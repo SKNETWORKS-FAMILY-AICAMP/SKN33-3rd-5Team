@@ -1,0 +1,41 @@
+# Qwen3-4B 조건 추출 QLoRA 학습에 사용할 데이터·양자화·학습 설정입니다.
+model:
+  id: Qwen/Qwen3-4B-Instruct-2507
+  # 실행 시 실제 Hugging Face commit hash가 run_manifest.json에 기록됩니다.
+  revision: main
+
+data:
+  # 2번 문서·데이터 담당 및 팀 검수 후 받게 되는 파일입니다.
+  train_file: data/finetuning/train.jsonl
+  dev_file: data/finetuning/dev.jsonl
+  holdout_file: data/finetuning/holdout.jsonl
+
+quantization:
+  quant_type: nf4
+  double_quant: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  # QLoRA 권장 방식으로 양자화된 모든 Linear 계층을 대상으로 합니다.
+  target_modules: all-linear
+
+training:
+  output_dir: /workspace/models/picare-qwen3-4b-qlora
+  num_train_epochs: 3
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 0.0001
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  max_grad_norm: 0.3
+  max_length: 1024
+  logging_steps: 10
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 2
+  optim: paged_adamw_8bit
+  seed: 42
