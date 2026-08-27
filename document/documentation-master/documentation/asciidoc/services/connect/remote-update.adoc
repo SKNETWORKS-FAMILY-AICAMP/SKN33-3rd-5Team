@@ -1,0 +1,81 @@
+[[remoteupdate-intro]]
+== Remotely update your Raspberry Pi devices
+
+Raspberry Pi Connect includes the ability to update your Raspberry Pi devices by remotely pushing them updates.
+
+Remote updates are useful for updating devices behind a firewall, devices that are offline (these are updated the next time they sign in to Raspberry Pi Connect), and devices that are physically remote or hard to reach.
+
+Connect supports two types of update artefact:
+
+* <<remoteupdate-otamaker,Script artefacts>>, created with `otamaker`, run a shell script as root on the device. They work on a standard installation of Raspberry Pi OS and suit maintenance tasks such as upgrading packages.
+* <<remoteupdate-ab,A/B boot updates>>, created with `rpi-image-gen`, replace the entire operating system and automatically revert to the previous version if the update fails. They require imaging the device with an A/B boot layout first.
+
+Whichever type of artefact you build, you host it yourself and then deploy it from the Raspberry Pi Connect website. Those two steps are the same for both types, and are described in <<host-the-update-artefact,Host the update artefact>> and <<update-remotely,Deploy the update artefact>>.
+
+If your devices belong to a xref:../services/connect-for-organisations.adoc[Connect for Organisations] account, deployment works slightly differently. For more information, see xref:../services/connect-for-organisations.adoc#deploy-remote-updates[Deploy remote updates in an organisation].
+
+[[host-the-update-artefact]]
+=== Host the update artefact
+
+Raspberry Pi Connect doesn't store your update artefacts. Instead, you host each artefact yourself and give Connect its location, which Connect passes on to the recipient device so that the device can download the artefact directly.
+
+Host the artefact anywhere the recipient device can reach it: your own web server, an S3 bucket, an FTP or SFTP server, or a path on the recipient device itself using a `file://` URI. Remote update supports HTTP, HTTPS, FTP, SFTP, and File URIs.
+
+The location must be accessible to the recipient device, but it doesn't have to be accessible to the Raspberry Pi Connect servers, or to the internet at large. Serving an artefact from another computer on the same local network as the recipient device works well.
+
+Here is an example URI: http://192.168.0.1:8080/path/to/update.tar.zst
+
+It contains the following required information:
+
+* The host IP: 192.168.0.1
+* The port: 8080
+* The path: /path/to/update.tar.zst
+
+You also need the artefact's SHA-256 checksum, which Connect passes to the device so that it can check that the artefact hasn't been corrupted or tampered with in transit. `otamaker` prints the checksum when it builds a script artefact; otherwise, calculate it with `sha256sum`:
+
+[source,console]
+----
+$ sha256sum update.tar.zst
+----
+
+Copy down the URI and the checksum; you need both in the next section.
+
+[[update-remotely]]
+=== Deploy the update artefact
+
+After you've built an artefact with <<remoteupdate-otamaker,otamaker>> or <<remoteupdate-ab,rpi-image-gen>> and hosted it, use the Raspberry Pi Connect website to deploy it to a device.
+
+NOTE: If the recipient device belongs to an organisation, deploy it as described in xref:../services/connect-for-organisations.adoc#deploy-remote-updates[Deploy remote updates in an organisation] instead.
+
+Deployments always start from the device you want to update, so make sure the recipient device is registered to your personal account before you proceed:
+
+. Log in to Raspberry Pi Connect.
+. Select the *Personal* account using the account switcher at the top right.
+. Go to the *Devices* tab, then select *Deploy* next to the recipient device. *Deploy* appears only for devices that have remote update enabled.
+
+This opens the *New deployment* form, which creates a new artefact for the deployment in two steps.
+
+In *Step 1: Create an artefact*, describe the artefact you hosted:
+
+. Enter a *Name* for the artefact. Names don't have to be unique, so use something that helps you recognise the deployment later, such as a version number.
+. Paste in the *URI* and the *SHA-256 checksum* that you copied down in <<host-the-update-artefact,Host the update artefact>>.
+. Select *Next*.
++
+.Step 1 of the New deployment form, showing the Name, URI, and SHA-256 checksum fields.
+image::images/new-deployment-personal-step-1.png[alt="Step 1 of the New deployment screen in Raspberry Pi Connect, showing the Name, URI, and SHA-256 checksum fields filled in for a new artefact", width="100%"]
+
+In *Step 2: Deploy to device*, check the details, then select *Deploy*. If you spot a mistake, select *Back* to correct it.
+
+.Step 2 of the New deployment form, showing the artefact's details for confirmation.
+image::images/new-deployment-personal-step-2.png[alt="Step 2 of the New deployment screen in Raspberry Pi Connect, showing the name, URI, and checksum of the artefact to be deployed, with a Deploy button", width="100%"]
+
+[[monitor-the-deployment]]
+==== Monitor the deployment
+
+While a deployment is *Pending* or *In Progress*, the deployment history updates automatically. A spinner appears next to the *Deployment history* heading to show that it is automatically refreshing. Once the deployment has finished, the spinner disappears and the history stops updating.
+
+If the deployment displays *Failed*, select it to reveal the error message, then see <<ab-troubleshooting,Troubleshooting>>.
+
+You can cancel a *Pending* deployment by selecting the deployment and then selecting *Cancel*. Pending deployments are also automatically cancelled when another deployment is queued up.
+
+When your deployment has succeeded, verify it in the way appropriate to the type of artefact you deployed. See <<remoteupdate-otamaker,Script artefacts>> for a script artefact, or <<remoteupdate-ab,A/B Boot Update>> for an A/B boot update.

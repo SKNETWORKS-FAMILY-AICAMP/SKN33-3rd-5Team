@@ -1,0 +1,256 @@
+[[link-connect]]
+== Link a Raspberry Pi device with a Connect account
+
+After starting Connect on your Raspberry Pi device, you must associate your device with your Connect account.
+
+If you used Raspberry Pi Imager to install Raspberry Pi OS on your device, you might have already linked your device with your Connect account. For more information, see xref:../computers/getting-started.adoc#imager-install[Install using Imager].
+
+If you want to use Raspberry Pi Connect with multiple users, see xref:../services/connect-for-organisations.adoc[Raspberry Pi Connect for Organisations].
+
+[tabs]
+======
+Desktop::
++
+From the Connect icon in the menu bar, select **Turn On Raspberry Pi Connect**. This opens your browser, where you're prompted to sign in with your Raspberry Pi ID:
++
+image::images/browser-sign-in.png[alt="The Connect page with a prompt to sign in to Connect with your Raspberry Pi ID.",width="100%"]
++
+If you've already turned on Connect, choose **Sign In...** from the dropdown menu:
++
+image::images/sign-in.png[alt="The Connect page, showing sign in selected from the Raspberry Pi Connect drop down menu.",width="100%"]
++
+If you don't already have a Raspberry Pi ID, select the *create one for free* link to xref:id.adoc#create-a-raspberry-pi-id[create one].
+
+CLI::
++
+Use the following command to generate a link that connects your device with your Connect account:
++
+[source,console]
+----
+$ rpi-connect signin
+----
++
+This command outputs something like the following:
++
+----
+Complete sign in by visiting https://connect.raspberrypi.com/verify/XXXX-XXXX
+----
++
+To link your device with your Connect account, visit the verification URL on any device and sign in with your Raspberry Pi ID.
+
+Using an Auth Key::
++
+An auth key is a single-use, temporary token that lets you link a device to a Connect account automatically (without using the web interface). Personal auth keys expire six hours after creation; organisation auth keys expire between 1 and 90 days after creation (1 day by default).
++
+The easiest way of creating and using an auth key is by using the xref:../computers/getting-started.adoc#imager-install[customisation options in Imager]. You can also manually create an auth key from the **Settings** page of a personal or organisation's Connect account, and organisation administrators can create auth keys using the xref:../services/connect-for-organisations.adoc#organisations-management-api[management API].
++
+NOTE: Personal accounts can only have one auth key active at a time; organisations can have multiple auth keys active at once. You need a unique auth key for each device.
++
+TIP: To use an auth key, ensure that you boot your Raspberry Pi and connect it to the internet before the expiry time shown on the Raspberry Pi Connect website.
++
+After creating an auth key, you can provide this to your device using the `rpi-connect signin` command, or by writing the auth key to a file in your home directory.
++
+To provide your auth key as a string, run the following command:
++
+[source,console]
+----
+$ rpi-connect signin --auth-key=rpuak_123456
+----
++
+If you have saved your auth key to a file, you can pass its full path to the command by prefixing it with `+@+`:
++
+[source,console]
+----
+$ rpi-connect signin --auth-key=@/home/alice/auth.key
+----
++
+If you save your auth key to `+.config/com.raspberrypi.connect/auth.key+` in your home directory, Connect detects it automatically.
+
+======
+
+=== Finish linking your Raspberry Pi
+
+After authenticating, assign a name to your device. Choose a name that uniquely identifies the device.
+
+image::images/new-device.png[alt="The Connect page inviting you to create a new device and sign in.",width="100%"]
+
+If you're an administrator of an xref:../services/connect-for-organisations.adoc[organisation], select whether to add this device to your personal account or to a specific organisation.
+
+image::images/new-organisation-device.png[alt="The Connect page, showing the new device account selection screen.",width="100%"]
+
+Select the **Create device and sign in** button to continue.
+
+You can now remotely connect to your device. The Connect icon in your menu bar turns blue to indicate that your device is signed in to the Connect service. You should receive an email notification indicating that a new device is linked to your Connect account.
+
+image::images/sign-in-email.png[alt="The Connect page, showing the account sign in notification screen.",width="100%"]
+
+WARNING: If you receive an email that says a device that you don't recognise has signed into Connect, change your Raspberry Pi ID password immediately. Follow the instructions in xref:connect.adoc#manage-devices[Remove the device from Connect] to permanently disassociate it from your account. Consider xref:id.adoc#enable-two-factor-authentication[enabling two-factor authentication] to keep your account secure.
+
+Open the Connect menu by selecting the Connect icon in your menu bar. This menu allows you to turn Connect on and off, sign in and out, and allow or disallow remote access methods.
+
+NOTE: Connect signs communication with your device's serial number. Moving your SD card between devices signs you out of Connect.
+
+== Access your Raspberry Pi device
+
+Now that your device appears on your Connect dashboard, you can access your device from anywhere using only a browser. Connect provides multiple ways to interact with your device remotely.
+
+=== Viewing your devices
+
+Connect lists all your linked devices on the *Devices* tab. For organisations, you can xref:../services/connect-for-organisations.adoc#search-filter-devices[search and filter] this list, and add xref:../services/connect-for-organisations.adoc#tag-devices[tags] to devices.
+
+Sign in to https://connect.raspberrypi.com[connect.raspberrypi.com] and go to the **Devices** tab. Connect displays a list of linked devices.
+
+image::images/devices.png[alt="The Connect page, showing the linked devices screen.",width="100%"]
+
+The features available for each device are displayed as a grey badge below the name of the device. You can interact with your devices through the following methods:
+
+* <<screen-sharing>>
+* <<remote-shell>>
+* <<remoteupdate-intro,Remote update>>
+
+[[screen-sharing]]
+=== Screen sharing
+
+Connect includes the ability to share your device's screen in a browser. Use the following instructions to share your device's screen.
+
+NOTE: Screen sharing requires the **Wayland** window server. Raspberry Pi OS _Bookworm_ and later use Wayland by default. Screen sharing is **not** compatible with Raspberry Pi OS Lite or systems that use the X window server.
+
+Sign in to https://connect.raspberrypi.com[connect.raspberrypi.com] and go to the **Devices** tab.
+
+Devices available for screen sharing show a grey **Screen sharing** badge below the name of the device.
+
+image::images/devices.png[alt="The Connect page, showing devices listed as available for screen sharing.",width="100%"]
+
+Select the **Connect via** button to the right of the device you want to access. Select the **Screen sharing** option from the menu. This opens a browser window that displays your device's desktop.
+
+image::images/waiting-for-screen-sharing.png[alt="A browser window open with a message indicating that a response is being awaited from the Raspberry Pi device.",width="100%"]
+
+You can now use your device as you would locally. For more information about the connection, hover your mouse over the padlock icon immediately to the right of the **Disconnect** button.
+
+image::images/screen-sharing.png[alt="The Connect page, showing the Raspberry Pi dropdown menu.",width="100%"]
+
+TIP: Use the **Copy from remote** and **Paste to remote** buttons above your desktop to transfer text between your local and remote clipboards.
+
+Once connected, a green dot appears next to the **Screen sharing** badge in the Connect dashboard. This indicates an active screen sharing session. Hover to see the current number of screen sharing sessions.
+
+image::images/screen-sharing-in-progress.png[alt="The screen sharing interface showing sharing in progress.",width="100%"]
+
+The Connect icon in the system tray rotates when a screen sharing session is in progress. A desktop notification appears whenever a screen sharing session starts.
+
+image::images/screen-sharing-notification.png[alt="The Connect interface, showing the Turn Off Raspberry Pi Connect dropdown menu option.",width="100%"]
+
+==== Screen sharing interface
+
+Connect's screen sharing interface is designed for both desktop and mobile devices.
+
+image::images/screen-sharing.png[alt="The Raspberry Pi Connect screen sharing interface, which includes common keyboard function toggles and keys at the bottom left of the interface.", width="100%"]
+
+You can simulate common keyboard functions using the buttons at the bottom left of the interface:
+
+* Keyboard. Toggles the on-screen keyboard. Displayed only on mobile devices.
+* Ctrl. Simulates holding down this key on a physical keyboard.
+* Super key. Simulates holding down this key on a physical keyboard.
+* Alt. Simulates holding down this key on a physical keyboard.
+* Esc. Simulates a single press - pressing and then releasing -  of this key.
+* Tab. Simulates a single press - pressing and then releasing - of this key.
+
+==== Stop screen sharing
+
+To close a screen sharing session, select the **Disconnect** button above your desktop.
+
+image::images/screen-sharing-ended.png[alt="The screen sharing interface showing the message "Screen sharing session ended".",width="100%"]
+
+==== Disallow screen sharing
+
+To turn off screen sharing, select the Connect icon in the menu bar then deselect **Allow Screen Sharing**.  Your device remains signed in to Connect, but you can't create a screen sharing session from the Connect dashboard.
+
+image::images/disallow-screen-sharing.png[alt="The Connect interface, showing dropdown menu that contains an option to allow screen sharing.",width="100%"]
+
+Alternatively, you can disallow screen sharing with the following command:
+
+[source,console]
+----
+$ rpi-connect vnc off
+----
+
+In the Connect dashboard, the **Screen sharing** badge and the **Screen sharing** option in the **Connect via** menu will appear crossed-out.
+
+image::images/screen-sharing-disabled.png[alt="The Connect interface, showing the Devices list, with the words "screen sharing" in strikethrough text to indicate that is has been disallowed.",width="100%"]
+
+To re-enable screen sharing, do one of the following:
+
+* Select the Connect icon in the menu bar and then choose **Allow Screen Sharing**
+* Run the following command:
++
+[source,console]
+----
+$ rpi-connect vnc on
+----
+
+[[remote-shell]]
+=== Remote shell
+
+Connect includes the ability to start a shell running on your device from a browser. Use the following instructions to access the remote shell.
+
+Sign in to https://connect.raspberrypi.com[connect.raspberrypi.com] and go to the **Devices** tab.
+
+Devices available for remote shell access show a grey **Remote shell** badge below the name of the device.
+
+image::images/devices.png[alt="The Connect interface, showing the Devices list display.",width="100%"]
+
+Select the **Connect via** button to the right of the device you would like to access. Select the **Remote shell** option from the menu. This opens a shell session on your device.
+
+image::images/waiting-for-remote-shell.png[alt="The waiting screen that is displayed during connection.",width="100%"]
+
+You can now use your device as you would locally.
+
+image::images/remote-shell.png[alt="Window showing an open connection using the the remote shell.",width="100%"]
+
+TIP: On some operating systems, the browser intercepts key combinations like **Ctrl+Shift+C** and **Ctrl+C**. Instead, you can use the right click menu or **Ctrl+Insert** to copy and **Shift+Insert** to paste.
+
+Once connected, a green dot appears next to the **Remote shell** badge in the Connect dashboard. This indicates an active remote shell session. Hover to see the current number of remote shell sessions.
+
+image::images/remote-shell-in-progress.png[alt="The Connect interface, showing the Devices list, with the Remote shell icon containing a green circle. This indicates that a remote shell session is in progress.",width="100%"]
+
+TIP: Every remote shell connection creates a brand new connection, just like SSH. To persist background commands and configuration across multiple sessions, use `screen` or `tmux`.
+
+The Connect icon in the menu bar rotates when a remote shell session is in progress. A desktop notification appears whenever a remote shell session starts.
+
+image::images/remote-shell-notification.png[alt="The Connect interface, showing a remote shell notification at the top of the desktop window.",width="100%"]
+
+TIP: The `CONNECT_TTY` environment variable indicates that a session uses a remote shell provided by Connect.
+
+==== End your remote shell session
+
+To close a remote shell session, run the `exit` command or close the window.
+
+image::images/remote-shell-ended.png[alt="Window showing that the remote shell connection has ended and that the window can now be closed.",width="100%"]
+
+
+==== Disallow remote shell access
+
+To turn off remote shell access, select the Connect icon in the menu bar and then deselect **Allow Remote Shell Access**. Your device remains signed in to Connect, but you can't create a remote shell session from the Connect dashboard.
+
+image::images/disallow-screen-sharing.png[alt="The Connect interface, showing dropdown menu that contains an option to allow screen sharing.",width="100%"]
+
+Alternatively, you can disallow remote shell access with the following command:
+
+[source,console]
+----
+$ rpi-connect shell off
+----
+
+In the Connect dashboard, the **Remote shell** badge and the **Remote shell** option in the **Connect via** menu will appear crossed-out.
+
+image::images/remote-shell-disabled.png[alt="The Connect interface, showing the Connect via dropdown menu in the Devices tab.",width="100%"]
+
+To re-enable remote shell access, do one of the following:
+
+* Select the Connect system tray icon and choose **Allow Remote Shell Access**
+* Run the following command:
++
+[source,console]
+----
+$ rpi-connect shell on
+----
+

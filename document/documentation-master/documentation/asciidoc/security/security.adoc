@@ -1,0 +1,36 @@
+This page provides an overview with links to more detailed information about securing your Raspberry Pi device.
+
+Raspberry Pi follows a structured vulnerability reporting and management process. As part of this process, we track and incorporate security updates from Debian on a regular schedule. Raspberry Pi lists official security vulnerability disclosures, product security policies, and guidance on user responsibilities for maintaining the security of Raspberry Pi devices.
+
+== Security architecture
+
+Raspberry Pi's security architecture ensures that only authenticated boot code runs on provisioned Raspberry Pi devices, disk encryption keys are protected, and a chain of trust verifies every stage of the boot process.
+
+For more information, see xref:../security/security-architecture.adoc[Security architecture].
+
+== Secure Boot Provisioner
+
+Raspberry Pi have created a provisioning tool for simplifying the process of:
+
+* Setting up *secure (verified) boot* to establish a hardware chain of trust that ensures that only authenticated code runs during the device startup sequence.
+* Setting up *disk encryption* to protect data stored on persistent media, such as microSD cards or USB drives.
+* Provisioning *multiple Raspberry Pi devices* with a streamlined configuration and deployment process.
+
+For more information and instructions, see xref:../security/secure-boot-provisioner.adoc[Secure Boot Provisioner].
+
+== Operational security
+
+You can configure your Raspberry Pi device to prevent unauthorised access and improve day-to-day security hygiene with:
+
+* User and access management, including authentication, user accounts, groups, and permissions.
+* Regular operating system and software updates.
+* Secure remote access with SSH hardening.
+* Protection against suspicious activity and brute force attacks.
+
+For more information and instructions, see xref:../security/operational-security.adoc[Operational security].
+
+== Firewall using UFW
+
+Configuring a packet-filtering firewall using *Uncomplicated Firewall (UFW)* on a Raspberry Pi device helps to harden the system. It can be used to limit network access to only essential services and mitigate external threats by blocking unwanted or malicious connections.
+
+For more information and instructions, see xref:../security/ufw.adoc[Firewall using UFW].

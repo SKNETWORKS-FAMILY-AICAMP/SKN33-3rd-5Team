@@ -29,3 +29,12 @@ results = retriever.search(
 - RAG: E5/Chroma, BM25, RRF, metadata filter, Top-k, Hit@k·MRR
 - sLLM: 조건 JSON을 통합 계층에서 `RagFilters`로 변환할 입력 제공
 - 챗봇: `RagResult`를 사용한 답변·출처 UI·보류 처리
+
+## RAG 담당 체크리스트
+
+- [ ] 문서·데이터 담당에게서 검수 완료된 corpus와 `manifest.json`을 수령한다.
+- [ ] 필수 metadata와 `official_verified` 값이 입력 계약에 맞는지 검증한다.
+- [ ] manifest 기반으로 E5 임베딩·Chroma 색인을 생성하고 재현 가능하게 저장한다.
+- [ ] BM25, Dense, Hybrid RRF 검색을 동일 질의셋에서 비교한다.
+- [ ] metadata filter, Top-k 결과, citation metadata 보존을 테스트한다.
+- [ ] Dev/Holdout qrels로 Hit@k와 MRR을 기록한다.

@@ -1,4 +1,9 @@
-"""Public data contracts shared with the document, sLLM, and chatbot modules."""
+"""RAG 모듈이 다른 담당자 모듈과 주고받는 데이터 형식(계약)을 정의한다.
+
+문서 담당자는 ``DocumentChunk`` 형식의 manifest를 만들고, sLLM 담당자는
+조건 JSON을 ``RagFilters``로 바꿔 전달한다. 챗봇 담당자는 ``RagResult``를
+그대로 근거 카드와 답변 컨텍스트에 사용한다.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +12,11 @@ from typing import Any
 
 @dataclass(frozen=True)
 class RagFilters:
-    """Search constraints produced by the integration layer from sLLM condition JSON."""
+    """검색 대상을 좁히기 위한 조건.
+
+    빈 튜플 ``()``은 해당 조건으로 제한하지 않는다는 뜻이다. 예를 들어
+    ``use_cases=("camera",)``이면 카메라 목적 청크를 우선 대상으로 삼는다.
+    """
 
     product_models: tuple[str, ...] = ()
     use_cases: tuple[str, ...] = ()
@@ -18,7 +27,11 @@ class RagFilters:
 
 @dataclass(frozen=True)
 class DocumentChunk:
-    """Validated document/data-team manifest record accepted by the RAG module."""
+    """문서·데이터 담당이 검수하여 manifest에 넣는 청크 1개.
+
+    RAG는 원문을 직접 수집하거나 청킹하지 않고, 이 형식으로 전달된 청크만
+    색인한다. ``official_verified``가 False이면 공식 근거로 사용하지 않는다.
+    """
 
     chunk_id: str
     document_id: str
@@ -37,7 +50,9 @@ class DocumentChunk:
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "DocumentChunk":
+        """JSON의 목록 값을 불변 tuple로 정규화해 객체로 변환한다."""
         normalized = dict(value)
+        # JSON array(list)와 코드 내부 tuple을 같은 방식으로 비교하기 위함이다.
         for key in ("product_models", "use_cases", "os_versions"):
             normalized[key] = tuple(normalized.get(key, ()))
         return cls(**normalized)
@@ -45,7 +60,11 @@ class DocumentChunk:
 
 @dataclass(frozen=True)
 class RagResult:
-    """Citation-safe result returned to the chatbot layer."""
+    """챗봇에 반환하는 검색 결과이자 출처 카드의 원본 데이터.
+
+    URL·라이선스·수집일은 LLM이 새로 만들지 않고 이 객체의 값을 화면에
+    표시해야 출처가 변조되거나 누락되는 것을 막을 수 있다.
+    """
 
     rank: int
     content: str
@@ -60,6 +79,7 @@ class RagResult:
 
     @classmethod
     def from_chunk(cls, chunk: DocumentChunk, rank: int) -> "RagResult":
+        """원본 청크에서 답변에 필요한 본문과 인용 metadata만 복사한다."""
         return cls(
             rank=rank,
             content=chunk.content,
