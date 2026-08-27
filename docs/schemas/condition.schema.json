@@ -1,0 +1,242 @@
+{
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "else": {
+        "properties": {
+          "clarification_questions": {
+            "maxItems": 0
+          }
+        }
+      },
+      "if": {
+        "properties": {
+          "needs_clarification": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "clarification_questions": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "description": "Complete sLLM condition output; unmentioned user constraints are null.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "intent": {
+      "enum": [
+        "product_recommendation",
+        "product_comparison",
+        "how_to",
+        "troubleshooting",
+        "support_recall",
+        "out_of_scope"
+      ],
+      "title": "Intent",
+      "type": "string"
+    },
+    "use_case": {
+      "anyOf": [
+        {
+          "enum": [
+            "education_coding",
+            "desktop_computing",
+            "home_server",
+            "camera_monitoring",
+            "smart_farm_monitoring",
+            "headless_remote_management",
+            "gpio_iot"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Use Case"
+    },
+    "product_models": {
+      "anyOf": [
+        {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Product Models"
+    },
+    "os_versions": {
+      "anyOf": [
+        {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Os Versions"
+    },
+    "task": {
+      "anyOf": [
+        {
+          "enum": [
+            "desktop_programming",
+            "os_installation",
+            "system_configuration",
+            "remote_access",
+            "camera_setup",
+            "gpio_setup",
+            "sensor_monitoring",
+            "server_operation",
+            "troubleshooting",
+            "support_recall"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Task"
+    },
+    "performance_priority": {
+      "anyOf": [
+        {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Performance Priority"
+    },
+    "wireless_required": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Wireless Required"
+    },
+    "camera_required": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Camera Required"
+    },
+    "gpio_required": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Gpio Required"
+    },
+    "monitor_available": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Monitor Available"
+    },
+    "remote_access_required": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Remote Access Required"
+    },
+    "user_level": {
+      "anyOf": [
+        {
+          "enum": [
+            "beginner",
+            "intermediate",
+            "advanced"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "User Level"
+    },
+    "needs_clarification": {
+      "title": "Needs Clarification",
+      "type": "boolean"
+    },
+    "clarification_questions": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Clarification Questions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "intent",
+    "use_case",
+    "product_models",
+    "os_versions",
+    "task",
+    "performance_priority",
+    "wireless_required",
+    "camera_required",
+    "gpio_required",
+    "monitor_available",
+    "remote_access_required",
+    "user_level",
+    "needs_clarification",
+    "clarification_questions"
+  ],
+  "title": "ConditionPayload",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

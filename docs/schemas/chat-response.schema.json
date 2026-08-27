@@ -1,0 +1,614 @@
+{
+  "$defs": {
+    "ChatCitation": {
+      "additionalProperties": false,
+      "description": "Server-built source card referenced from the answer with [C1], [C2], ...",
+      "properties": {
+        "citation_id": {
+          "pattern": "^C[1-9][0-9]*$",
+          "title": "Citation Id",
+          "type": "string"
+        },
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "chunk_id": {
+          "minLength": 1,
+          "title": "Chunk Id",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "publisher": {
+          "minLength": 1,
+          "title": "Publisher",
+          "type": "string"
+        },
+        "section": {
+          "minLength": 1,
+          "title": "Section",
+          "type": "string"
+        },
+        "source_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "source_anchor": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Anchor"
+        },
+        "document_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Version"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Updated At"
+        },
+        "collected_at": {
+          "format": "date",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "quote": {
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "citation_id",
+        "document_id",
+        "chunk_id",
+        "title",
+        "publisher",
+        "section",
+        "source_url",
+        "source_anchor",
+        "document_version",
+        "published_at",
+        "updated_at",
+        "collected_at",
+        "license",
+        "quote"
+      ],
+      "title": "ChatCitation",
+      "type": "object"
+    },
+    "ConditionPayload": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "properties": {
+              "clarification_questions": {
+                "maxItems": 0
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "needs_clarification": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "clarification_questions": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "description": "Complete sLLM condition output; unmentioned user constraints are null.",
+      "properties": {
+        "schema_version": {
+          "const": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "intent": {
+          "enum": [
+            "product_recommendation",
+            "product_comparison",
+            "how_to",
+            "troubleshooting",
+            "support_recall",
+            "out_of_scope"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "use_case": {
+          "anyOf": [
+            {
+              "enum": [
+                "education_coding",
+                "desktop_computing",
+                "home_server",
+                "camera_monitoring",
+                "smart_farm_monitoring",
+                "headless_remote_management",
+                "gpio_iot"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Use Case"
+        },
+        "product_models": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Product Models"
+        },
+        "os_versions": {
+          "anyOf": [
+            {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Os Versions"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "enum": [
+                "desktop_programming",
+                "os_installation",
+                "system_configuration",
+                "remote_access",
+                "camera_setup",
+                "gpio_setup",
+                "sensor_monitoring",
+                "server_operation",
+                "troubleshooting",
+                "support_recall"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task"
+        },
+        "performance_priority": {
+          "anyOf": [
+            {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Performance Priority"
+        },
+        "wireless_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Wireless Required"
+        },
+        "camera_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Camera Required"
+        },
+        "gpio_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Gpio Required"
+        },
+        "monitor_available": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Monitor Available"
+        },
+        "remote_access_required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Remote Access Required"
+        },
+        "user_level": {
+          "anyOf": [
+            {
+              "enum": [
+                "beginner",
+                "intermediate",
+                "advanced"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "User Level"
+        },
+        "needs_clarification": {
+          "title": "Needs Clarification",
+          "type": "boolean"
+        },
+        "clarification_questions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Clarification Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schema_version",
+        "intent",
+        "use_case",
+        "product_models",
+        "os_versions",
+        "task",
+        "performance_priority",
+        "wireless_required",
+        "camera_required",
+        "gpio_required",
+        "monitor_available",
+        "remote_access_required",
+        "user_level",
+        "needs_clarification",
+        "clarification_questions"
+      ],
+      "title": "ConditionPayload",
+      "type": "object"
+    },
+    "MediaItem": {
+      "additionalProperties": false,
+      "description": "Official image or video linked to a verified citation.",
+      "properties": {
+        "media_type": {
+          "enum": [
+            "image",
+            "video"
+          ],
+          "title": "Media Type",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "source_citation_id": {
+          "pattern": "^C[1-9][0-9]*$",
+          "title": "Source Citation Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "media_type",
+        "title",
+        "url",
+        "source_citation_id"
+      ],
+      "title": "MediaItem",
+      "type": "object"
+    },
+    "ProductRecommendation": {
+      "additionalProperties": false,
+      "description": "Structured card for product recommendation or comparison UI.",
+      "properties": {
+        "product_model": {
+          "minLength": 1,
+          "title": "Product Model",
+          "type": "string"
+        },
+        "recommendation": {
+          "minLength": 1,
+          "title": "Recommendation",
+          "type": "string"
+        },
+        "matched_conditions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Matched Conditions",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "citation_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Citation Ids",
+          "type": "array"
+        },
+        "product_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Product Url",
+          "type": "string"
+        },
+        "image_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Image Url"
+        }
+      },
+      "required": [
+        "product_model",
+        "recommendation",
+        "matched_conditions",
+        "limitations",
+        "citation_ids",
+        "product_url",
+        "image_url"
+      ],
+      "title": "ProductRecommendation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "answered"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "citations": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "needs_clarification"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "clarification_questions": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "description": "Stable chatbot-to-Streamlit response contract.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "request_id": {
+      "minLength": 1,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "answered",
+        "needs_clarification",
+        "insufficient_evidence",
+        "out_of_scope",
+        "safety_blocked",
+        "error"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "language": {
+      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
+      "title": "Language",
+      "type": "string"
+    },
+    "answer": {
+      "minLength": 1,
+      "title": "Answer",
+      "type": "string"
+    },
+    "conditions": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConditionPayload"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "citations": {
+      "items": {
+        "$ref": "#/$defs/ChatCitation"
+      },
+      "title": "Citations",
+      "type": "array"
+    },
+    "products": {
+      "items": {
+        "$ref": "#/$defs/ProductRecommendation"
+      },
+      "title": "Products",
+      "type": "array"
+    },
+    "media": {
+      "items": {
+        "$ref": "#/$defs/MediaItem"
+      },
+      "title": "Media",
+      "type": "array"
+    },
+    "clarification_questions": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Clarification Questions",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "status",
+    "language",
+    "answer",
+    "conditions",
+    "citations",
+    "products",
+    "media",
+    "clarification_questions",
+    "warnings"
+  ],
+  "title": "ChatResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
