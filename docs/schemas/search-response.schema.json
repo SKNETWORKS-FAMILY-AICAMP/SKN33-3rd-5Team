@@ -1,0 +1,378 @@
+{
+  "$defs": {
+    "SearchFilters": {
+      "additionalProperties": false,
+      "description": "Metadata filters applied by the integration layer before retrieval.",
+      "properties": {
+        "product_models": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Product Models",
+          "type": "array"
+        },
+        "use_cases": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Use Cases",
+          "type": "array"
+        },
+        "os_versions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Os Versions",
+          "type": "array"
+        },
+        "source_types": {
+          "items": {
+            "enum": [
+              "documentation",
+              "product_page",
+              "faq",
+              "release_note",
+              "support_notice",
+              "recall_notice"
+            ],
+            "type": "string"
+          },
+          "title": "Source Types",
+          "type": "array"
+        },
+        "official_only": {
+          "title": "Official Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "product_models",
+        "use_cases",
+        "os_versions",
+        "source_types",
+        "official_only"
+      ],
+      "title": "SearchFilters",
+      "type": "object"
+    },
+    "SearchResultMetadata": {
+      "additionalProperties": false,
+      "description": "One citation-safe retrieved chunk returned by the RAG module.",
+      "properties": {
+        "citation_id": {
+          "pattern": "^C[1-9][0-9]*$",
+          "title": "Citation Id",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "document_id": {
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "chunk_id": {
+          "minLength": 1,
+          "title": "Chunk Id",
+          "type": "string"
+        },
+        "chunk_index": {
+          "minimum": 0,
+          "title": "Chunk Index",
+          "type": "integer"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "publisher": {
+          "minLength": 1,
+          "title": "Publisher",
+          "type": "string"
+        },
+        "section": {
+          "minLength": 1,
+          "title": "Section",
+          "type": "string"
+        },
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "source_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Source Url",
+          "type": "string"
+        },
+        "source_anchor": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Source Anchor"
+        },
+        "language": {
+          "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
+          "title": "Language",
+          "type": "string"
+        },
+        "source_type": {
+          "enum": [
+            "documentation",
+            "product_page",
+            "faq",
+            "release_note",
+            "support_notice",
+            "recall_notice"
+          ],
+          "title": "Source Type",
+          "type": "string"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Updated At"
+        },
+        "collected_at": {
+          "format": "date",
+          "title": "Collected At",
+          "type": "string"
+        },
+        "indexed_at": {
+          "format": "date-time",
+          "title": "Indexed At",
+          "type": "string"
+        },
+        "document_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Document Version"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "product_models": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Product Models",
+          "type": "array"
+        },
+        "use_cases": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Use Cases",
+          "type": "array"
+        },
+        "tasks": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Tasks",
+          "type": "array"
+        },
+        "categories": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "os_versions": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Os Versions",
+          "type": "array"
+        },
+        "document_checksum": {
+          "minLength": 1,
+          "title": "Document Checksum",
+          "type": "string"
+        },
+        "chunk_checksum": {
+          "minLength": 1,
+          "title": "Chunk Checksum",
+          "type": "string"
+        },
+        "parser_version": {
+          "minLength": 1,
+          "title": "Parser Version",
+          "type": "string"
+        },
+        "official_verified": {
+          "const": true,
+          "title": "Official Verified",
+          "type": "boolean"
+        },
+        "image_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Image Url"
+        },
+        "video_url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Video Url"
+        }
+      },
+      "required": [
+        "citation_id",
+        "rank",
+        "document_id",
+        "chunk_id",
+        "chunk_index",
+        "title",
+        "publisher",
+        "section",
+        "content",
+        "source_url",
+        "source_anchor",
+        "language",
+        "source_type",
+        "published_at",
+        "updated_at",
+        "collected_at",
+        "indexed_at",
+        "document_version",
+        "license",
+        "product_models",
+        "use_cases",
+        "tasks",
+        "categories",
+        "os_versions",
+        "document_checksum",
+        "chunk_checksum",
+        "parser_version",
+        "official_verified",
+        "image_url",
+        "video_url"
+      ],
+      "title": "SearchResultMetadata",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "RAG-to-chatbot response contract.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "query_id": {
+      "minLength": 1,
+      "title": "Query Id",
+      "type": "string"
+    },
+    "query_language": {
+      "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$",
+      "title": "Query Language",
+      "type": "string"
+    },
+    "retrieval_method": {
+      "enum": [
+        "dense",
+        "bm25",
+        "hybrid"
+      ],
+      "title": "Retrieval Method",
+      "type": "string"
+    },
+    "top_k": {
+      "maximum": 20,
+      "minimum": 1,
+      "title": "Top K",
+      "type": "integer"
+    },
+    "applied_filters": {
+      "$ref": "#/$defs/SearchFilters"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/SearchResultMetadata"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "query_id",
+    "query_language",
+    "retrieval_method",
+    "top_k",
+    "applied_filters",
+    "results"
+  ],
+  "title": "SearchResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
