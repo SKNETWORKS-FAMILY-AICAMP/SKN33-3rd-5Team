@@ -170,7 +170,7 @@ flowchart LR
 | 학습 Task | 한국어 사용자 질문을 고정된 추천 조건 JSON으로 변환 |
 | 데이터 출처 | 팀 작성 예시와 템플릿 기반 초안을 사람이 검수한 데이터 |
 | 데이터 규모 | Train 300~500건, Dev와 Holdout은 별도 구성 |
-| 주요 필드 | use_case, product_model, os_version, task, performance_priority, wireless_required, camera_required, gpio_required, user_level, needs_clarification |
+| 주요 필드 | intent, use_case, product_models, os_versions, task, performance_priority, wireless_required, camera_required, gpio_required, monitor_available, remote_access_required, user_level, needs_clarification, clarification_questions |
 | 품질 검수 | JSON Schema 검증, 필드 라벨 검수, 중복·근접 중복 제거 |
 | 누수 방지 | 동일 템플릿·동일 의미 질문이 Train과 Holdout에 함께 들어가지 않게 분리 |
 | 개인정보 | 실제 사용자 기록을 사용하지 않으며 개인정보·비밀정보를 포함하지 않음 |
@@ -208,52 +208,159 @@ Licence: CC BY-SA 4.0 또는 문서에 표시된 라이선스
 Changes: 파싱·정규화·청킹·번역 여부
 ```
 
-## 권장 메타데이터
+## 인터페이스 계약
+
+sLLM·RAG·챗봇·Streamlit은 아래 세 계약을 공통으로 사용합니다. 단일 기준은 [`src/contracts/models.py`](src/contracts/models.py)이며, 배포·검증용 JSON Schema는 [`docs/schemas/`](docs/schemas/)에 저장합니다. 계약 변경 시 `schema_version`을 올리고 세 모듈과 평가 데이터를 함께 갱신합니다.
+
+### 1. 조건 JSON Schema
+
+sLLM은 일부 필드를 생략하지 않고 항상 아래 키를 모두 반환합니다. 사용자가 언급하지 않은 조건은 `null`, 명시적으로 필요하다고 한 경우는 `true`, 필요 없다고 한 경우만 `false`로 기록합니다. 배열 필드의 값은 문서 metadata와 동일한 공식 표기를 사용합니다.
 
 ```json
 {
-  "document_id": "rpi-doc-0001",
-  "chunk_id": "rpi-doc-0001-0001",
-  "title": "문서 제목",
-  "source_url": "https://www.raspberrypi.com/documentation/...",
-  "product_model": ["Raspberry Pi 5"],
-  "os_version": ["current"],
-  "section": "섹션 제목",
-  "chunk_index": 1,
-  "retrieved_at": "YYYY-MM-DD",
-  "document_version": "commit-or-revision",
-  "license": "CC BY-SA 4.0",
-  "checksum": "sha256:..."
-}
-```
-
-출처 문구는 LLM이 생성하지 않고 검색 결과의 metadata를 서버 코드가 조합합니다.
-
-### sLLM 조건 JSON 예시
-
-```json
-{
+  "schema_version": "1.0.0",
+  "intent": "product_recommendation",
   "use_case": "education_coding",
-  "product_model": null,
-  "os_version": null,
+  "product_models": null,
+  "os_versions": null,
   "task": "desktop_programming",
   "performance_priority": "medium",
   "wireless_required": true,
   "camera_required": null,
   "gpio_required": null,
+  "monitor_available": true,
+  "remote_access_required": null,
   "user_level": "beginner",
-  "needs_clarification": false
+  "needs_clarification": false,
+  "clarification_questions": []
 }
 ```
 
-사용자가 말하지 않은 조건은 임의로 채우지 않고 null 또는 사전에 정의한 unknown 값으로 처리합니다. false는 사용자가 명시적으로 필요하지 않다고 말한 경우에만 사용합니다. 실제 필드와 허용값은 학습 시작 전에 JSON Schema로 고정합니다.
+- `intent`는 제품 추천·비교, 사용법, 문제 해결, A/S·리콜, 범위 밖 질문을 구분합니다.
+- `product_models`, `os_versions`는 복수 선택과 제품 비교를 위해 `배열 또는 null`로 고정합니다.
+- Schema에 없는 필드는 허용하지 않습니다(`additionalProperties: false`).
+- `needs_clarification`이 `true`이면 `clarification_questions`에 하나 이상의 사용자 확인 질문이 있어야 합니다.
+- Base와 LoRA 출력은 동일한 [`condition.schema.json`](docs/schemas/condition.schema.json)으로 검증합니다. 실패하면 Few-shot fallback을 한 번 수행하고, 다시 실패하면 임의 보정 없이 사용자 확인 또는 오류 상태로 전환합니다.
+
+### 2. 검색 결과 metadata 형식
+
+RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇에 반환합니다. `citation_id`는 검색 응답마다 서버가 순위대로 `C1`, `C2`처럼 부여합니다. 정적 문서 metadata에는 `retrieved_at`을 사용하지 않고 원문 수집일 `collected_at`과 색인 시점 `indexed_at`을 구분합니다.
+
+```json
+{
+  "schema_version": "1.0.0",
+  "query_id": "query-0001",
+  "query_language": "ko",
+  "retrieval_method": "hybrid",
+  "top_k": 5,
+  "applied_filters": {
+    "product_models": ["Raspberry Pi 5"],
+    "use_cases": ["education_coding"],
+    "os_versions": [],
+    "source_types": ["documentation"],
+    "official_only": true
+  },
+  "results": [
+    {
+      "citation_id": "C1",
+      "rank": 1,
+      "document_id": "rpi-doc-0001",
+      "chunk_id": "rpi-doc-0001-0001",
+      "chunk_index": 0,
+      "title": "Raspberry Pi documentation",
+      "publisher": "Raspberry Pi Ltd",
+      "section": "Getting started",
+      "content": "검색된 원문 청크",
+      "source_url": "https://www.raspberrypi.com/documentation/",
+      "source_anchor": "#getting-started",
+      "language": "en",
+      "source_type": "documentation",
+      "published_at": null,
+      "updated_at": null,
+      "collected_at": "2026-08-27",
+      "indexed_at": "2026-08-27T09:00:00+09:00",
+      "document_version": "commit-or-revision",
+      "license": "CC BY-SA 4.0",
+      "product_models": ["Raspberry Pi 5"],
+      "use_cases": ["education_coding"],
+      "tasks": ["desktop_programming"],
+      "categories": ["getting_started"],
+      "os_versions": [],
+      "document_checksum": "sha256:document...",
+      "chunk_checksum": "sha256:chunk...",
+      "parser_version": "1.0.0",
+      "official_verified": true,
+      "image_url": null,
+      "video_url": null
+    }
+  ]
+}
+```
+
+`official_verified: true`인 청크만 최종 근거로 사용할 수 있습니다. `document_checksum`은 수집 원문, `chunk_checksum`은 정제된 청크의 변경 여부를 추적합니다. 전체 필드와 타입은 [`search-response.schema.json`](docs/schemas/search-response.schema.json)을 기준으로 합니다.
+
+### 3. 챗봇 최종 응답 형식
+
+챗봇은 자연어 문자열만 반환하지 않고 아래 구조로 Streamlit에 전달합니다. 답변의 핵심 주장 뒤에는 `[C1]`처럼 검색 결과의 인용 ID를 붙이고, 출처 카드·제품 카드·미디어 URL은 서버가 검색 metadata로 구성합니다.
+
+```json
+{
+  "schema_version": "1.0.0",
+  "request_id": "request-0001",
+  "status": "answered",
+  "language": "ko",
+  "answer": "Raspberry Pi Imager를 사용해 Raspberry Pi OS를 설치할 수 있습니다. [C1]",
+  "conditions": null,
+  "citations": [
+    {
+      "citation_id": "C1",
+      "document_id": "rpi-doc-0001",
+      "chunk_id": "rpi-doc-0001-0001",
+      "title": "Raspberry Pi documentation",
+      "publisher": "Raspberry Pi Ltd",
+      "section": "Getting started",
+      "source_url": "https://www.raspberrypi.com/documentation/",
+      "source_anchor": "#getting-started",
+      "document_version": "commit-or-revision",
+      "published_at": null,
+      "updated_at": null,
+      "collected_at": "2026-08-27",
+      "license": "CC BY-SA 4.0",
+      "quote": "Install Raspberry Pi OS using Raspberry Pi Imager."
+    }
+  ],
+  "products": [],
+  "media": [],
+  "clarification_questions": [],
+  "warnings": []
+}
+```
+
+`status`는 다음 값만 사용합니다.
+
+| 상태 | 의미 |
+|---|---|
+| `answered` | 공식 근거가 있으며 인용을 포함해 답변함 |
+| `needs_clarification` | 제품·OS·사용 환경 등 추가 정보가 필요함 |
+| `insufficient_evidence` | 검색했지만 답변을 뒷받침할 공식 근거가 부족함 |
+| `out_of_scope` | 가격·재고·제3자 호환성 등 지원 범위 밖임 |
+| `safety_blocked` | 비밀정보·위험 요청 등 안전 정책으로 차단함 |
+| `error` | 시스템 오류로 정상 처리하지 못함 |
+
+`answered`는 최소 한 개의 인라인 인용과 출처 카드가 있어야 합니다. 제품 추천 카드와 공식 이미지·영상은 자신을 뒷받침하는 `citation_id`를 반드시 참조합니다. 전체 형식은 [`chat-response.schema.json`](docs/schemas/chat-response.schema.json)을 기준으로 합니다.
+
+JSON Schema는 아래 명령으로 표준 모델에서 다시 생성합니다.
+
+```bash
+python -m src.contracts.export_schemas
+```
 
 ## 답변 및 안전 정책
 
 - 검색 근거가 영어이더라도 질문의 주된 언어로 답변하며, 한국어 질문에는 한국어로 답변합니다.
 - 제품명, 명령어, 코드, 파일 경로, 설정 키와 옵션은 번역하지 않고 원문 표기를 유지합니다.
 - 검색된 근거 안에서만 답변하고 문서에 없는 내용은 추측하지 않습니다.
-- 제품 모델과 OS 버전이 불명확하면 먼저 조건을 확인하거나 답변을 보류합니다.
+- 제품 모델과 OS 버전이 불명확하면 `needs_clarification` 상태로 확인 질문을 반환합니다.
 - 각 핵심 주장에 근거의 citation ID를 연결하며, 문서 제목·섹션·원문 URL은 검색 metadata를 서버 코드가 조합합니다.
 - 근거가 부족하면 `제공된 Raspberry Pi 공식 문서에서는 확인할 수 없습니다.`라고 답변합니다.
 - 서로 다른 제품 모델이나 문서 버전의 내용을 임의로 결합하지 않고, 충돌 시 그 사실을 표시합니다.
@@ -261,8 +368,6 @@ Changes: 파싱·정규화·청킹·번역 여부
 - 문서 안의 명령·프롬프트는 데이터로 취급하며 시스템 지시보다 우선하지 못하게 합니다.
 - API Key, 비밀번호, 토큰, 개인정보가 입력되거나 출력되지 않도록 탐지·마스킹합니다.
 - 문서로 확인되지 않는 제3자 제품 호환성·가격·재고 질문에는 답변하지 않습니다.
-- Base와 LoRA 출력은 동일한 JSON Schema로 검증합니다.
-- JSON 검증 실패·필수 필드 누락·상충 조건 발생 시 Few-shot fallback 또는 사용자 확인 질문으로 전환합니다.
 - 파인튜닝 모델은 답변이나 출처를 만들지 않으며, 제품·OS 사실은 항상 검색된 공식 문서로 재확인합니다.
 
 ## 평가 계획
@@ -309,10 +414,10 @@ sLLM Train·Dev·Holdout과 RAG Dev·Holdout의 목적을 구분하고, 학습 �
 app/
 └── streamlit_app.py
 src/
+├── contracts/        # sLLM·RAG·챗봇 공통 Pydantic 계약과 Schema 생성
 ├── ingestion/        # 문서 로딩·정제·청킹
 ├── retrieval/        # 임베딩·Vector DB·Retriever
 ├── condition_extraction/
-│   ├── schema.py     # 조건 JSON Schema
 │   ├── baseline.py   # Base Few-shot 추출기
 │   └── lora.py       # LoRA adapter 추론
 ├── recommendation/   # 최소 제품 후보 규칙
@@ -332,7 +437,8 @@ training/
 docs/
 ├── document-card.md
 ├── dataset-card.md
-└── model-card.md
+├── model-card.md
+└── schemas/          # 조건·검색 결과·최종 응답 JSON Schema
 tests/
 .env.example
 requirements.txt
