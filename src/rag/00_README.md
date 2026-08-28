@@ -1,9 +1,26 @@
 # RAG 모듈
 
-## 가장 먼저: 실행 위치와 명령어
+## 팀 공통 QA 실행 명령
 
-`demo.py`와 `indexer.py`는 상대 import를 사용하는 패키지 모듈이다. 따라서
-`src/rag` 폴더에서 `python demo.py`처럼 직접 실행하지 않는다.
+RAG 검색, 답변 생성기, 인용 검증을 함께 확인하는 기본 실행 명령은 아래다.
+발표·시연·통합 확인에는 `src.rag.demo`가 아니라 이 QA CLI를 사용한다.
+
+```bash
+python3 -m src.services.rag_qa_cli
+```
+
+명령을 인자 없이 실행하면 화살표 키로 **Hybrid QA / BM25 QA / Chroma 색인 생성·갱신**을
+선택한 뒤 질문을 입력한다. Hybrid QA를 직접 실행할 때는 아래처럼 사용한다.
+
+```bash
+python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?" --trace
+```
+
+## Retriever 단위 점검: 실행 위치와 명령어
+
+`demo.py`는 답변 생성 전 Retriever 결과만 확인하는 선택적 단위 점검 도구다. `demo.py`와
+`indexer.py`는 상대 import를 사용하는 패키지 모듈이므로, `src/rag` 폴더에서
+`python demo.py`처럼 직접 실행하지 않는다.
 
 프로젝트 최상위 폴더에서 아래처럼 실행한다.
 
@@ -22,6 +39,62 @@ HF_HUB_OFFLINE=1 python3 -m src.rag.demo --mode hybrid
 `ImportError: attempted relative import with no known parent package`가 나오면
 `python3 demo.py`가 아니라 위의 `python3 -m src.rag.demo` 명령으로 실행한다.
 
+## QA CLI 상세 옵션
+
+RAG 검색 결과를 기존 근거 기반 프롬프트·안전 검증과 연결한 QA CLI는 아래처럼
+실행한다. Streamlit, 제품 catalog, Qwen 조건 추출은 이 1차 범위에 포함하지 않는다.
+
+인자 없이 실행하면 화살표 키로 **Hybrid QA / BM25 QA / Chroma 색인 생성·갱신** 중
+하나를 선택한다. Hybrid·BM25를 선택한 뒤 질문을 비우고 Enter를 누르면 검증용 예시
+질문 하나를 무작위로 실행한다.
+
+```bash
+# 대화형 실행: 화살표로 작업 선택 후 질문 입력
+python3 -m src.services.rag_qa_cli
+
+# Hybrid: 먼저 Chroma 색인을 만든 뒤 실행한다.
+python3 -m src.rag.indexer --reset
+HF_HUB_OFFLINE=1 python3 -m src.services.rag_qa_cli \
+  --mode hybrid \
+  --query "SSH를 활성화하려면?"
+
+# Chroma 없이 BM25만 확인한다.
+python3 -m src.services.rag_qa_cli \
+  --mode bm25 \
+  --query "microSD에 Raspberry Pi OS를 설치하려면?"
+
+# 이후 Streamlit·통합 테스트가 읽을 공통 응답 JSON을 확인한다.
+python3 -m src.services.rag_qa_cli --mode bm25 --query "SSH를 활성화하려면?" --json
+
+# 메뉴를 건너뛰고 Chroma 색인을 생성·갱신한다.
+python3 -m src.services.rag_qa_cli --action index
+# 기존 collection을 명시적으로 삭제하고 전체 재색인한다.
+python3 -m src.services.rag_qa_cli --action index --reset
+```
+
+### 명령별 역할
+
+| 명령·옵션 | 역할 | 사용할 시점 |
+| --- | --- | --- |
+| `python3 -m src.rag.indexer --reset` | `manifest.json` 청크를 E5 임베딩으로 변환해 Chroma DB에 전체 색인한다. 기존 collection은 삭제 후 새로 만든다. | 최초 실행, corpus·metadata 변경 후 |
+| `--mode bm25` | 문서와 질문의 단어 일치를 기준으로 BM25만 검색한 뒤 QA 응답을 만든다. Chroma와 E5 모델이 없어도 된다. | 빠른 기본 검색 확인, Chroma 색인 전 |
+| `--mode hybrid` | BM25 키워드 검색과 Chroma Dense 의미 검색을 RRF로 결합한 뒤 QA 응답을 만든다. | 실제 시연과 기본 QA 실행 |
+| `--json` | 검색 방식은 바꾸지 않고, 콘솔용 출력 대신 공통 `ChatResponse` JSON을 출력한다. | Streamlit 연결, 자동 테스트, API 응답 확인 |
+
+예를 들어 `SSH`처럼 문서와 같은 키워드가 있는 질문은 BM25도 잘 찾는다. 반면
+`모니터 없이 처음 설정하고 싶어`처럼 문서 표현과 다른 자연어 질문은 Dense 검색이
+의미를 보완하므로 Hybrid 방식이 더 적합하다.
+
+로컬 기본값은 `ANSWER_GENERATOR=template`이며, 한국어 안내와 검색된 영문 공식 근거를
+`[C1]` 인용과 함께 출력한다. RunPod Pod에서 Qwen3-4B Base Instruct를 직접 쓸 때는
+`ANSWER_GENERATOR=huggingface`와 `--trace`를 지정한다. 원문 URL은 답변 모델이 만들지
+않고 출처 카드에서 표시한다. 자세한 Pod 실행 절차는 [RunPod QA 안내](../../runpod/README.md)를
+참고한다.
+
+현재 프로토타입 manifest의 `retrieved_at`은 QA 응답에서 임시로 `collected_at`에
+매핑된다. 문서 파이프라인의 canonical manifest와 `SearchResponse` adapter 연결은
+제품 추천 통합 단계에서 처리한다.
+
 > [!IMPORTANT]
 > 현재 이 패키지는 검색 동작을 검증하기 위한 프로토타입입니다. 필드명과 반환 형식의 기준은 기존 `RagResult` 구현이 아니라 `src/contracts/models.py`와 `docs/schemas/search-response.schema.json`입니다. 프로토타입을 서비스에 연결할 때는 공통 계약을 만족하도록 교체하거나 adapter를 구현해야 합니다.
 
@@ -35,7 +108,7 @@ HF_HUB_OFFLINE=1 python3 -m src.rag.demo --mode hybrid
 
 `official_verified`가 `true`인 청크만 Chroma index에 넣고, 기본 검색 결과에도 포함한다.
 
-## 사용 방법
+## Retriever 구현 단위 사용 방법
 
 ### `.env` 설정과 로컬 실행
 

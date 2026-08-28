@@ -12,23 +12,8 @@ import sys
 
 from .models import RagFilters
 from .retriever import DenseRetrievalError, HybridRetriever
+from .sample_queries import DEMO_QUERIES
 from .settings import RagSettings, RagSettingsError
-
-# 현재 테스트 corpus의 공식 문서 근거로 답변을 검증할 수 있는 질문들이다.
-DEMO_QUERIES = [
-    "라즈베리파이에 OS는 어떻게 설치해?",
-    "microSD에 Raspberry Pi OS를 설치하려면?",
-    "모니터 없이 처음 설정하려면?",
-    "Raspberry Pi Imager에서 Wi-Fi는 어디서 설정해?",
-    "Raspberry Pi Connect는 어떻게 켜?",
-    "SSH를 활성화하려면?",
-    "SSH 공개키 인증도 가능한가?",
-    "이미 설치된 Pi에서 SSH를 켜는 방법은?",
-    "카메라 모듈을 사용할 수 있어?",
-    "구형 raspivid, raspistill을 써도 돼?",
-    "카메라로 사진·영상 촬영이 가능한가?",
-]
-
 
 def create_parser() -> argparse.ArgumentParser:
     """질문과 선택 metadata filter를 받는 데모 CLI parser를 만든다."""

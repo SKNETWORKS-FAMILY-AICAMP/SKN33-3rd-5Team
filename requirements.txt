@@ -8,6 +8,6 @@ rank-bm25>=0.2.2,<1
 beautifulsoup4>=4.12,<5
 pytest>=8.0,<9
 
-# Needed by the RunPod client contract; Worker-only packages are in runpod/requirements.txt.
+# RAG QA 공통 계약용 패키지. RunPod Qwen 추론 전용 패키지는 runpod/requirements.txt에 둔다.
 transformers>=4.45,<5
 PyYAML>=6.0,<7
