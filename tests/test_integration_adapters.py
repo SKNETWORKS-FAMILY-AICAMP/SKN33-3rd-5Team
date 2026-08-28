@@ -17,7 +17,7 @@ from src.services.integration_adapters import (
 
 def condition_payload(**updates: object) -> ConditionPayload:
     payload: dict[str, object] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "troubleshooting",
         "use_case": "camera_monitoring",
         "product_models": ["Raspberry Pi 5"],
