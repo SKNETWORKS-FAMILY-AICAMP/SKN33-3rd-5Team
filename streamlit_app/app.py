@@ -5,21 +5,24 @@ from __future__ import annotations
 import base64
 import html
 import mimetypes
+import sys
 import time
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import streamlit as st
 
 from mock_data import (
     PRODUCTS,
     RECOMMENDATION_SOURCES,
-    mock_qa_response,
     recommendation_conditions,
 )
+from src.services.chat_service import build_default_mock_chat_service
 from styles import APP_CSS
 
-
-ROOT = Path(__file__).resolve().parents[1]
 
 st.set_page_config(
     page_title="PiCare | Raspberry Pi 공식 문서 기반 도우미",
@@ -28,6 +31,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 st.markdown(APP_CSS, unsafe_allow_html=True)
+
+
+@st.cache_resource(show_spinner=False)
+def qa_chat_service():
+    """Keep one replaceable mock QA service for the Streamlit process."""
+
+    return build_default_mock_chat_service()
 
 
 @st.cache_data(show_spinner=False)
@@ -231,7 +241,14 @@ def render_recommendation_page() -> None:
 def answer_label_class(status: str) -> str:
     """Return a visual class for answer status labels."""
 
-    return "blocked" if status in {"out_of_scope", "safety_blocked", "needs_clarification"} else ""
+    blocked = {
+        "error",
+        "insufficient_evidence",
+        "needs_clarification",
+        "out_of_scope",
+        "safety_blocked",
+    }
+    return "blocked" if status in blocked else ""
 
 
 def render_answer(response: dict) -> None:
@@ -256,10 +273,10 @@ def render_answer(response: dict) -> None:
 
 
 def submit_qa(question: str) -> None:
-    """Update session state with a deterministic mock response."""
+    """Run the mock document-grounded chain and store its safe response."""
 
     st.session_state.qa_question = question.strip()
-    st.session_state.qa_response = mock_qa_response(question)
+    st.session_state.qa_response = qa_chat_service().answer(question)
 
 
 def render_qa_page() -> None:
@@ -287,7 +304,14 @@ def render_qa_page() -> None:
     with left:
         render_answer(response)
         with st.expander("🧩 조건 JSON과 응답 상태 · mock", expanded=False):
-            st.json({"status": response["status"], "mode": "mock", "conditions": response["conditions"]})
+            st.json(
+                {
+                    "status": response["status"],
+                    "reason_code": response.get("reason_code"),
+                    "mode": response.get("mode", "mock_chain"),
+                    "conditions": response["conditions"],
+                }
+            )
     with right:
         section_title(f"공식 문서 출처 {len(response['sources'])}건")
         render_sources(response["sources"])
