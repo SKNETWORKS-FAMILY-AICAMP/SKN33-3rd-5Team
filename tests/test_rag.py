@@ -11,11 +11,14 @@ from src.rag import (
     RagFilters,
     RagSettings,
     RagSettingsError,
+    RetrievalDecision,
     build_chroma_index,
     evaluate_rankings,
     rrf_fuse,
 )
 from src.rag.chroma_metadata import chroma_where, chunk_to_chroma_metadata, tag_flag_key
+from src.rag import demo
+from src.rag.demo import DEMO_QUERIES, create_parser, prompt_for_query, select_query
 
 
 def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> DocumentChunk:
@@ -40,7 +43,11 @@ def test_rrf_rewards_a_chunk_returned_by_both_rankers() -> None:
 
 def test_metadata_filter_is_applied_before_bm25_ranking() -> None:
     retriever = HybridRetriever(
-        [make_chunk("camera", "camera cable connector", ("camera",)), make_chunk("learn", "camera coding", ("learning",))]
+        [
+            make_chunk("camera", "camera cable connector", ("camera",)),
+            make_chunk("learn", "learning coding", ("learning",)),
+            make_chunk("server", "server storage", ("server",)),
+        ]
     )
     results = retriever.search("camera", RagFilters(use_cases=("camera",)))
     assert [result.chunk_id for result in results] == ["camera"]
@@ -78,6 +85,7 @@ def test_settings_reads_dotenv_and_resolves_project_relative_paths(tmp_path, mon
     assert settings.chroma_path == tmp_path / "data" / "indexed" / "chroma"
     assert settings.chroma_collection_name == "test_collection"
     assert settings.top_k == 3
+    assert settings.dense_max_distance == 0.48
 
 
 def test_settings_rejects_invalid_top_k(tmp_path, monkeypatch) -> None:
@@ -100,6 +108,143 @@ def test_settings_rejects_invalid_top_k(tmp_path, monkeypatch) -> None:
 
     with pytest.raises(RagSettingsError, match="TOP_K"):
         RagSettings.from_env(tmp_path)
+
+
+def test_settings_rejects_invalid_dense_distance(tmp_path, monkeypatch) -> None:
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text('{"chunks": []}', encoding="utf-8")
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "DOCUMENT_MANIFEST=manifest.json",
+                "CHROMA_PATH=data/chroma",
+                "CHROMA_COLLECTION_NAME=test_collection",
+                "E5_MODEL_NAME=intfloat/multilingual-e5-base",
+                "TOP_K=3",
+                "DENSE_MAX_DISTANCE=2",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    for name in (
+        "DOCUMENT_MANIFEST",
+        "CHROMA_PATH",
+        "CHROMA_COLLECTION_NAME",
+        "E5_MODEL_NAME",
+        "TOP_K",
+        "DENSE_MAX_DISTANCE",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(RagSettingsError, match="DENSE_MAX_DISTANCE"):
+        RagSettings.from_env(tmp_path)
+
+
+def test_bm25_all_zero_returns_insufficient_evidence_and_search_stays_compatible() -> None:
+    retriever = HybridRetriever([make_chunk("camera", "camera setup", ("camera",))])
+
+    decision = retriever.search_with_decision("스마트팜을 만들고 싶어요")
+
+    assert isinstance(decision, RetrievalDecision)
+    assert decision.status == "insufficient_evidence"
+    assert decision.reason == "bm25_all_zero"
+    assert decision.results == ()
+    assert retriever.search("스마트팜을 만들고 싶어요") == []
+
+
+def _mock_dense_response(monkeypatch, response: dict[str, list[list[object]]]) -> None:
+    class FakeCollection:
+        def query(self, **kwargs: object) -> dict[str, list[list[object]]]:
+            return response
+
+    class FakeClient:
+        def get_collection(self, name: str) -> FakeCollection:
+            assert name == "rpi_official"
+            return FakeCollection()
+
+    class FakeSentenceTransformer:
+        def __init__(self, name: str) -> None:
+            assert name == "test-e5"
+
+        def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
+            assert normalize_embeddings is True
+            return [[0.1, 0.2]]
+
+    monkeypatch.setitem(sys.modules, "chromadb", types.SimpleNamespace(PersistentClient=lambda path: FakeClient()))
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", types.SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+    )
+
+
+def test_dense_distance_over_threshold_returns_insufficient_evidence(monkeypatch) -> None:
+    _mock_dense_response(monkeypatch, {"ids": [["camera"]], "distances": [[0.49]]})
+    retriever = HybridRetriever(
+        [make_chunk("camera", "camera setup", ("camera",))],
+        chroma_path="test-chroma",
+        embedding_model_name="test-e5",
+        dense_max_distance=0.48,
+    )
+
+    decision = retriever.search_with_decision("스마트팜을 만들고 싶어요")
+
+    assert decision.status == "insufficient_evidence"
+    assert decision.reason == "bm25_all_zero_and_dense_below_threshold"
+
+
+def test_hybrid_returns_dense_result_when_bm25_is_zero(monkeypatch) -> None:
+    _mock_dense_response(monkeypatch, {"ids": [["camera"]], "distances": [[0.20]]})
+    retriever = HybridRetriever(
+        [make_chunk("camera", "camera setup", ("camera",))],
+        chroma_path="test-chroma",
+        embedding_model_name="test-e5",
+    )
+
+    decision = retriever.search_with_decision("카메라를 연결하고 싶어요")
+
+    assert decision.status == "retrieved"
+    assert [result.chunk_id for result in decision.results] == ["camera"]
+
+
+def test_hybrid_keeps_bm25_result_when_dense_is_below_threshold(monkeypatch) -> None:
+    _mock_dense_response(monkeypatch, {"ids": [["camera"]], "distances": [[0.90]]})
+    retriever = HybridRetriever(
+        [
+            make_chunk("camera", "camera setup", ("camera",)),
+            make_chunk("learn", "learning coding", ("learning",)),
+            make_chunk("server", "server storage", ("server",)),
+        ],
+        chroma_path="test-chroma",
+        embedding_model_name="test-e5",
+    )
+
+    decision = retriever.search_with_decision("camera")
+
+    assert decision.status == "retrieved"
+    assert [result.chunk_id for result in decision.results] == ["camera"]
+
+
+def test_demo_parser_has_no_fixed_filter_and_accepts_optional_use_case() -> None:
+    default_args = create_parser().parse_args([])
+    filtered_args = create_parser().parse_args(["--query", "카메라", "--use-case", "camera"])
+
+    assert default_args.use_cases is None
+    assert filtered_args.query == "카메라"
+    assert filtered_args.use_cases == ["camera"]
+
+
+def test_demo_uses_a_random_example_query_only_when_no_query_is_provided(monkeypatch) -> None:
+    monkeypatch.setattr(demo.random, "choice", lambda values: values[-1])
+
+    assert select_query(None) == DEMO_QUERIES[-1]
+    assert select_query("직접 입력한 질문") == "직접 입력한 질문"
+
+
+def test_demo_console_input_returns_text_or_none_for_empty_input(monkeypatch) -> None:
+    monkeypatch.setattr("builtins.input", lambda _: "  SSH를 활성화하려면?  ")
+    assert prompt_for_query() == "SSH를 활성화하려면?"
+
+    monkeypatch.setattr("builtins.input", lambda _: "   ")
+    assert prompt_for_query() is None
 
 
 def test_chroma_metadata_and_where_include_tag_filters() -> None:

@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -92,3 +92,17 @@ class RagResult:
             retrieved_at=chunk.retrieved_at,
             document_version=chunk.document_version,
         )
+
+
+@dataclass(frozen=True)
+class RetrievalDecision:
+    """검색 결과와 근거 충분 여부를 함께 표현한다.
+
+    ``search()``의 기존 ``list[RagResult]`` 계약은 유지한다. 챗봇처럼 근거
+    부족을 구분해야 하는 호출부는 ``search_with_decision()``의 이 객체를
+    사용한다.
+    """
+
+    status: Literal["retrieved", "insufficient_evidence"]
+    results: tuple[RagResult, ...]
+    reason: str | None = None

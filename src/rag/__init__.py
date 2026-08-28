@@ -3,7 +3,7 @@
 from typing import Any
 
 from .evaluation import RetrievalEvaluation, evaluate_rankings, hit_at_k, mean_reciprocal_rank
-from .models import DocumentChunk, RagFilters, RagResult
+from .models import DocumentChunk, RagFilters, RagResult, RetrievalDecision
 from .retriever import DenseRetrievalError, HybridRetriever, rrf_fuse
 from .settings import RagSettings, RagSettingsError
 
@@ -23,6 +23,7 @@ __all__ = [
     "RagSettings",
     "RagSettingsError",
     "RetrievalEvaluation",
+    "RetrievalDecision",
     "build_chroma_index",
     "evaluate_rankings",
     "hit_at_k",
