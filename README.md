@@ -118,6 +118,8 @@ flowchart LR
 
 핵심 corpus는 라이선스와 변경 이력을 확인하기 쉬운 **Raspberry Pi 공식 온라인 문서**를 우선 사용합니다. 아래 링크는 최초 수집 후보이며 실제 색인 여부·수집일·checksum은 Document Card와 manifest에서 관리합니다.
 
+실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry.csv`](document_pipeline/data/source_registry.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
+
 ### 핵심 온라인 문서
 
 | 영역 | 공식 문서 | 활용 목적 |
@@ -415,7 +417,6 @@ app/
 └── streamlit_app.py
 src/
 ├── contracts/        # sLLM·RAG·챗봇 공통 Pydantic 계약과 Schema 생성
-├── ingestion/        # 문서 로딩·정제·청킹
 ├── retrieval/        # 임베딩·Vector DB·Retriever
 ├── condition_extraction/
 │   ├── baseline.py   # Base Few-shot 추출기
@@ -425,6 +426,11 @@ src/
 ├── safety/           # 답변 보류·인젝션·비밀정보 방어
 ├── evaluation/       # RAG·조건 추출 평가
 └── services/         # UI와 분리된 RAG 서비스 계층
+document_pipeline/    # 문서·데이터 담당 작업을 한곳에서 관리
+├── contracts/        # RAG 전달용 manifest 계약
+├── ingestion/        # 문서 로딩·정제·청킹 코드
+├── data/             # source registry와 로컬 원문·정제본
+└── docs/             # 라이선스 검토와 Document Card
 data/
 ├── sample/           # 공개 가능한 샘플 문서와 manifest
 └── finetuning/

@@ -18,7 +18,7 @@
 ```python
 from src.rag import HybridRetriever, RagFilters
 
-retriever = HybridRetriever.from_manifest("data/documents/manifest.json", chroma_path="data/chroma")
+retriever = HybridRetriever.from_manifest("document_pipeline/data/manifest.json", chroma_path="data/chroma")
 results = retriever.search(
     "모니터 없이 카메라를 연결하고 싶어요",
     RagFilters(product_models=("Raspberry Pi 5",), use_cases=("camera",)),
@@ -27,6 +27,8 @@ results = retriever.search(
 ```
 
 현재 반환값은 테스트용 `list[RagResult]`다. 실제 챗봇 연결 전에는 `SearchResponse` 계약으로 변환하고, 서버가 `citation_id`와 출처 metadata를 조합해야 한다.
+
+신규 문서 파이프라인의 manifest 계약은 `document_pipeline/contracts/manifest.schema.json`을 기준으로 한다. 현재 프로토타입의 `retrieved_at` 필드는 신규 계약에서 사용하지 않으므로, 통합 시 canonical metadata로 변환하는 adapter가 필요하다.
 
 ## 역할 경계
 
