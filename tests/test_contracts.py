@@ -8,7 +8,7 @@ from src.contracts import ChatCitation, ChatResponse, ConditionPayload, SearchRe
 
 def valid_conditions(**overrides: object) -> ConditionPayload:
     payload: dict[str, object] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "product_recommendation",
         "use_case": "education_coding",
         "product_models": None,
@@ -48,7 +48,7 @@ def test_search_response_requires_ordered_citation_ids() -> None:
     with pytest.raises(ValidationError):
         SearchResponse.model_validate(
             {
-                "schema_version": "1.0.0",
+                "schema_version": "1.1.0",
                 "query_id": "query-0001",
                 "query_language": "ko",
                 "retrieval_method": "hybrid",
@@ -116,7 +116,7 @@ def test_answered_chat_response_requires_a_known_inline_citation() -> None:
         quote="Install Raspberry Pi OS using Raspberry Pi Imager.",
     )
     response = ChatResponse(
-        schema_version="1.0.0",
+        schema_version="1.1.0",
         request_id="req-0001",
         status="answered",
         language="ko",
@@ -134,7 +134,7 @@ def test_answered_chat_response_requires_a_known_inline_citation() -> None:
 def test_answered_chat_response_rejects_an_unknown_citation() -> None:
     with pytest.raises(ValidationError):
         ChatResponse(
-            schema_version="1.0.0",
+            schema_version="1.1.0",
             request_id="req-0002",
             status="answered",
             language="ko",

@@ -45,7 +45,7 @@ def build_recommendation_chat_response(
 
     decision = agent_result.decision
     common = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "request_id": request_id,
         "language": language,
         "conditions": decision.conditions,
@@ -105,6 +105,7 @@ def build_recommendation_chat_response(
         )
         contract_products.append(
             ProductRecommendation(
+                product_id=candidate.product_id,
                 product_model=candidate.name,
                 recommendation=recommendation,
                 matched_conditions=candidate.matched_conditions,

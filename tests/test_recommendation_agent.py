@@ -114,7 +114,7 @@ def conditions(**overrides) -> ConditionPayload:
     """추천 테스트에 사용할 기본 공통 조건에 필요한 값만 덮어쓴다."""
 
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "product_recommendation",
         "use_case": "gpio_iot",
         "product_models": None,
@@ -153,7 +153,7 @@ def search_response() -> SearchResponse:
 
     return SearchResponse.model_validate(
         {
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "query_id": "query-1",
             "query_language": "ko",
             "retrieval_method": "hybrid",
@@ -333,6 +333,7 @@ class RecommendationAgentTests(unittest.TestCase):
             search_response=search_response(),
         )
         self.assertEqual(response.status, "answered")
+        self.assertEqual(response.products[0].product_id, "compact-board")
         self.assertEqual(response.products[0].product_model, "Compact Board")
         self.assertIn("[C1]", response.answer)
         self.assertIn("GPIO·IoT", response.answer)

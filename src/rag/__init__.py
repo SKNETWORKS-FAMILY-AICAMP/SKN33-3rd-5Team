@@ -3,6 +3,7 @@
 from typing import Any
 
 from .evaluation import RetrievalEvaluation, evaluate_rankings, hit_at_k, mean_reciprocal_rank
+from .adapters import manifest_chunk_to_document_chunk, manifest_to_document_chunks
 from .models import DocumentChunk, RagFilters, RagResult, RetrievalDecision
 from .retriever import DenseRetrievalError, HybridRetriever, rrf_fuse
 from .settings import RagSettings, RagSettingsError
@@ -28,5 +29,7 @@ __all__ = [
     "evaluate_rankings",
     "hit_at_k",
     "mean_reciprocal_rank",
+    "manifest_chunk_to_document_chunk",
+    "manifest_to_document_chunks",
     "rrf_fuse",
 ]

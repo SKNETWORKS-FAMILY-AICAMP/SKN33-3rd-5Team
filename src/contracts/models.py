@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 
 NonEmptyText = Annotated[str, Field(min_length=1)]
 NonEmptyTextList = Annotated[list[NonEmptyText], Field(min_length=1)]
@@ -196,6 +196,7 @@ class ChatCitation(StrictContract):
 class ProductRecommendation(StrictContract):
     """Structured card for product recommendation or comparison UI."""
 
+    product_id: NonEmptyText
     product_model: NonEmptyText
     recommendation: NonEmptyText
     matched_conditions: list[NonEmptyText]

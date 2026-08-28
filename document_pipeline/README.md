@@ -50,13 +50,13 @@ python document_pipeline/ingestion/run_pipeline.py
 실행 결과는 다음과 같다.
 
 - `data/raw/*.adoc`: 변경하지 않은 공식 원문과 `collection.json` 수집 대장
-- `data/processed/parsed_sections.json`: 제목·절·본문을 분리한 중간 결과
+- `data/processed/parsed_sections.json`: 실제 anchor와 heading 경로, 문단·목록·코드·주의문·표·이미지 블록을 보존한 중간 결과
 - `data/manifest.json`: RAG에 전달하는 청크와 metadata
 
-이 파일들은 모두 Git 제외 대상이다. 파싱 로직만 다시 실행하려면 `python document_pipeline/ingestion/build_manifest.py`를 사용한다.
+이 파일들은 모두 Git 제외 대상이다. 파싱 로직만 다시 실행하려면 `python document_pipeline/ingestion/build_manifest.py`를 사용한다. 기본값은 `multilingual-e5-base` 토크나이저 기준 목표 360 tokens, 하드 최대 460 tokens, 완전한 문단 블록만 60 tokens 이내로 겹치게 한다. 코드·표·이미지는 겹치지 않는다.
 
 ## 다음 합의 사항
 
 1. RAG 담당자가 manifest의 정적 필드와 런타임 필드 분리를 검토한다.
-2. 현재 `src/rag/models.py`의 `retrieved_at`을 canonical 계약으로 변환할 adapter 위치를 정한다.
+2. `src/rag/adapters.py`가 canonical `collected_at`을 기존 RAG 모델의 `retrieved_at`으로 변환한다. 새 manifest 계약은 줄이지 않는다.
 3. 제품 카드 UI에 `CC BY-SA 4.0` 출처 표기와 비공식 프로젝트 고지를 구현한다.

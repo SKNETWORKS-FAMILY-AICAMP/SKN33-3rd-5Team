@@ -22,7 +22,7 @@ def condition_payload(**overrides):
     """테스트마다 필요한 필드만 바꿀 수 있는 정상 조건 JSON을 만든다."""
 
     payload = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "product_recommendation",
         "use_case": "education_coding",
         "product_models": None,
