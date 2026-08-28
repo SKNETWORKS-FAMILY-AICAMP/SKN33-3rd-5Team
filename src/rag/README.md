@@ -15,6 +15,33 @@
 
 ## 사용 방법
 
+### `.env` 설정과 로컬 실행
+
+프로젝트 최상위 `.env`에 아래 RAG 설정이 필요하다. 로컬 `PersistentClient`를
+사용하므로 Chroma API 키는 필요 없다.
+
+```env
+DOCUMENT_MANIFEST=data/corpora/corpus_section_test/manifest.json
+CHROMA_PATH=data/indexed/chroma_section_test
+CHROMA_COLLECTION_NAME=rpi_official
+E5_MODEL_NAME=intfloat/multilingual-e5-base
+TOP_K=3
+```
+
+색인은 명시적으로 실행한다. `--reset`은 기존 컬렉션을 삭제한 뒤 manifest 전체를
+다시 색인하며, 옵션 없이 실행하면 같은 `chunk_id`만 upsert한다.
+
+```bash
+python3 -m src.rag.indexer --reset
+python3 -m src.rag.demo --mode bm25
+python3 -m src.rag.demo --mode hybrid
+```
+
+`--mode hybrid`에서 Chroma DB나 collection이 없으면 오류를 숨기고 BM25로 전환하지
+않는다. 먼저 indexer를 실행해 원인을 바로 확인한다.
+
+### Python에서 사용
+
 ```python
 from src.rag import HybridRetriever, RagFilters
 
@@ -27,6 +54,10 @@ results = retriever.search(
 ```
 
 현재 반환값은 테스트용 `list[RagResult]`다. 실제 챗봇 연결 전에는 `SearchResponse` 계약으로 변환하고, 서버가 `citation_id`와 출처 metadata를 조합해야 한다.
+
+Chroma 색인에는 `product_models`, `use_cases`, `os_versions`를 tag별 boolean metadata로
+저장한다. Dense 검색은 해당 metadata를 Chroma `where`에 먼저 적용하고, 반환 전에는
+동일 조건을 다시 검사한다.
 
 ## 역할 경계
 
