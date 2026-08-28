@@ -73,7 +73,7 @@ class RagQaService:
         if status == "needs_clarification" and not questions:
             questions = [answer]
         return ChatResponse(
-            schema_version="1.0.0",
+            schema_version="1.1.0",
             request_id=request_id,
             status=status,
             language="ko",
@@ -222,7 +222,7 @@ class RagQaService:
             if f"C{result.rank}" in used_citation_ids
         ]
         return ChatResponse(
-            schema_version="1.0.0",
+            schema_version="1.1.0",
             request_id=request_id,
             status="answered",
             language="ko",
