@@ -323,7 +323,7 @@
   "description": "RAG-to-chatbot response contract.",
   "properties": {
     "schema_version": {
-      "const": "1.0.0",
+      "const": "1.1.0",
       "title": "Schema Version",
       "type": "string"
     },

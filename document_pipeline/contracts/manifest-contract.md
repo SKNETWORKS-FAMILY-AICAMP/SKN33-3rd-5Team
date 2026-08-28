@@ -31,7 +31,7 @@
 3. 날짜는 ISO 8601을 사용하고 checksum은 `sha256:<64 hex>` 형식을 사용한다.
 4. `official_verified`가 `true`이고 source registry에서 `collection_decision=include`인 자료만 manifest에 포함한다.
 5. `rank`, `citation_id`, `indexed_at`은 런타임 필드이므로 manifest에 넣지 않는다.
-6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. 통합 시 `collected_at`을 보존하는 adapter를 구현한다.
+6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. `src/rag/adapters.py`가 `collected_at`을 보존해 변환하며, manifest 계약 자체는 줄이지 않는다.
 7. corpus의 `image_url`, `video_url`은 명확한 재사용 권리가 확인된 공식 URL만 사용하며, 파일 자체는 corpus에 복제하지 않는다.
 8. `license_url`, 검토 상태와 attribution 문구는 `source_registry.csv`와 Document Card에서 관리한다. RAG manifest에는 canonical 계약의 `license`만 전달한다.
 9. 제품 페이지 사진은 corpus manifest에 넣지 않는다. 교육용 제품 카드의 원격 표시는 `data/product_media_registry.json`에서 별도로 통제한다.
@@ -50,7 +50,7 @@ RAG 담당자의 테스트 chunk는 검색 품질을 빠르게 확인하기 위�
 | 없음 | `image_url`, `video_url` | 명확한 재사용 권리가 있는 경우에만 채움 |
 | 없음 | `indexed_at`, `rank`, `citation_id` | RAG/통합 계층이 검색·응답 시 생성 |
 
-따라서 테스트 예시의 `source_url`처럼 사람이 바로 열 수 있는 공식 문서 링크는 유지한다. 다만 최종 manifest에는 `source_anchor`를 분리해 넣어, 인용 UI가 같은 문서의 정확한 절을 표시할 수 있게 한다.
+따라서 테스트 예시의 `source_url`처럼 사람이 바로 열 수 있는 공식 문서 링크는 유지한다. 다만 최종 manifest에는 `source_anchor`를 분리해 넣어, 인용 UI가 같은 문서의 정확한 절을 표시할 수 있게 한다. AsciiDoc 원문에 `[[explicit-anchor]]`가 있으면 그 값을 그대로 사용하고, 없으면 임의로 추정하지 않아 `null`로 둔다.
 
 ## RAG 전달 예시
 

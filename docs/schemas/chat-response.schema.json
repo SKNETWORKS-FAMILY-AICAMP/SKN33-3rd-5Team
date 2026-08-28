@@ -154,7 +154,7 @@
       "description": "Complete sLLM condition output; unmentioned user constraints are null.",
       "properties": {
         "schema_version": {
-          "const": "1.0.0",
+          "const": "1.1.0",
           "title": "Schema Version",
           "type": "string"
         },
@@ -408,6 +408,11 @@
       "additionalProperties": false,
       "description": "Structured card for product recommendation or comparison UI.",
       "properties": {
+        "product_id": {
+          "minLength": 1,
+          "title": "Product Id",
+          "type": "string"
+        },
         "product_model": {
           "minLength": 1,
           "title": "Product Model",
@@ -466,6 +471,7 @@
         }
       },
       "required": [
+        "product_id",
         "product_model",
         "recommendation",
         "matched_conditions",
@@ -516,7 +522,7 @@
   "description": "Stable chatbot-to-Streamlit response contract.",
   "properties": {
     "schema_version": {
-      "const": "1.0.0",
+      "const": "1.1.0",
       "title": "Schema Version",
       "type": "string"
     },
