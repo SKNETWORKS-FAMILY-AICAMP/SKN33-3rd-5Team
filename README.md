@@ -469,6 +469,23 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 > [!NOTE]
 > 현재 Streamlit 화면은 sLLM·RAG 연동 전 UI 검증을 위한 mock 버전입니다. 제품 추천, 조건 JSON, 한국어 QA 답변, 답변 보류, 공식 문서 출처 화면을 미리 확인할 수 있습니다.
 
+### 현재 RAG QA 실행 기준
+
+공식 문서 검색·답변 생성기·인용 검증을 함께 실행하는 팀 공통 명령은 아래다.
+`src.rag.demo`는 Retriever 결과만 보는 단위 점검 도구이므로 발표·시연·통합 확인에는
+사용하지 않는다.
+
+```bash
+python3 -m src.services.rag_qa_cli
+```
+
+화살표 키로 Hybrid QA, BM25 QA, Chroma 색인 생성·갱신 중 하나를 선택한다. Hybrid QA를
+바로 실행할 때는 다음 명령을 사용한다.
+
+```bash
+python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?" --trace
+```
+
 예정된 챗봇 실행 흐름은 다음과 같습니다.
 
 ```bash

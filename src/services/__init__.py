@@ -2,9 +2,11 @@
 
 from .recommendation_agent import RecommendationAgent, RecommendationAgentResult
 from .recommendation_response import build_recommendation_chat_response
+from .rag_qa_service import RagQaService
 
 __all__ = [
     "RecommendationAgent",
     "RecommendationAgentResult",
+    "RagQaService",
     "build_recommendation_chat_response",
 ]
