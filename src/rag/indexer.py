@@ -9,8 +9,8 @@ import argparse
 import json
 from pathlib import Path
 
+from .adapters import manifest_to_document_chunks
 from .chroma_metadata import chunk_to_chroma_metadata
-from .models import DocumentChunk
 from .settings import RagSettings, RagSettingsError
 
 
@@ -32,7 +32,7 @@ def build_chroma_index(
 
     # 문서 담당자가 제공한 하나의 manifest에서 모든 청크를 읽는다.
     payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
-    chunks = [DocumentChunk.from_dict(value) for value in payload["chunks"]]
+    chunks = manifest_to_document_chunks(payload)
     # 미검수 문서는 검색 근거와 Chroma DB 모두에서 제외한다.
     approved = [chunk for chunk in chunks if chunk.official_verified]
     if not approved:

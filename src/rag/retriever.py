@@ -11,6 +11,7 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
+from .adapters import manifest_to_document_chunks
 from .chroma_metadata import chroma_where
 from .models import DocumentChunk, RagFilters, RagResult
 
@@ -66,7 +67,7 @@ class HybridRetriever:
     def from_manifest(cls, path: str | Path, **kwargs: object) -> "HybridRetriever":
         """manifest.json을 읽어 HybridRetriever를 생성하는 편의 메서드."""
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
-        return cls([DocumentChunk.from_dict(value) for value in payload["chunks"]], **kwargs)
+        return cls(manifest_to_document_chunks(payload), **kwargs)
 
     @staticmethod
     def _matches(requested: tuple[str, ...], actual: tuple[str, ...]) -> bool:

@@ -30,6 +30,7 @@ class SourceRecord:
     language: str
     license_id: str
     source_type: str
+    official_verified: bool
     product_models: list[str]
     use_cases: list[str]
     tasks: list[str]
@@ -50,6 +51,8 @@ def included_sources(registry_path: Path = REGISTRY_PATH) -> list[SourceRecord]:
                 continue
             if row["collection_method"] != "git_raw" or row["source_format"] != "asciidoc":
                 raise ValueError(f"{row['source_id']}: included source must be git_raw AsciiDoc")
+            if row["official_verified"] != "true":
+                raise ValueError(f"{row['source_id']}: included source must be officially verified")
             records.append(
                 SourceRecord(
                     source_id=row["source_id"],
@@ -61,6 +64,7 @@ def included_sources(registry_path: Path = REGISTRY_PATH) -> list[SourceRecord]:
                     language=row["language"],
                     license_id=row["license_id"],
                     source_type=row["source_type"],
+                    official_verified=row["official_verified"] == "true",
                     product_models=split_values(row["product_models"]),
                     use_cases=split_values(row["use_cases"]),
                     tasks=split_values(row["tasks"]),
