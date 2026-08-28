@@ -31,7 +31,7 @@ def _target(**overrides: Any) -> ConditionPayload:
     """few-shot 예시용 기본 조건에 필요한 정답 필드만 덮어쓴다."""
 
     payload: dict[str, Any] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "product_recommendation",
         "use_case": None,
         "product_models": None,

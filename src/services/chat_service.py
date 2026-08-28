@@ -251,7 +251,7 @@ def _conditions(question: str, **updates: object) -> dict[str, object]:
     )
     models = [f"Raspberry Pi {model_match.group(1)}"] if model_match else None
     payload: dict[str, object] = {
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "intent": "qa",
         "use_case": None,
         "product_models": models,

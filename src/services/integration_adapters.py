@@ -153,7 +153,7 @@ def rag_results_to_search_response(
 
     return SearchResponse.model_validate(
         {
-            "schema_version": "1.0.0",
+                "schema_version": "1.1.0",
             "query_id": query_id,
             "query_language": query_language,
             "retrieval_method": retrieval_method,
