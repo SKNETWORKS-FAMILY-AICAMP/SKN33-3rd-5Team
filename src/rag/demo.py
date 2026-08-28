@@ -7,17 +7,65 @@
 from __future__ import annotations
 
 import argparse
+import random
+import sys
 
 from .models import RagFilters
 from .retriever import DenseRetrievalError, HybridRetriever
 from .settings import RagSettings, RagSettingsError
 
+# 현재 테스트 corpus의 공식 문서 근거로 답변을 검증할 수 있는 질문들이다.
+DEMO_QUERIES = [
+    "라즈베리파이에 OS는 어떻게 설치해?",
+    "microSD에 Raspberry Pi OS를 설치하려면?",
+    "모니터 없이 처음 설정하려면?",
+    "Raspberry Pi Imager에서 Wi-Fi는 어디서 설정해?",
+    "Raspberry Pi Connect는 어떻게 켜?",
+    "SSH를 활성화하려면?",
+    "SSH 공개키 인증도 가능한가?",
+    "이미 설치된 Pi에서 SSH를 켜는 방법은?",
+    "카메라 모듈을 사용할 수 있어?",
+    "구형 raspivid, raspistill을 써도 돼?",
+    "카메라로 사진·영상 촬영이 가능한가?",
+]
+
+
+def create_parser() -> argparse.ArgumentParser:
+    """질문과 선택 metadata filter를 받는 데모 CLI parser를 만든다."""
+    parser = argparse.ArgumentParser(description="Run the RAG sample query.")
+    parser.add_argument("--mode", choices=("bm25", "hybrid"), default="bm25")
+    parser.add_argument("--query", help="직접 실행할 질문. 생략하면 콘솔에서 입력받습니다.")
+    parser.add_argument(
+        "--use-case",
+        action="append",
+        dest="use_cases",
+        help="검색할 목적 tag. 여러 번 지정할 수 있습니다. 예: --use-case headless",
+    )
+    return parser
+
+
+def select_query(query: str | None) -> str:
+    """직접 지정한 질문 또는 예시 질문 목록의 무작위 항목을 반환한다."""
+    return query if query else random.choice(DEMO_QUERIES)
+
+
+def prompt_for_query() -> str | None:
+    """터미널에서 질문을 입력받고, 빈 입력은 예시 질문 선택으로 넘긴다."""
+    try:
+        query = input("질문을 입력하세요 (Enter: 예시 질문 랜덤 선택): ").strip()
+    except EOFError:
+        return None
+    return query or None
+
 
 def main() -> None:
     """`.env` 설정으로 BM25 또는 Hybrid 검색 결과와 출처를 출력한다."""
-    parser = argparse.ArgumentParser(description="Run the RAG sample query.")
-    parser.add_argument("--mode", choices=("bm25", "hybrid"), default="bm25")
-    args = parser.parse_args()
+    args = create_parser().parse_args()
+    entered_query = args.query
+    if entered_query is None and sys.stdin.isatty():
+        entered_query = prompt_for_query()
+    query = select_query(entered_query)
+    print(f"[query] {query}")
     try:
         settings = RagSettings.from_env()
     except RagSettingsError as exc:
@@ -27,18 +75,23 @@ def main() -> None:
         chroma_path=settings.chroma_path if args.mode == "hybrid" else None,
         collection_name=settings.chroma_collection_name,
         embedding_model_name=settings.e5_model_name,
+        dense_max_distance=settings.dense_max_distance,
     )
     try:
-        results = retriever.search(
-            # 사용자가 마지막으로 바꾼 스마트팜 질문은 유지한다.
-            query="스마트팜을 작게 구현하고싶은데 어떤 모델이 좋을까?",
-            filters=RagFilters(use_cases=("headless",)),
+        decision = retriever.search_with_decision(
+            query=query,
+            filters=RagFilters(use_cases=tuple(args.use_cases or ())),
             top_k=settings.top_k,
         )
     except DenseRetrievalError as exc:
         raise SystemExit(str(exc)) from exc
 
-    for result in results:
+    if decision.status == "insufficient_evidence":
+        print(f"[{decision.status}] {decision.reason}")
+        print("공식 문서에서 질문을 뒷받침할 충분한 근거를 찾지 못했습니다.")
+        return
+
+    for result in decision.results:
         print(f"[{result.rank}] {result.title} / {result.section}")
         print(result.content)
         print(result.source_url)
