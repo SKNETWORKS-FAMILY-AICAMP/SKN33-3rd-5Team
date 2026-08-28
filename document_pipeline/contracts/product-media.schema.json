@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://picare.local/schemas/product-media-registry-1.1.0.json",
+  "title": "PiCare Product Media Registry",
+  "description": "Product images sourced from Raspberry Pi documentation under CC BY-SA 4.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "reviewed_at", "display_scope", "items"],
+  "properties": {
+    "schema_version": {"const": "1.1.0"},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "display_scope": {"const": "cc_by_sa_4_0_with_attribution"},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/productMedia"}
+    }
+  },
+  "$defs": {
+    "httpsUri": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "productMedia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_registry_id",
+        "product_model",
+        "product_page_url",
+        "image_url",
+        "source_file",
+        "source_commit",
+        "alt_text",
+        "source_owner",
+        "license_id",
+        "display_status",
+        "attribution",
+        "checked_at",
+        "remote_only",
+        "cache_permitted",
+        "git_commit_permitted",
+        "transform_permitted",
+        "public_deployment_permitted"
+      ],
+      "properties": {
+        "source_registry_id": {"type": "string", "minLength": 1},
+        "product_model": {"type": "string", "minLength": 1},
+        "product_page_url": {"$ref": "#/$defs/httpsUri"},
+        "image_url": {"$ref": "#/$defs/httpsUri"},
+        "source_file": {"type": "string", "pattern": "^documentation/.+\\.(png|jpe?g|webp|svg)$"},
+        "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "alt_text": {"type": "string", "minLength": 1},
+        "source_owner": {"const": "Raspberry Pi Ltd"},
+        "license_id": {"const": "CC-BY-SA-4.0"},
+        "display_status": {"const": "cc_by_sa_4_0"},
+        "attribution": {"type": "string", "minLength": 1},
+        "checked_at": {"type": "string", "format": "date"},
+        "remote_only": {"const": false},
+        "cache_permitted": {"const": true},
+        "git_commit_permitted": {"const": true},
+        "transform_permitted": {"const": true},
+        "public_deployment_permitted": {"const": true}
+      }
+    }
+  }
+}

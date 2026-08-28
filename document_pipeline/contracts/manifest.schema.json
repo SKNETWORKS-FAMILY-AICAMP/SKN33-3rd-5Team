@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://picare.local/schemas/document-manifest-1.0.0.json",
+  "title": "PiCare Document Manifest",
+  "description": "Static, reviewed document chunks handed from the document pipeline to RAG.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "source_registry",
+    "chunks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_registry": {
+      "type": "string",
+      "const": "document_pipeline/data/source_registry.csv"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/chunk"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullableDate": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "date"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableUri": {
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uri"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "chunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document_id",
+        "chunk_id",
+        "chunk_index",
+        "title",
+        "publisher",
+        "section",
+        "content",
+        "source_url",
+        "source_anchor",
+        "language",
+        "source_type",
+        "published_at",
+        "updated_at",
+        "collected_at",
+        "document_version",
+        "license",
+        "product_models",
+        "use_cases",
+        "tasks",
+        "categories",
+        "os_versions",
+        "document_checksum",
+        "chunk_checksum",
+        "parser_version",
+        "official_verified",
+        "image_url",
+        "video_url"
+      ],
+      "properties": {
+        "document_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "chunk_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "chunk_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "title": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "publisher": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "section": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "content": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "source_anchor": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(?:-[A-Z]{2})?$"
+        },
+        "source_type": {
+          "enum": [
+            "documentation",
+            "product_page",
+            "faq",
+            "release_note",
+            "support_notice",
+            "recall_notice"
+          ]
+        },
+        "published_at": {
+          "$ref": "#/$defs/nullableDate"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/nullableDate"
+        },
+        "collected_at": {
+          "type": "string",
+          "format": "date"
+        },
+        "document_version": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/nonEmptyString"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "license": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "product_models": {
+          "$ref": "#/$defs/stringList"
+        },
+        "use_cases": {
+          "$ref": "#/$defs/stringList"
+        },
+        "tasks": {
+          "$ref": "#/$defs/stringList"
+        },
+        "categories": {
+          "$ref": "#/$defs/stringList"
+        },
+        "os_versions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "document_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "chunk_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "parser_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "official_verified": {
+          "const": true
+        },
+        "image_url": {
+          "$ref": "#/$defs/nullableUri"
+        },
+        "video_url": {
+          "$ref": "#/$defs/nullableUri"
+        }
+      }
+    }
+  }
+}

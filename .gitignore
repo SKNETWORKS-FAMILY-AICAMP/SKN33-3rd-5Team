@@ -154,6 +154,16 @@ node_modules/
 # - 임시 폴더입니다. 잠깐 데이터 보관할 폴더여서 제외로 추가합니다. lgj
 temp/
 
+# ── 문서 파이프라인 ─────────────────────────────────────
+# 원문·정제본·생성 manifest는 재생성 가능한 데이터이므로 커밋하지 않는다.
+# 계약, 출처 대장, 라이선스 검토 기록만 저장소에서 공동 검수한다.
+document_pipeline/data/raw/*
+!document_pipeline/data/raw/README.md
+document_pipeline/data/processed/*
+!document_pipeline/data/processed/README.md
+document_pipeline/data/manifest.json
+!document_pipeline/data/source_registry.csv
+
 # ══════════════════════════════════════════════════════════════
 # 제출 묶음 (생성물)
 #
