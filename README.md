@@ -208,6 +208,15 @@ Licence: CC BY-SA 4.0 또는 문서에 표시된 라이선스
 Changes: 파싱·정규화·청킹·번역 여부
 ```
 
+### 공식 이미지 자산
+
+제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개를 [`assets/media/`](assets/media/)에 수집했습니다. 제품 대표 이미지 5개와 사용 지원 이미지 14개이며, 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json)에서 관리합니다.
+
+- 원본은 Raspberry Pi 공식 documentation 저장소의 `documentation/` 하위 파일로 제한합니다.
+- 이미지 바이트는 수정하지 않고 서비스용 파일명만 적용했습니다.
+- 사용 지원 이미지는 검색된 citation의 문서·주제와 일치할 때만 챗봇에 표시합니다.
+- 제품·마케팅 페이지의 권리 조건이 불명확한 사진과 CC BY-ND 제품 PDF에서 잘라낸 이미지는 포함하지 않습니다.
+
 ## 인터페이스 계약
 
 sLLM·RAG·챗봇·Streamlit은 아래 세 계약을 공통으로 사용합니다. 단일 기준은 [`src/contracts/models.py`](src/contracts/models.py)이며, 배포·검증용 JSON Schema는 [`docs/schemas/`](docs/schemas/)에 저장합니다. 계약 변경 시 `schema_version`을 올리고 세 모듈과 평가 데이터를 함께 갱신합니다.
@@ -431,6 +440,8 @@ data/
     ├── train.jsonl
     ├── dev.jsonl
     └── holdout.jsonl
+assets/
+└── media/            # 공식 이미지, 출처·라이선스·checksum manifest
 training/
 ├── train_qlora.py
 └── configs/
