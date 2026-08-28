@@ -1,0 +1,1 @@
+"""PiCare Streamlit application package."""

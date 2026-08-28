@@ -118,6 +118,8 @@ flowchart LR
 
 핵심 corpus는 라이선스와 변경 이력을 확인하기 쉬운 **Raspberry Pi 공식 온라인 문서**를 우선 사용합니다. 아래 링크는 최초 수집 후보이며 실제 색인 여부·수집일·checksum은 Document Card와 manifest에서 관리합니다.
 
+실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry.csv`](document_pipeline/data/source_registry.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
+
 ### 핵심 온라인 문서
 
 | 영역 | 공식 문서 | 활용 목적 |
@@ -207,6 +209,15 @@ Retrieved: YYYY-MM-DD
 Licence: CC BY-SA 4.0 또는 문서에 표시된 라이선스
 Changes: 파싱·정규화·청킹·번역 여부
 ```
+
+### 공식 이미지 자산
+
+제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개를 [`assets/media/`](assets/media/)에 수집했습니다. 제품 대표 이미지 5개와 사용 지원 이미지 14개이며, 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json)에서 관리합니다.
+
+- 원본은 Raspberry Pi 공식 documentation 저장소의 `documentation/` 하위 파일로 제한합니다.
+- 이미지 바이트는 수정하지 않고 서비스용 파일명만 적용했습니다.
+- 사용 지원 이미지는 검색된 citation의 문서·주제와 일치할 때만 챗봇에 표시합니다.
+- 제품·마케팅 페이지의 권리 조건이 불명확한 사진과 CC BY-ND 제품 PDF에서 잘라낸 이미지는 포함하지 않습니다.
 
 ## 인터페이스 계약
 
@@ -415,7 +426,6 @@ app/
 └── streamlit_app.py
 src/
 ├── contracts/        # sLLM·RAG·챗봇 공통 Pydantic 계약과 Schema 생성
-├── ingestion/        # 문서 로딩·정제·청킹
 ├── retrieval/        # 임베딩·Vector DB·Retriever
 ├── condition_extraction/
 │   ├── baseline.py   # Base Few-shot 추출기
@@ -425,12 +435,19 @@ src/
 ├── safety/           # 답변 보류·인젝션·비밀정보 방어
 ├── evaluation/       # RAG·조건 추출 평가
 └── services/         # UI와 분리된 RAG 서비스 계층
+document_pipeline/    # 문서·데이터 담당 작업을 한곳에서 관리
+├── contracts/        # RAG 전달용 manifest 계약
+├── ingestion/        # 문서 로딩·정제·청킹 코드
+├── data/             # source registry와 로컬 원문·정제본
+└── docs/             # 라이선스 검토와 Document Card
 data/
 ├── sample/           # 공개 가능한 샘플 문서와 manifest
 └── finetuning/
     ├── train.jsonl
     ├── dev.jsonl
     └── holdout.jsonl
+assets/
+└── media/            # 공식 이미지, 출처·라이선스·checksum manifest
 training/
 ├── train_qlora.py
 └── configs/
@@ -450,7 +467,7 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 ## 설치 및 실행
 
 > [!NOTE]
-> 현재 페이지는 조직 소개용 README입니다. 실행 가능한 코드 저장소가 생성되면 실제 의존성 버전·환경변수·명령을 검증한 뒤 이 절과 프로젝트 저장소 README를 갱신합니다.
+> 현재 Streamlit 화면은 sLLM·RAG 연동 전 UI 검증을 위한 mock 버전입니다. 제품 추천, 조건 JSON, 한국어 QA 답변, 답변 보류, 공식 문서 출처 화면을 미리 확인할 수 있습니다.
 
 예정된 챗봇 실행 흐름은 다음과 같습니다.
 
@@ -458,10 +475,12 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 git clone <PROJECT_REPOSITORY_URL>
 cd <PROJECT_REPOSITORY>
 python -m venv .venv
-pip install -r requirements.txt
-# .env.example을 복사한 뒤 로컬 환경에 API Key 설정
-streamlit run app/streamlit_app.py
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python -m pip install -r requirements.txt
+streamlit run streamlit_app/app.py
 ```
+
+브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. Streamlit 실행 파일, mock 응답, 화면 스타일은 `streamlit_app/` 디렉터리에서 함께 관리합니다. 실제 연동 시 UI 코드에 모델·검색 로직을 직접 추가하지 않고 `src/services/`의 공통 응답으로 mock 데이터를 교체합니다.
 
 조건 추출기는 환경변수로 교체할 수 있게 구성합니다.
 
