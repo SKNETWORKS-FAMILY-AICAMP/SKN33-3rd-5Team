@@ -4,7 +4,8 @@ from typing import Any
 
 from .evaluation import RetrievalEvaluation, evaluate_rankings, hit_at_k, mean_reciprocal_rank
 from .models import DocumentChunk, RagFilters, RagResult
-from .retriever import HybridRetriever, rrf_fuse
+from .retriever import DenseRetrievalError, HybridRetriever, rrf_fuse
+from .settings import RagSettings, RagSettingsError
 
 
 def build_chroma_index(*args: Any, **kwargs: Any) -> int:
@@ -15,9 +16,12 @@ def build_chroma_index(*args: Any, **kwargs: Any) -> int:
 
 __all__ = [
     "DocumentChunk",
+    "DenseRetrievalError",
     "HybridRetriever",
     "RagFilters",
     "RagResult",
+    "RagSettings",
+    "RagSettingsError",
     "RetrievalEvaluation",
     "build_chroma_index",
     "evaluate_rankings",

@@ -11,7 +11,12 @@ from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
+from .chroma_metadata import chroma_where
 from .models import DocumentChunk, RagFilters, RagResult
+
+
+class DenseRetrievalError(RuntimeError):
+    """Chroma가 설정됐지만 Dense 검색을 실행하지 못했을 때 발생한다."""
 
 
 def _tokenize(text: str) -> list[str]:
@@ -92,8 +97,9 @@ class HybridRetriever:
     def _dense_ids(self, query: str, filters: RagFilters, candidate_k: int) -> list[str]:
         """의미 기반 Chroma 후보 Top-k의 chunk_id만 반환한다.
 
-        Chroma 경로가 없거나 모델/DB가 준비되지 않은 개발 단계에서는 빈 결과를
-        반환한다. 이때 ``search``는 BM25 단독 검색으로 안전하게 동작한다.
+        Chroma 경로가 없는 경우에는 빈 결과를 반환해 BM25 단독 검색으로 동작한다.
+        반대로 Chroma 경로가 설정됐는데 DB·모델·collection 오류가 나면 오류를
+        숨기지 않고 호출자에게 전달한다.
         """
         if not self.chroma_path:
             return []
@@ -106,18 +112,22 @@ class HybridRetriever:
                 self._embedding_model = SentenceTransformer(self.embedding_model_name)
             vector = self._embedding_model.encode([f"query: {query}"], normalize_embeddings=True)[0].tolist()
             collection = chromadb.PersistentClient(path=self.chroma_path).get_collection(self.collection_name)
-            # 공식 검증 여부는 DB에서 먼저 걸러, 불필요한 벡터 후보를 줄인다.
-            response = collection.query(
-                query_embeddings=[vector], n_results=candidate_k, where={"official_verified": True}
-            )
+            # 제품·목적·OS 조건까지 DB에서 먼저 걸러 후보 누락을 줄인다.
+            query_args: dict[str, object] = {"query_embeddings": [vector], "n_results": candidate_k}
+            where = chroma_where(filters)
+            if where is not None:
+                query_args["where"] = where
+            response = collection.query(**query_args)
             return [
                 chunk_id
                 for chunk_id in response.get("ids", [[]])[0]
                 if chunk_id in self.by_id and self._allowed(self.by_id[chunk_id], filters)
             ]
-        except Exception:
-            # Dense setup is optional during BM25-only development; callers still receive safe results.
-            return []
+        except Exception as exc:
+            raise DenseRetrievalError(
+                "Dense retrieval failed. Check CHROMA_PATH and CHROMA_COLLECTION_NAME, "
+                "then run `python3 -m src.rag.indexer --reset`."
+            ) from exc
 
     def search(self, query: str, filters: RagFilters | None = None, top_k: int = 5) -> list[RagResult]:
         """질문에 대한 최종 근거 청크를 순위·출처 metadata와 함께 반환한다."""
