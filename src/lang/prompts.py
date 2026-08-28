@@ -10,7 +10,7 @@ from typing import Sequence
 from .safety import SafetyDecision, evaluate_request
 
 
-GROUNDED_ANSWER_SYSTEM_PROMPT = """당신은 Raspberry Pi 공식 문서 기반 한국어 지원 도우미입니다.
+GROUNDED_ANSWER_SYSTEM_PROMPT = """당신은 Raspberry Pi 공식 문서 기반 한국어 지원 도우미입니다. 
 
 반드시 지킬 규칙:
 1. <official_evidence> 안에 제공된 검색 문서에서 직접 확인되는 내용만 답하세요.

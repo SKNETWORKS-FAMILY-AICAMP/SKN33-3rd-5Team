@@ -1,4 +1,4 @@
-"""Tests for the grounded Korean answer prompt and deterministic safety gates."""
+"""Tests for the grounded Korean answer prompt and deterministic safety gates"""
 
 from __future__ import annotations
 

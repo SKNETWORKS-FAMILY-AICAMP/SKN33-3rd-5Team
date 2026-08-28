@@ -1,4 +1,4 @@
-"""Deterministic safety gates for document-grounded Raspberry Pi answers."""
+"""Deterministic safety gates for document-grounded Raspberry Pi answers"""
 
 from __future__ import annotations
 
