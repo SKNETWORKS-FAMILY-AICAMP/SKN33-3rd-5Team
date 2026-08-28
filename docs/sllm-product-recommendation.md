@@ -23,7 +23,7 @@
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "intent": "product_recommendation",
   "use_case": "education_coding",
   "product_models": null,

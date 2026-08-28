@@ -120,7 +120,7 @@ class RecommendationAgent:
 
         return (
             ConditionPayload(
-                schema_version="1.0.0",
+                schema_version="1.1.0",
                 intent="product_recommendation",
                 use_case=None,
                 product_models=None,

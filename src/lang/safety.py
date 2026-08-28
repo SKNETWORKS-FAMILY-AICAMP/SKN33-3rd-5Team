@@ -25,6 +25,19 @@ _PROMPT_INJECTION_PATTERNS = (
     re.compile(r"(?:API\s*key|토큰|비밀번호).{0,20}(?:보여|공개|출력)", re.IGNORECASE),
 )
 
+_PROMPT_DISCLOSURE_PATTERNS = (
+    re.compile(
+        r"(?:(?:시스템|개발자|내부)\s*)?(?:프롬프트|prompt).{0,20}"
+        r"(?:보여|공개|출력|알려|말해)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:보여|공개|출력|알려).{0,20}"
+        r"(?:(?:시스템|개발자|내부)\s*)?(?:프롬프트|prompt)",
+        re.IGNORECASE,
+    ),
+)
+
 _COMMERCE_PATTERNS = (
     re.compile(r"실시간\s*(?:가격|재고)", re.IGNORECASE),
     re.compile(r"(?:최저가|가장\s*저렴한|제일\s*싼|할인\s*가격)", re.IGNORECASE),
@@ -85,6 +98,15 @@ def evaluate_request(
             status="needs_clarification",
             reason_code="empty_question",
             message="질문을 한 문장 이상 입력해 주세요.",
+        )
+    if _matches_any(normalized, _PROMPT_DISCLOSURE_PATTERNS):
+        return SafetyDecision(
+            status="safety_blocked",
+            reason_code="prompt_disclosure",
+            message=(
+                "시스템·개발자 프롬프트와 내부 지시는 공개할 수 없습니다. "
+                "Raspberry Pi 제품·설치·문제 해결에 관해 질문해 주세요."
+            ),
         )
     if _matches_any(normalized, _PROMPT_INJECTION_PATTERNS):
         return SafetyDecision(

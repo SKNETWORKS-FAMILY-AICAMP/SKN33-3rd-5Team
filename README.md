@@ -229,7 +229,7 @@ sLLM은 일부 필드를 생략하지 않고 항상 아래 키를 모두 반환�
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "intent": "product_recommendation",
   "use_case": "education_coding",
   "product_models": null,
@@ -259,7 +259,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "query_id": "query-0001",
   "query_language": "ko",
   "retrieval_method": "hybrid",
@@ -316,7 +316,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "request_id": "request-0001",
   "status": "answered",
   "language": "ko",
@@ -358,7 +358,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 | `safety_blocked` | 비밀정보·위험 요청 등 안전 정책으로 차단함 |
 | `error` | 시스템 오류로 정상 처리하지 못함 |
 
-`answered`는 최소 한 개의 인라인 인용과 출처 카드가 있어야 합니다. 제품 추천 카드와 공식 이미지·영상은 자신을 뒷받침하는 `citation_id`를 반드시 참조합니다. 전체 형식은 [`chat-response.schema.json`](docs/schemas/chat-response.schema.json)을 기준으로 합니다.
+`answered`는 최소 한 개의 인라인 인용과 출처 카드가 있어야 합니다. 제품 추천 카드의 `product_id`는 카탈로그에서 정한 고정 제품 코드이고, 카드와 공식 이미지·영상은 자신을 뒷받침하는 이번 검색의 `citation_id`를 반드시 참조합니다. 전체 형식은 [`chat-response.schema.json`](docs/schemas/chat-response.schema.json)을 기준으로 합니다.
 
 JSON Schema는 아래 명령으로 표준 모델에서 다시 생성합니다.
 
