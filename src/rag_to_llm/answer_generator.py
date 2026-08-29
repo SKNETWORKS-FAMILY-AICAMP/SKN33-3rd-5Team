@@ -72,7 +72,11 @@ class EvidenceTemplateGenerator:
         first_id = evidence[0].citation_id
         lines = [f"공식 문서에서 확인된 관련 근거입니다. [{first_id}]"]
         for item in evidence:
-            lines.append(f"- {self._without_urls(item.content)} [{item.citation_id}]")
+            # 검증기는 모든 비어 있지 않은 줄에 인용을 요구한다. 의미 단위 청크에는
+            # 코드·표 등 여러 줄 본문이 포함될 수 있으므로, 로컬 템플릿에서는 한 줄로
+            # 정규화해 근거와 인용의 1:1 관계를 유지한다.
+            content = " ".join(self._without_urls(item.content).split())
+            lines.append(f"- {content} [{item.citation_id}]")
         return GenerationResult(
             text="\n".join(lines),
             provider=self.provider,

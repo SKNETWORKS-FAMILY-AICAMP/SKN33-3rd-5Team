@@ -46,6 +46,14 @@ _COMMERCE_PATTERNS = (
     re.compile(r"(?:쇼핑몰|판매처|구매처).{0,20}(?:추천|순위|비교)", re.IGNORECASE),
 )
 
+# 현재 로컬 공식 corpus에는 A/S·보증·리콜 공지가 포함되지 않는다. 이 질문은
+# Dense 검색이 의미적으로 가까운 일반 문서를 반환하더라도 근거 부족으로 보류한다.
+_SUPPORT_RECALL_PATTERNS = (
+    re.compile(r"(?:리콜|recall)", re.IGNORECASE),
+    re.compile(r"(?:a\s*/?\s*s)(?=\s|[가-힣]|$)|after[-\s]?sales|애프터\s*서비스", re.IGNORECASE),
+    re.compile(r"(?:서비스\s*센터|수리\s*(?:접수|신청)|보증\s*(?:기간|수리)|warranty)", re.IGNORECASE),
+)
+
 _UNSUPPORTED_MODIFICATION_PATTERNS = (
     re.compile(r"오버\s*클럭", re.IGNORECASE),
     re.compile(r"비공식.{0,12}(?:개조|펌웨어|드라이버|설정)", re.IGNORECASE),
@@ -124,6 +132,15 @@ def evaluate_request(
             message=(
                 "실시간 가격·재고·판매처 순위는 PiCare의 공식 기술 문서 "
                 "지원 범위에 포함되지 않습니다."
+            ),
+        )
+    if _matches_any(normalized, _SUPPORT_RECALL_PATTERNS):
+        return SafetyDecision(
+            status="insufficient_evidence",
+            reason_code="support_recall_corpus_unavailable",
+            message=(
+                "현재 로컬 공식 corpus에는 A/S·보증·리콜 공지가 포함되지 않아 "
+                "확인 가능한 근거가 없습니다. 추측하지 않고 답변을 보류합니다."
             ),
         )
     if _matches_any(normalized, _UNSUPPORTED_MODIFICATION_PATTERNS):

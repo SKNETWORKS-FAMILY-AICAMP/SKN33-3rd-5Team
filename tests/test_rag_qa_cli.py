@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from io import StringIO
+
 from src.services import rag_qa_cli
 
 
@@ -18,8 +20,20 @@ def test_cli_uses_random_demo_question_when_input_is_empty(monkeypatch) -> None:
     assert rag_qa_cli.select_query("  SSH를 활성화하려면? ") == "SSH를 활성화하려면?"
 
 
-def test_cli_uses_hybrid_when_noninteractive(monkeypatch) -> None:
-    monkeypatch.setattr(rag_qa_cli.sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(rag_qa_cli.sys.stdout, "isatty", lambda: False)
+def test_cli_defaults_to_hybrid_without_an_operation_option() -> None:
+    assert rag_qa_cli.resolve_action(rag_qa_cli.create_parser().parse_args([])) == "hybrid"
+    assert rag_qa_cli.resolve_action(
+        rag_qa_cli.create_parser().parse_args(["--mode", "bm25"])
+    ) == "bm25"
+    assert rag_qa_cli.resolve_action(
+        rag_qa_cli.create_parser().parse_args(["--action", "index"])
+    ) == "index"
 
-    assert rag_qa_cli.select_action() == "hybrid"
+
+def test_loading_indicator_prints_a_plain_progress_message_when_not_a_tty() -> None:
+    stream = StringIO()
+
+    with rag_qa_cli._loading_indicator("공식 문서를 검색하는 중입니다...", stream=stream):
+        pass
+
+    assert stream.getvalue() == "[loading] 공식 문서를 검색하는 중입니다...\n"

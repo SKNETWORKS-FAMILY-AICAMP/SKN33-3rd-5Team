@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.lang import PromptEvidence, validate_grounded_answer
 from src.rag import RagResult, RetrievalDecision
 from src.rag.retriever import DenseRetrievalError
 from src.rag_to_llm import AnswerGenerationError, EvidenceTemplateGenerator, GenerationResult, HuggingFaceAnswerGenerator
@@ -87,6 +88,21 @@ def test_retrieved_result_becomes_answered_chat_response():
     assert retriever.calls == 1
 
 
+def test_template_generator_keeps_multiline_evidence_on_a_cited_line():
+    generation = EvidenceTemplateGenerator().generate(
+        ({"role": "system", "content": "근거만 사용하세요."},),
+        (
+            PromptEvidence(
+                citation_id="C1",
+                content="첫 번째 근거입니다.\n```console\n$ rpi-connect on\n```",
+            ),
+        ),
+    )
+
+    assert "\n```" not in generation.text
+    assert validate_grounded_answer(generation.text, allowed_citation_ids=["C1"]) == {"C1"}
+
+
 def test_trace_includes_generator_and_citation_validation_details():
     response = RagQaService(retriever=StaticRetriever(decision=retrieved_decision())).answer(
         request_id="request-trace",
@@ -139,6 +155,21 @@ def test_price_request_stops_before_retrieval():
     assert retriever.calls == 0
 
 
+def test_recall_request_defers_before_retrieval_and_generation():
+    retriever = StaticRetriever(decision=retrieved_decision())
+    generator = SpyGenerator()
+    response = RagQaService(retriever=retriever, answer_generator=generator).answer(
+        request_id="request-recall",
+        question="현재 라즈베리파이 리콜이 있나요?",
+        retrieval_mode="hybrid",
+    )
+
+    assert response.status == "insufficient_evidence"
+    assert "safety_reason=support_recall_corpus_unavailable" in response.warnings
+    assert retriever.calls == 0
+    assert generator.calls == 0
+
+
 def test_prompt_injection_stops_before_retrieval():
     retriever = StaticRetriever(decision=retrieved_decision())
     response = RagQaService(retriever=retriever).answer(
@@ -161,6 +192,7 @@ def test_dense_error_becomes_error_response():
 
     assert response.status == "error"
     assert "Dense 검색" in response.answer
+    assert "src.services.rag_qa_cli --action index --reset" in response.answer
 
 
 def test_invalid_generated_citation_is_not_exposed():

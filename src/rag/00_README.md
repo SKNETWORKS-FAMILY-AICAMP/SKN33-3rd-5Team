@@ -9,11 +9,12 @@ RAG 검색, 답변 생성기, 인용 검증을 함께 확인하는 기본 실행
 python3 -m src.services.rag_qa_cli
 ```
 
-명령을 인자 없이 실행하면 화살표 키로 **Hybrid QA / BM25 QA / Chroma 색인 생성·갱신**을
-선택한 뒤 질문을 입력한다. Hybrid QA를 직접 실행할 때는 아래처럼 사용한다.
+명령을 인자 없이 실행하면 질문을 입력받아 **BM25 + Chroma Dense + RRF Hybrid QA**를
+실행한다. 빈 입력 후 Enter를 누르면 검증용 예시 질문을 무작위로 실행한다. 검색·답변
+생성 중에는 터미널에 spinner가 표시된다.
 
 ```bash
-python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?" --trace
+python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 ```
 
 ## Retriever 단위 점검: 실행 위치와 명령어
@@ -44,18 +45,15 @@ HF_HUB_OFFLINE=1 python3 -m src.rag.demo --mode hybrid
 RAG 검색 결과를 기존 근거 기반 프롬프트·안전 검증과 연결한 QA CLI는 아래처럼
 실행한다. Streamlit, 제품 catalog, Qwen 조건 추출은 이 1차 범위에 포함하지 않는다.
 
-인자 없이 실행하면 화살표 키로 **Hybrid QA / BM25 QA / Chroma 색인 생성·갱신** 중
-하나를 선택한다. Hybrid·BM25를 선택한 뒤 질문을 비우고 Enter를 누르면 검증용 예시
-질문 하나를 무작위로 실행한다.
+인자 없이 실행하면 최종 사용자용 Hybrid QA가 실행된다. BM25 단독 검색과 Chroma 색인은
+성능 비교·운영을 위한 명시적 옵션이며 일반 질의 흐름에는 포함하지 않는다.
 
 ```bash
-# 대화형 실행: 화살표로 작업 선택 후 질문 입력
+# 최종 사용자용 대화형 Hybrid QA
 python3 -m src.services.rag_qa_cli
 
-# Hybrid: 먼저 Chroma 색인을 만든 뒤 실행한다.
-python3 -m src.rag.indexer --reset
+# Hybrid를 자동화·테스트에서 직접 실행한다.
 HF_HUB_OFFLINE=1 python3 -m src.services.rag_qa_cli \
-  --mode hybrid \
   --query "SSH를 활성화하려면?"
 
 # Chroma 없이 BM25만 확인한다.
@@ -66,7 +64,7 @@ python3 -m src.services.rag_qa_cli \
 # 이후 Streamlit·통합 테스트가 읽을 공통 응답 JSON을 확인한다.
 python3 -m src.services.rag_qa_cli --mode bm25 --query "SSH를 활성화하려면?" --json
 
-# 메뉴를 건너뛰고 Chroma 색인을 생성·갱신한다.
+# corpus 변경 후 Chroma 색인을 생성·갱신한다.
 python3 -m src.services.rag_qa_cli --action index
 # 기존 collection을 명시적으로 삭제하고 전체 재색인한다.
 python3 -m src.services.rag_qa_cli --action index --reset
@@ -76,9 +74,9 @@ python3 -m src.services.rag_qa_cli --action index --reset
 
 | 명령·옵션 | 역할 | 사용할 시점 |
 | --- | --- | --- |
-| `python3 -m src.rag.indexer --reset` | `manifest.json` 청크를 E5 임베딩으로 변환해 Chroma DB에 전체 색인한다. 기존 collection은 삭제 후 새로 만든다. | 최초 실행, corpus·metadata 변경 후 |
+| `python3 -m src.services.rag_qa_cli --action index --reset` | `manifest.json` 청크를 E5 임베딩으로 변환해 Chroma DB에 전체 색인한다. 기존 collection은 삭제 후 새로 만든다. | 최초 실행, corpus·metadata 변경 후 |
 | `--mode bm25` | 문서와 질문의 단어 일치를 기준으로 BM25만 검색한 뒤 QA 응답을 만든다. Chroma와 E5 모델이 없어도 된다. | 빠른 기본 검색 확인, Chroma 색인 전 |
-| `--mode hybrid` | BM25 키워드 검색과 Chroma Dense 의미 검색을 RRF로 결합한 뒤 QA 응답을 만든다. | 실제 시연과 기본 QA 실행 |
+| 기본 실행 또는 `--mode hybrid` | BM25 키워드 검색과 Chroma Dense 의미 검색을 RRF로 결합한 뒤 QA 응답을 만든다. | 실제 시연과 기본 QA 실행 |
 | `--json` | 검색 방식은 바꾸지 않고, 콘솔용 출력 대신 공통 `ChatResponse` JSON을 출력한다. | Streamlit 연결, 자동 테스트, API 응답 확인 |
 
 예를 들어 `SSH`처럼 문서와 같은 키워드가 있는 질문은 BM25도 잘 찾는다. 반면
@@ -91,14 +89,14 @@ python3 -m src.services.rag_qa_cli --action index --reset
 않고 출처 카드에서 표시한다. 자세한 Pod 실행 절차는 [RunPod QA 안내](../../runpod/README.md)를
 참고한다.
 
-현재 프로토타입 manifest의 `retrieved_at`은 QA 응답에서 임시로 `collected_at`에
-매핑된다. 문서 파이프라인의 canonical manifest와 `SearchResponse` adapter 연결은
-제품 추천 통합 단계에서 처리한다.
+문서 파이프라인의 canonical manifest는 `collected_at`을 사용하며,
+`src.rag.adapters`가 기존 RAG 모델의 `retrieved_at`으로 호환 변환한다. 실제 검색 결과의
+출처 카드에는 제목·절·공식 URL·수집일·라이선스·문서 버전 metadata를 유지한다.
 
 > [!IMPORTANT]
 > 현재 이 패키지는 검색 동작을 검증하기 위한 프로토타입입니다. 필드명과 반환 형식의 기준은 기존 `RagResult` 구현이 아니라 `src/contracts/models.py`와 `docs/schemas/search-response.schema.json`입니다. 프로토타입을 서비스에 연결할 때는 공통 계약을 만족하도록 교체하거나 adapter를 구현해야 합니다.
 
-이 패키지는 문서 수집·청킹, sLLM 조건 추출, 챗봇 UI에 의존하지 않는다. 문서·데이터 담당이 검수한 `manifest.json`을 입력으로 받아 E5/Chroma Dense 검색, BM25, RRF, metadata filter와 Hit@k·MRR 평가를 제공한다.
+이 패키지는 문서 수집·청킹, sLLM 조건 추출, 챗봇 UI에 의존하지 않는다. 문서·데이터 담당이 검수한 `manifest.json`을 입력으로 받아 E5/Chroma Dense 검색, BM25, RRF, metadata filter와 Hit@k·MRR 평가를 제공한다. 현재 추천 MVP corpus는 설치·원격 접속·카메라·GPIO·전원·NVMe·외장 저장장치·키보드형 컴퓨터 비교를 다룬다. 가격·재고·A/S·리콜은 corpus 범위 밖이므로 근거 부족으로 보류하며, 후속 공식 웹 검색 단계에서 처리한다.
 
 ## 프로토타입 입력 형식
 
@@ -116,11 +114,11 @@ python3 -m src.services.rag_qa_cli --action index --reset
 사용하므로 Chroma API 키는 필요 없다.
 
 ```env
-DOCUMENT_MANIFEST=data/corpora/corpus_section_test/manifest.json
-CHROMA_PATH=data/indexed/chroma_section_test
+DOCUMENT_MANIFEST=document_pipeline/data/manifest_v2.json
+CHROMA_PATH=data/indexed/chroma_official_v2
 CHROMA_COLLECTION_NAME=rpi_official
 E5_MODEL_NAME=intfloat/multilingual-e5-base
-TOP_K=3
+TOP_K=5
 # 현재 테스트 corpus 기준 초기값이며, 실제 Dev qrels로 재조정한다.
 DENSE_MAX_DISTANCE=0.48
 ```
@@ -151,7 +149,10 @@ BM25는 점수가 모두 0이면 근거가 없는 것으로 보고 결과를 반
 ```python
 from src.rag import HybridRetriever, RagFilters
 
-retriever = HybridRetriever.from_manifest("data/documents/manifest.json", chroma_path="data/chroma")
+retriever = HybridRetriever.from_manifest(
+    "document_pipeline/data/manifest_v2.json",
+    chroma_path="data/indexed/chroma_official_v2",
+)
 results = retriever.search(
     "모니터 없이 카메라를 연결하고 싶어요",
     RagFilters(product_models=("Raspberry Pi 5",), use_cases=("camera",)),

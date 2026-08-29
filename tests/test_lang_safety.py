@@ -36,6 +36,15 @@ class RequestSafetyTests(unittest.TestCase):
         self.assertEqual(decision.status, "out_of_scope")
         self.assertEqual(decision.reason_code, "live_commerce_data")
 
+    def test_support_and_recall_requests_defer_without_local_corpus(self) -> None:
+        for question in ("현재 라즈베리파이 리콜이 있나요?", "A/S를 접수하려면?"):
+            with self.subTest(question=question):
+                decision = evaluate_request(question, evidence_count=3)
+
+                self.assertEqual(decision.status, "insufficient_evidence")
+                self.assertEqual(decision.reason_code, "support_recall_corpus_unavailable")
+                self.assertIn("답변을 보류", decision.message)
+
     def test_unofficial_overclocking_is_out_of_scope(self) -> None:
         decision = evaluate_request("Raspberry Pi 5 오버클럭 방법을 알려주세요.", evidence_count=2)
         self.assertEqual(decision.status, "out_of_scope")

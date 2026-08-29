@@ -36,9 +36,8 @@ ANSWER_MAX_NEW_TOKENS=512
 실제 corpus가 준비된 뒤 Chroma를 색인하고 QA를 실행한다.
 
 ```bash
-python3 -m src.rag.indexer --reset
+python3 -m src.services.rag_qa_cli --action index --reset
 python3 -m src.services.rag_qa_cli \
-  --mode hybrid \
   --query "SSH를 활성화하려면?" \
   --trace
 ```

@@ -2,18 +2,20 @@
 
 프로젝트 최상위에서 실행한다.
 
-    python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?"
+    python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?"
 """
 
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+from itertools import cycle
 import random
 import sys
-import termios
-import tty
+from threading import Event, Thread
+from time import sleep
 import uuid
-from typing import Literal
+from typing import Iterator, Literal, TextIO
 
 from src.rag import HybridRetriever, build_chroma_index
 from src.rag.sample_queries import DEMO_QUERIES
@@ -29,13 +31,6 @@ from .rag_qa_service import RagQaService
 
 CliAction = Literal["index", "bm25", "hybrid"]
 
-_ACTION_MENU: tuple[tuple[CliAction, str, str], ...] = (
-    ("hybrid", "Hybrid QA", "BM25 + Chroma Dense 검색으로 답변합니다. (권장)"),
-    ("bm25", "BM25 QA", "Chroma 없이 키워드 검색으로 답변합니다."),
-    ("index", "Chroma 색인 생성·갱신", "manifest의 검수 문서를 Chroma DB에 upsert합니다."),
-)
-
-
 def create_parser() -> argparse.ArgumentParser:
     """QA CLI가 받는 실행 옵션을 정의한다."""
 
@@ -44,12 +39,12 @@ def create_parser() -> argparse.ArgumentParser:
     action_group.add_argument(
         "--mode",
         choices=("bm25", "hybrid"),
-        help="검색 모드를 바로 지정합니다. 생략하면 화살표 메뉴를 표시합니다.",
+        help="검증용 검색 모드를 지정합니다. 생략하면 최종 Hybrid QA를 실행합니다.",
     )
     action_group.add_argument(
         "--action",
         choices=("index", "bm25", "hybrid"),
-        help="색인 또는 검색 작업을 바로 지정합니다.",
+        help="운영·검증 작업을 지정합니다. 색인은 index를 사용합니다.",
     )
     parser.add_argument("--query", help="질문을 입력합니다. 생략하면 콘솔에서 입력받습니다.")
     parser.add_argument("--request-id", default=None, help="응답 추적 ID. 생략하면 UUID를 생성합니다.")
@@ -59,50 +54,11 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _render_menu(selected_index: int, *, redraw: bool) -> None:
-    """화살표 메뉴의 현재 선택 상태를 ANSI 지원 터미널에 표시한다."""
+def resolve_action(args: argparse.Namespace) -> CliAction:
+    """명시한 운영 옵션이 없으면 최종 사용자용 Hybrid QA를 선택한다."""
 
-    if redraw:
-        # 제목 1줄, 안내 1줄, 선택지 3줄을 덮어쓴다.
-        sys.stdout.write(f"\033[{len(_ACTION_MENU) + 2}A")
-    sys.stdout.write("\033[2K\rRAG QA 작업을 선택하세요\n")
-    sys.stdout.write("\033[2K\r↑/↓ 이동 · Enter 선택 · Ctrl+C 취소\n")
-    for index, (_, label, description) in enumerate(_ACTION_MENU):
-        marker = "❯" if index == selected_index else " "
-        sys.stdout.write(f"\033[2K\r{marker} {label}: {description}\n")
-    sys.stdout.flush()
-
-
-def select_action() -> CliAction:
-    """TTY에서 3개 작업을 화살표로 선택하고, 비대화형 실행은 Hybrid로 처리한다."""
-
-    if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        return "hybrid"
-
-    selected_index = 0
-    file_descriptor = sys.stdin.fileno()
-    previous_terminal_state = termios.tcgetattr(file_descriptor)
-    _render_menu(selected_index, redraw=False)
-    try:
-        tty.setraw(file_descriptor)
-        while True:
-            key = sys.stdin.read(1)
-            if key == "\x03":  # Ctrl+C
-                raise KeyboardInterrupt
-            if key == "\x1b":  # macOS 터미널의 위/아래 화살표 시퀀스
-                key += sys.stdin.read(2)
-            if key in ("\x1b[A", "k"):
-                selected_index = (selected_index - 1) % len(_ACTION_MENU)
-            elif key in ("\x1b[B", "j"):
-                selected_index = (selected_index + 1) % len(_ACTION_MENU)
-            elif key in ("\r", "\n"):
-                sys.stdout.write("\n")
-                return _ACTION_MENU[selected_index][0]
-            else:
-                continue
-            _render_menu(selected_index, redraw=True)
-    finally:
-        termios.tcsetattr(file_descriptor, termios.TCSADRAIN, previous_terminal_state)
+    selected = args.action or args.mode
+    return selected if selected is not None else "hybrid"
 
 
 def select_query(query: str | None) -> str:
@@ -115,7 +71,7 @@ def prompt_for_query() -> str | None:
     """콘솔에서 질문을 입력받고, 빈 입력은 예시 질문 선택으로 넘긴다."""
 
     try:
-        query = input("질문을 입력하세요 (Enter: 예시 질문 랜덤 선택): ").strip()
+        query = input("Raspberry Pi 질문을 입력하세요 (Enter: 예시 질문 랜덤 선택): ").strip()
     except EOFError:
         return None
     return query or None
@@ -129,6 +85,41 @@ def _read_question(query: str | None) -> str:
     if sys.stdin.isatty():
         return select_query(prompt_for_query())
     return select_query(None)
+
+
+@contextmanager
+def _loading_indicator(message: str, *, stream: TextIO) -> Iterator[None]:
+    """질의 처리 중 멈춘 것처럼 보이지 않도록 터미널 진행 표시를 출력한다.
+
+    TTY에서는 한 줄 spinner를 갱신한다. JSON·파이프 실행처럼 비대화형 출력에서는
+    결과 JSON을 오염시키지 않도록 호출자가 전달한 표준 오류에 한 번만 기록한다.
+    """
+
+    if not stream.isatty():
+        print(f"[loading] {message}", file=stream, flush=True)
+        yield
+        return
+
+    stopped = Event()
+    rendered_width = len(message) + 3
+
+    def render() -> None:
+        for symbol in cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"):
+            if stopped.is_set():
+                break
+            stream.write(f"\r{symbol} {message}")
+            stream.flush()
+            sleep(0.1)
+
+    thread = Thread(target=render, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stopped.set()
+        thread.join(timeout=0.2)
+        stream.write(f"\r{' ' * rendered_width}\r")
+        stream.flush()
 
 
 def _run_indexer(settings: RagSettings, *, reset: bool) -> int:
@@ -174,9 +165,9 @@ def main() -> int:
     """환경 설정으로 RAG QA 서비스를 조립하고 한 질문을 처리한다."""
 
     args = create_parser().parse_args()
-    action: CliAction = args.action or args.mode or select_action()
+    action = resolve_action(args)
     if args.reset and action != "index":
-        create_parser().error("--reset은 --action index 또는 메뉴의 색인 작업에서만 사용할 수 있습니다.")
+        create_parser().error("--reset은 --action index에서만 사용할 수 있습니다.")
     if args.json and action == "index":
         create_parser().error("--json은 BM25 또는 Hybrid QA 응답에서만 사용할 수 있습니다.")
     try:
@@ -199,24 +190,26 @@ def main() -> int:
     request_id = args.request_id or str(uuid.uuid4())
     print(f"[query] {question}", file=sys.stderr if args.json else sys.stdout)
 
-    retriever = HybridRetriever.from_manifest(
-        settings.manifest_path,
-        chroma_path=settings.chroma_path if action == "hybrid" else None,
-        collection_name=settings.chroma_collection_name,
-        embedding_model_name=settings.e5_model_name,
-        dense_max_distance=settings.dense_max_distance,
-    )
-    service = RagQaService(
-        retriever=retriever,
-        answer_generator=answer_generator,
-        top_k=settings.top_k,
-    )
-    response = service.answer(
-        request_id=request_id,
-        question=question,
-        retrieval_mode=action,
-        trace=args.trace,
-    )
+    output_stream = sys.stderr if args.json else sys.stdout
+    with _loading_indicator("공식 문서를 Hybrid 검색하고 답변을 생성하는 중입니다...", stream=output_stream):
+        retriever = HybridRetriever.from_manifest(
+            settings.manifest_path,
+            chroma_path=settings.chroma_path if action == "hybrid" else None,
+            collection_name=settings.chroma_collection_name,
+            embedding_model_name=settings.e5_model_name,
+            dense_max_distance=settings.dense_max_distance,
+        )
+        service = RagQaService(
+            retriever=retriever,
+            answer_generator=answer_generator,
+            top_k=settings.top_k,
+        )
+        response = service.answer(
+            request_id=request_id,
+            question=question,
+            retrieval_mode=action,
+            trace=args.trace,
+        )
     if args.json:
         print(response.model_dump_json(indent=2))
     else:

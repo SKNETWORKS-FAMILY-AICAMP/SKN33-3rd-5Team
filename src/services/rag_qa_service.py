@@ -116,8 +116,8 @@ class RagQaService:
             document_version=result.document_version,
             published_at=None,
             updated_at=None,
-            # 프로토타입 manifest의 retrieved_at은 실제 수집일로 작성돼 있다.
-            # canonical manifest 연결 전까지만 collected_at으로 호환한다.
+            # canonical manifest의 collected_at을 RAG adapter가 기존 필드명
+            # retrieved_at으로 호환 변환한 값이다. 실제 검색 시각은 아니다.
             collected_at=result.retrieved_at,
             license=result.license,
             quote=result.content,
@@ -157,7 +157,7 @@ class RagQaService:
                 status="error",
                 answer=(
                     "공식 문서 Dense 검색을 실행하지 못했습니다. Chroma 색인을 확인한 뒤 "
-                    "`python3 -m src.rag.indexer --reset`을 실행해 주세요."
+                    "`python3 -m src.services.rag_qa_cli --action index --reset`을 실행해 주세요."
                 ),
                 warnings=[f"retrieval_mode={retrieval_mode}", f"retrieval_error={type(exc).__name__}"],
             )
@@ -234,7 +234,7 @@ class RagQaService:
             clarification_questions=[],
             warnings=[
                 f"retrieval_mode={retrieval_mode}",
-                "prototype_metadata: retrieved_at is temporarily exposed as collected_at",
+                "metadata_compatibility: canonical collected_at is carried through legacy RagResult.retrieved_at",
                 f"answer_generator={generation.provider}",
                 *(
                     [
