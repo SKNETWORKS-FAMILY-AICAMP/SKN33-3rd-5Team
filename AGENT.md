@@ -17,11 +17,11 @@
 python3 -m src.services.rag_qa_cli
 ```
 
-실행하면 화살표 키로 Hybrid QA, BM25 QA, Chroma 색인 생성·갱신을 선택한다. 직접 Hybrid
-QA를 실행할 때는 아래처럼 사용한다.
+인자 없이 실행하면 질문을 입력받아 최종 Hybrid QA를 실행한다. BM25 단독 검색과 Chroma
+색인은 검증·운영용 명시 옵션으로만 사용한다. Hybrid QA를 자동 실행할 때는 아래처럼 사용한다.
 
 ```bash
-python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?" --trace
+python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 ```
 
 `src.rag.demo`는 Retriever 결과만 확인하는 개발용 단위 점검 도구이며, 팀 시연·통합 실행

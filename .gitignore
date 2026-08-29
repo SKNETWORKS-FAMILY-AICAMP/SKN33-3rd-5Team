@@ -163,6 +163,10 @@ document_pipeline/data/processed/*
 !document_pipeline/data/processed/README.md
 document_pipeline/data/manifest.json
 !document_pipeline/data/source_registry.csv
+document_pipeline/data/raw_v*/
+document_pipeline/data/processed_v*/
+document_pipeline/data/manifest_v*.json
+!document_pipeline/data/source_registry_v*.csv
 
 # ══════════════════════════════════════════════════════════════
 # 제출 묶음 (생성물)

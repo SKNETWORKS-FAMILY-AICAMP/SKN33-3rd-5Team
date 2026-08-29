@@ -479,11 +479,12 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 python3 -m src.services.rag_qa_cli
 ```
 
-화살표 키로 Hybrid QA, BM25 QA, Chroma 색인 생성·갱신 중 하나를 선택한다. Hybrid QA를
-바로 실행할 때는 다음 명령을 사용한다.
+인자 없이 실행하면 질문을 입력받아 최종 Hybrid QA를 실행한다. BM25 단독 검색과 Chroma
+색인 생성은 성능 비교·운영용 명시 옵션으로만 사용한다. Hybrid QA를 바로 실행할 때는 다음
+명령을 사용한다.
 
 ```bash
-python3 -m src.services.rag_qa_cli --mode hybrid --query "SSH를 활성화하려면?" --trace
+python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 ```
 
 예정된 챗봇 실행 흐름은 다음과 같습니다.
