@@ -146,8 +146,10 @@ class SearchResultMetadata(StrictContract):
     os_versions: list[NonEmptyText]
     document_checksum: NonEmptyText
     chunk_checksum: NonEmptyText
+    embedding_checksum: NonEmptyText
     parser_version: NonEmptyText
     official_verified: Literal[True]
+    quality_status: Literal["approved"]
     image_url: HttpUrl | None
     video_url: HttpUrl | None
 

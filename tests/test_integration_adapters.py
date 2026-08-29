@@ -52,7 +52,7 @@ def rag_result(*, retrieved_at: str = "2026-08-27", rank: int = 1) -> RagResult:
     )
 
 
-def metadata(*, official_verified: bool = True) -> RagResultMetadata:
+def metadata(*, official_verified: bool = True, quality_status: str = "approved") -> RagResultMetadata:
     return RagResultMetadata(
         chunk_index=0,
         publisher="Raspberry Pi Ltd",
@@ -61,8 +61,10 @@ def metadata(*, official_verified: bool = True) -> RagResultMetadata:
         indexed_at=datetime.fromisoformat("2026-08-28T12:00:00+09:00"),
         document_checksum="sha256:document",
         chunk_checksum="sha256:chunk",
+        embedding_checksum="sha256:embedding",
         parser_version="1.0.0",
         official_verified=official_verified,
+        quality_status=quality_status,
         product_models=("Raspberry Pi 5",),
         use_cases=("camera_monitoring",),
         tasks=("troubleshooting",),
@@ -145,6 +147,20 @@ class IntegrationAdapterTests(unittest.TestCase):
                 applied_filters=RagFilters(),
                 metadata_by_chunk_id={
                     "camera-001": metadata(official_verified=False)
+                },
+            )
+
+    def test_unapproved_result_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationAdapterError, "품질 승인되지 않은"):
+            rag_results_to_search_response(
+                [rag_result()],
+                query_id="query-1",
+                query_language="ko",
+                retrieval_method="dense",
+                top_k=3,
+                applied_filters=RagFilters(),
+                metadata_by_chunk_id={
+                    "camera-001": metadata(quality_status="needs_review")
                 },
             )
 

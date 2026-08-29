@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sys
 import types
 
@@ -16,6 +17,7 @@ from src.rag import (
     rrf_fuse,
 )
 from src.rag.chroma_metadata import chroma_where, chunk_to_chroma_metadata, tag_flag_key
+from src.contracts.retrieval_text import build_e5_passage
 
 
 def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> DocumentChunk:
@@ -31,6 +33,7 @@ def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> Docum
         license="CC BY-SA 4.0",
         use_cases=use_cases,
         official_verified=True,
+        quality_status="approved",
     )
 
 
@@ -119,8 +122,9 @@ def test_chroma_metadata_and_where_include_tag_filters() -> None:
     )
     assert where is not None
     assert where["$and"][0] == {"official_verified": True}
-    assert {tag_flag_key("product_models", "Raspberry Pi 5"): True} in where["$and"][1]["$or"]
-    assert {tag_flag_key("use_cases", "camera"): True} in where["$and"][2]["$or"]
+    assert where["$and"][1] == {"quality_status": "approved"}
+    assert {tag_flag_key("product_models", "Raspberry Pi 5"): True} in where["$and"][2]["$or"]
+    assert {tag_flag_key("use_cases", "camera"): True} in where["$and"][3]["$or"]
 
 
 def test_dense_configuration_error_is_not_silently_hidden(monkeypatch) -> None:
@@ -134,6 +138,8 @@ def test_dense_configuration_error_is_not_silently_hidden(monkeypatch) -> None:
 
 def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tmp_path, monkeypatch) -> None:
     manifest_path = tmp_path / "manifest.json"
+    passage = build_e5_passage(title="Camera", section="Setup", content="camera setup")
+    embedding_checksum = f"sha256:{hashlib.sha256(passage.encode('utf-8')).hexdigest()}"
     manifest_path.write_text(
         json.dumps(
             {
@@ -145,6 +151,7 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
                         "section": "Setup",
                         "content": "camera setup",
                         "source_url": "https://www.raspberrypi.com/documentation/",
+                        "source_anchor": "setup",
                         "retrieved_at": "2026-08-28",
                         "document_version": None,
                         "license": "CC BY-SA 4.0",
@@ -152,6 +159,8 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
                         "use_cases": ["camera"],
                         "os_versions": ["Raspberry Pi OS"],
                         "official_verified": True,
+                        "quality_status": "approved",
+                        "embedding_checksum": embedding_checksum,
                     }
                 ]
             }
@@ -165,6 +174,12 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
 
         def upsert(self, **kwargs: object) -> None:
             self.upserted = kwargs
+
+        def get(self) -> dict[str, list[str]]:
+            return {"ids": []}
+
+        def delete(self, *, ids: list[str]) -> None:
+            raise AssertionError(f"reset collection should not contain stale ids: {ids}")
 
     class FakeClient:
         def __init__(self) -> None:
@@ -186,7 +201,7 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
             assert name == "test-e5"
 
         def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
-            assert texts == ["passage: camera setup"]
+            assert texts == [passage]
             assert normalize_embeddings is True
             return [[0.1, 0.2]]
 
@@ -203,3 +218,73 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     assert client.collection.upserted is not None
     metadata = client.collection.upserted["metadatas"][0]
     assert metadata[tag_flag_key("product_models", "Raspberry Pi 5")] is True
+    assert metadata["quality_status"] == "approved"
+
+
+def test_indexer_removes_stale_chunk_ids_without_full_reset(tmp_path, monkeypatch) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    passage = build_e5_passage(title="Camera", section="Setup", content="camera setup")
+    checksum = f"sha256:{hashlib.sha256(passage.encode('utf-8')).hexdigest()}"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "camera",
+                        "document_id": "doc-1",
+                        "title": "Camera",
+                        "section": "Setup",
+                        "content": "camera setup",
+                        "source_url": "https://www.raspberrypi.com/documentation/",
+                        "source_anchor": "setup",
+                        "retrieved_at": "2026-08-28",
+                        "document_version": None,
+                        "license": "CC BY-SA 4.0",
+                        "product_models": [],
+                        "use_cases": [],
+                        "os_versions": [],
+                        "official_verified": True,
+                        "quality_status": "approved",
+                        "embedding_checksum": checksum,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    class FakeCollection:
+        def __init__(self) -> None:
+            self.deleted_ids: list[str] = []
+
+        def get(self) -> dict[str, list[str]]:
+            return {"ids": ["camera", "removed-old-chunk"]}
+
+        def delete(self, *, ids: list[str]) -> None:
+            self.deleted_ids.extend(ids)
+
+        def upsert(self, **kwargs: object) -> None:
+            pass
+
+    collection = FakeCollection()
+    fake_client = types.SimpleNamespace(
+        list_collections=lambda: ["rpi_official"],
+        delete_collection=lambda name: None,
+        get_or_create_collection=lambda name: collection,
+    )
+
+    class FakeSentenceTransformer:
+        def __init__(self, name: str) -> None:
+            pass
+
+        def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
+            return [[0.1, 0.2]]
+
+    monkeypatch.setitem(sys.modules, "chromadb", types.SimpleNamespace(PersistentClient=lambda path: fake_client))
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", types.SimpleNamespace(SentenceTransformer=FakeSentenceTransformer)
+    )
+
+    build_chroma_index(manifest_path, tmp_path / "chroma", embedding_model_name="test-e5")
+
+    assert collection.deleted_ids == ["removed-old-chunk"]

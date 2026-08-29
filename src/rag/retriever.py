@@ -77,7 +77,8 @@ class HybridRetriever:
     def _allowed(self, chunk: DocumentChunk, filters: RagFilters) -> bool:
         """검색 점수를 계산하기 전에 공식 여부와 metadata 조건을 검사한다."""
         return (
-            (not filters.official_only or chunk.official_verified)
+            chunk.quality_status == "approved"
+            and (not filters.official_only or chunk.official_verified)
             and self._matches(filters.product_models, chunk.product_models)
             and self._matches(filters.use_cases, chunk.use_cases)
             and self._matches(filters.os_versions, chunk.os_versions)
