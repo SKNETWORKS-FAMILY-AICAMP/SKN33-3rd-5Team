@@ -26,14 +26,14 @@
 
 ## 결정 사항
 
-1. manifest의 최상위 객체는 `schema_version`, `generated_at`, `source_registry`, `chunks`를 가진다.
+1. manifest의 최상위 객체는 `schema_version`, `generated_at`, `source_registry`, `chunks`를 가진다. `source_registry`는 `document_pipeline/data/source_registry.csv` 또는 `source_registry_vN.csv`처럼 실제 수집에 사용한 검수 대장을 기록한다.
 2. `chunks`는 RAG가 문서 조인 없이 검색할 수 있도록 출처 metadata를 청크마다 포함한다.
 3. 날짜는 ISO 8601을 사용하고 checksum은 `sha256:<64 hex>` 형식을 사용한다.
 4. `official_verified`가 `true`이고 source registry에서 `collection_decision=include`인 자료만 manifest에 포함한다.
 5. `rank`, `citation_id`, `indexed_at`은 런타임 필드이므로 manifest에 넣지 않는다.
 6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. `src/rag/adapters.py`가 `collected_at`을 보존해 변환하며, manifest 계약 자체는 줄이지 않는다.
 7. corpus의 `image_url`, `video_url`은 명확한 재사용 권리가 확인된 공식 URL만 사용하며, 파일 자체는 corpus에 복제하지 않는다.
-8. `license_url`, 검토 상태와 attribution 문구는 `source_registry.csv`와 Document Card에서 관리한다. RAG manifest에는 canonical 계약의 `license`만 전달한다.
+8. `license_url`, 검토 상태와 attribution 문구는 실제 수집에 사용한 `source_registry*.csv`와 Document Card에서 관리한다. RAG manifest에는 canonical 계약의 `license`만 전달한다.
 9. 제품 페이지 사진은 corpus manifest에 넣지 않는다. 교육용 제품 카드의 원격 표시는 `data/product_media_registry.json`에서 별도로 통제한다.
 
 ## 현재 RAG 테스트 형식과의 연결

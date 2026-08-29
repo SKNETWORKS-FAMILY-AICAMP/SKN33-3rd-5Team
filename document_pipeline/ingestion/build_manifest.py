@@ -11,22 +11,24 @@ from pathlib import Path
 from typing import Protocol, Sequence
 
 try:  # Supports both `python -m` and direct script execution.
-    from .fetch import PIPELINE_ROOT, SourceRecord, included_sources
+    from .fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources
     from .parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 except ImportError:  # pragma: no cover - direct invocation path
-    from fetch import PIPELINE_ROOT, SourceRecord, included_sources
+    from fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources
     from parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 
 
 RAW_ROOT = PIPELINE_ROOT / "data" / "raw"
 PROCESSED_ROOT = PIPELINE_ROOT / "data" / "processed"
 MANIFEST_PATH = PIPELINE_ROOT / "data" / "manifest.json"
+REPOSITORY_ROOT = PIPELINE_ROOT.parent
 PARSER_VERSION = "asciidoc-semantic-2.0.0"
 DEFAULT_TOKENIZER_NAME = "intfloat/multilingual-e5-base"
 DEFAULT_TARGET_TOKENS = 360
 DEFAULT_MAX_TOKENS = 460
 DEFAULT_OVERLAP_TOKENS = 60
 SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
+SOURCE_REGISTRY_REFERENCE = re.compile(r"^document_pipeline/data/source_registry(?:_v[0-9]+)?\.csv$")
 
 
 class Tokenizer(Protocol):
@@ -240,6 +242,27 @@ def _load_collection_ledger(raw_root: Path) -> dict[str, object]:
     return ledger
 
 
+def _registry_path_from_ledger(ledger: dict[str, object]) -> Path:
+    """Use the exact registry recorded at collection time for reproducible builds."""
+
+    reference = ledger.get("source_registry")
+    if reference is None:
+        return REGISTRY_PATH
+    if not isinstance(reference, str) or not SOURCE_REGISTRY_REFERENCE.fullmatch(reference):
+        raise ValueError("collection ledger has an unsupported source registry reference")
+    return (REPOSITORY_ROOT / reference).resolve()
+
+
+def _registry_reference(registry_path: Path) -> str:
+    try:
+        reference = registry_path.resolve().relative_to(REPOSITORY_ROOT).as_posix()
+    except ValueError as exc:
+        raise ValueError("source registry must be inside the project repository") from exc
+    if not SOURCE_REGISTRY_REFERENCE.fullmatch(reference):
+        raise ValueError("source registry must use source_registry.csv or source_registry_vN.csv")
+    return reference
+
+
 def _ledger_by_source_id(ledger: dict[str, object]) -> dict[str, dict[str, str]]:
     documents = ledger.get("documents")
     if not isinstance(documents, list):
@@ -313,6 +336,10 @@ def validate_manifest(payload: dict[str, object]) -> None:
     required_top_level = {"schema_version", "generated_at", "source_registry", "chunks"}
     if set(payload) != required_top_level or payload["schema_version"] != "1.0.0":
         raise ValueError("manifest top-level contract does not match version 1.0.0")
+    if not isinstance(payload["source_registry"], str) or not SOURCE_REGISTRY_REFERENCE.fullmatch(
+        payload["source_registry"]
+    ):
+        raise ValueError("manifest source_registry reference is invalid")
     chunks = payload["chunks"]
     if not isinstance(chunks, list) or not chunks:
         raise ValueError("manifest must contain at least one chunk")
@@ -342,6 +369,7 @@ def build_manifest(
     raw_root: Path = RAW_ROOT,
     output_path: Path = MANIFEST_PATH,
     processed_root: Path = PROCESSED_ROOT,
+    registry_path: Path | None = None,
     tokenizer: Tokenizer | None = None,
     tokenizer_name: str = DEFAULT_TOKENIZER_NAME,
     target_tokens: int = DEFAULT_TARGET_TOKENS,
@@ -351,6 +379,7 @@ def build_manifest(
     """Transform the current raw collection into a token-aware static RAG manifest."""
     tokenizer = tokenizer or load_e5_tokenizer(tokenizer_name)
     ledger = _load_collection_ledger(raw_root)
+    registry_path = registry_path.resolve() if registry_path is not None else _registry_path_from_ledger(ledger)
     ledger_by_source = _ledger_by_source_id(ledger)
     collected_at = ledger.get("collected_at")
     commit = ledger.get("commit")
@@ -359,7 +388,7 @@ def build_manifest(
 
     all_chunks: list[dict[str, object]] = []
     parsed_sections: dict[str, list[dict[str, object]]] = {}
-    for source in included_sources():
+    for source in included_sources(registry_path):
         entry = ledger_by_source.get(source.source_id)
         if entry is None:
             raise ValueError(f"collection ledger does not contain approved source: {source.source_id}")
@@ -386,7 +415,7 @@ def build_manifest(
     manifest: dict[str, object] = {
         "schema_version": "1.0.0",
         "generated_at": datetime.now(UTC).isoformat(),
-        "source_registry": "document_pipeline/data/source_registry.csv",
+        "source_registry": _registry_reference(registry_path),
         "chunks": all_chunks,
     }
     validate_manifest(manifest)
@@ -405,15 +434,23 @@ def main() -> None:
     parser.add_argument("--target-tokens", type=int, default=DEFAULT_TARGET_TOKENS)
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--overlap-tokens", type=int, default=DEFAULT_OVERLAP_TOKENS)
+    parser.add_argument("--source-registry", type=Path, default=None)
+    parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
+    parser.add_argument("--processed-root", type=Path, default=PROCESSED_ROOT)
+    parser.add_argument("--output-path", type=Path, default=MANIFEST_PATH)
     args = parser.parse_args()
     manifest = build_manifest(
+        raw_root=args.raw_root,
+        processed_root=args.processed_root,
+        output_path=args.output_path,
+        registry_path=args.source_registry,
         tokenizer_name=args.tokenizer_name,
         target_tokens=args.target_tokens,
         max_tokens=args.max_tokens,
         overlap_tokens=args.overlap_tokens,
     )
     print(f"built {len(manifest['chunks'])} chunks")
-    print(f"manifest: {MANIFEST_PATH}")
+    print(f"manifest: {args.output_path}")
 
 
 if __name__ == "__main__":
