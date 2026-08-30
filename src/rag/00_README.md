@@ -17,6 +17,53 @@ python3 -m src.services.rag_qa_cli
 python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 ```
 
+## 제품 추천 통합 실행
+
+제품 추천은 QA CLI와 별도 흐름이다. `sLLM LoRA 조건 JSON → catalog 후보 필터·점수화
+→ 후보의 공식 문서만 Hybrid RAG → Qwen 인용 답변` 순서로 실행한다. 모델은 후보·제품 URL·
+이미지·출처를 새로 만들 수 없으며, 서버가 catalog와 manifest metadata로 조합한다.
+
+`DOCUMENT_MANIFEST`를 v3 manifest로 설정하고, `PRODUCT_CATALOG`와 LoRA adapter를
+RunPod volume에 둔 뒤 먼저 색인한다.
+
+```bash
+python3 -m src.services.rag_qa_cli --action index --reset
+ANSWER_GENERATOR=huggingface CONDITION_EXTRACTOR=lora \
+python3 -m src.services.recommendation_rag_cli \
+  --query "작은 스마트팜을 만들고 싶은데 어떤 모델이 좋을까?" --trace
+```
+
+추천 후보의 `document_ids`는 BM25의 로컬 후보 필터와 Chroma `where`의 `document_id`
+조건에 모두 적용된다. 선택된 후보를 뒷받침할 청크가 없으면 Qwen을 호출하지 않고
+`insufficient_evidence`로 보류한다.
+
+### v3 공식 corpus 생성·색인
+
+제품 추천용 v3 registry는 v2의 15개 공식 문서를 유지하고, Pi 5 멀티카메라·열 관리·
+초기 하드웨어 설정 문서 3개를 추가한다. 제품 페이지는 이미지·URL 카드용
+`reference_only`이므로 RAG 본문에 색인하지 않는다.
+
+```bash
+# registry 계약 검증: 총 26개 중 include 18개, reference_only 8개
+python3 document_pipeline/ingestion/validate_foundation.py \
+  --source-registry document_pipeline/data/source_registry_v3.csv
+
+# 동일 commit의 원문·정제본·canonical manifest를 재현한다.
+python3 -m document_pipeline.ingestion.run_pipeline \
+  --commit 75331a79fbf32d2403b7547729ddccf553873b09 \
+  --source-registry document_pipeline/data/source_registry_v3.csv \
+  --raw-root document_pipeline/data/raw_v3 \
+  --processed-root document_pipeline/data/processed_v3 \
+  --manifest-path document_pipeline/data/manifest_v3.json
+
+# .env의 DOCUMENT_MANIFEST/CHROMA_PATH를 v3 경로로 설정한 후 실행한다.
+python3 -m src.services.rag_qa_cli --action index --reset
+```
+
+`raw_v3`, `processed_v3`, `manifest_v3.json`, `chroma_official_v3` 및 실제
+`data/products/catalog.json`은 재생성·내부 공유 데이터이므로 Git에 커밋하지 않는다.
+현재 검증 기준 v3 manifest는 18개 문서·266개 청크이며, 최대 E5 입력 길이는 459 tokens다.
+
 ## Retriever 단위 점검: 실행 위치와 명령어
 
 `demo.py`는 답변 생성 전 Retriever 결과만 확인하는 선택적 단위 점검 도구다. `demo.py`와
@@ -114,8 +161,8 @@ python3 -m src.services.rag_qa_cli --action index --reset
 사용하므로 Chroma API 키는 필요 없다.
 
 ```env
-DOCUMENT_MANIFEST=document_pipeline/data/manifest_v2.json
-CHROMA_PATH=data/indexed/chroma_official_v2
+DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json
+CHROMA_PATH=data/indexed/chroma_official_v3
 CHROMA_COLLECTION_NAME=rpi_official
 E5_MODEL_NAME=intfloat/multilingual-e5-base
 TOP_K=5
@@ -150,12 +197,16 @@ BM25는 점수가 모두 0이면 근거가 없는 것으로 보고 결과를 반
 from src.rag import HybridRetriever, RagFilters
 
 retriever = HybridRetriever.from_manifest(
-    "document_pipeline/data/manifest_v2.json",
-    chroma_path="data/indexed/chroma_official_v2",
+    "document_pipeline/data/manifest_v3.json",
+    chroma_path="data/indexed/chroma_official_v3",
 )
 results = retriever.search(
     "모니터 없이 카메라를 연결하고 싶어요",
-    RagFilters(product_models=("Raspberry Pi 5",), use_cases=("camera",)),
+    RagFilters(
+        product_models=("Raspberry Pi 5",),
+        use_cases=("camera",),
+        document_ids=("rpi-doc-camera-install",),
+    ),
     top_k=5,
 )
 
@@ -167,8 +218,9 @@ if decision.status == "insufficient_evidence":
 현재 반환값은 테스트용 `list[RagResult]`다. 실제 챗봇 연결 전에는 `SearchResponse` 계약으로 변환하고, 서버가 `citation_id`와 출처 metadata를 조합해야 한다.
 
 Chroma 색인에는 `product_models`, `use_cases`, `os_versions`를 tag별 boolean metadata로
-저장한다. Dense 검색은 해당 metadata를 Chroma `where`에 먼저 적용하고, 반환 전에는
-동일 조건을 다시 검사한다.
+저장하고, `document_id`도 scalar metadata로 저장한다. Dense 검색은 해당 metadata와
+선택적인 `document_ids`를 Chroma `where`에 먼저 적용하고, 반환 전에는 동일 조건을 다시
+검사한다.
 
 ## 역할 경계
 

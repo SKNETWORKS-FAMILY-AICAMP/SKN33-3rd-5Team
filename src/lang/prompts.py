@@ -32,6 +32,14 @@ GROUNDED_ANSWER_SYSTEM_PROMPT = """당신은 Raspberry Pi 공식 문서 기반 �
 - 별도의 '출처' 목록, URL, JSON, 코드 펜스는 출력하지 않습니다.
 """
 
+RECOMMENDATION_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT + """
+
+제품 추천 추가 규칙:
+11. <selected_candidates>는 서버가 catalog 조건으로 확정한 후보입니다. 후보에 없는 제품·메모리 변형·구성품을 새로 추천하거나 비교하지 마세요.
+12. 후보 이름, 장점, 제한사항을 설명할 때도 <official_evidence>에서 확인되는 내용만 사용하고 각 내용에 인용을 붙이세요.
+13. 제품 URL, 이미지 URL, 가격, 재고, 판매처를 답변 본문에 넣지 마세요. 제품 카드는 서버가 별도로 표시합니다.
+"""
+
 
 @dataclass(frozen=True)
 class PromptEvidence:
@@ -111,9 +119,52 @@ def build_grounded_answer_messages(
     ]
 
 
+def build_recommendation_answer_messages(
+    question: str,
+    *,
+    selected_candidates: str,
+    evidence: Sequence[PromptEvidence],
+) -> list[dict[str, str]]:
+    """서버가 확정한 catalog 후보와 공식 근거로 추천 설명 프롬프트를 만든다."""
+
+    items = tuple(evidence)
+    decision = evaluate_request(question, evidence_count=len(items))
+    if not decision.allowed:
+        raise PromptBuildError(decision)
+    if not selected_candidates.strip():
+        raise ValueError("추천 답변에는 서버가 선택한 제품 후보가 필요합니다.")
+    citation_ids = [item.citation_id for item in items]
+    if len(citation_ids) != len(set(citation_ids)):
+        raise ValueError("검색 근거에 중복된 인용 ID가 있습니다.")
+
+    user_prompt = f"""<user_question>
+{escape(question.strip())}
+</user_question>
+
+<selected_candidates>
+{escape(selected_candidates.strip())}
+</selected_candidates>
+
+<allowed_citation_ids>
+{', '.join(citation_ids)}
+</allowed_citation_ids>
+
+<official_evidence>
+{_render_evidence(items)}
+</official_evidence>
+
+위 후보와 근거만 사용해 한국어 제품 추천 설명을 작성하세요."""
+    return [
+        {"role": "system", "content": RECOMMENDATION_ANSWER_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
 __all__ = [
     "GROUNDED_ANSWER_SYSTEM_PROMPT",
+    "RECOMMENDATION_ANSWER_SYSTEM_PROMPT",
     "PromptBuildError",
     "PromptEvidence",
     "build_grounded_answer_messages",
+    "build_recommendation_answer_messages",
 ]

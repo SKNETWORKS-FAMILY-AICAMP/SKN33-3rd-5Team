@@ -27,6 +27,22 @@ python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 `src.rag.demo`는 Retriever 결과만 확인하는 개발용 단위 점검 도구이며, 팀 시연·통합 실행
 명령으로 사용하지 않는다.
 
+## 1.2 제품 추천 실행 기준
+
+제품 추천은 QA CLI를 확장하지 않고 전용 명령을 사용한다. 이 흐름은 **sLLM LoRA 조건
+JSON → catalog 후보 필터·점수화 → 후보 근거 문서로 제한한 Hybrid RAG → Qwen 답변** 순서다.
+모델은 제품 후보·제품 URL·이미지·출처를 생성하지 않으며, 서버가 검증된 catalog와 manifest
+metadata에서 조합한다.
+
+```bash
+python3 -m src.services.recommendation_rag_cli \
+  --query "작은 스마트팜을 만들고 싶은데 어떤 모델이 좋을까?" --trace
+```
+
+추천 전에는 `source_registry_v3.csv`에서 생성한 `manifest_v3.json` 및 Chroma 색인이 필요하다.
+catalog의 필드별 공식 근거 `document_id`만 검색 필터에 전달하고, 근거가 없는 후보는 Qwen에
+전달하지 않는다.
+
 ## 2. 사용자 문제와 AX 목표
 
 라즈베리 파이는 모델, 메모리, 전원, 저장장치, 카메라, 원격 접속, GPIO 등 선택과 설정 요소가 많다. 특히 입문자는 아래 과정을 여러 문서와 커뮤니티에서 따로 찾아야 한다.

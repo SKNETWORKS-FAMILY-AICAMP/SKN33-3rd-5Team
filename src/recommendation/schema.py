@@ -65,7 +65,8 @@ class ProductDisplayMetadata(StrictContract):
     cpu: str = Field(min_length=1, max_length=200)
     memory: str = Field(min_length=1, max_length=100)
     wireless: str = Field(min_length=1, max_length=200)
-    dimensions: str = Field(min_length=1, max_length=100)
+    # 공식 documentation corpus에서 확인되지 않은 크기는 추측하지 않고 숨긴다.
+    dimensions: str | None = Field(default=None, max_length=100)
 
 
 class ProductRecommendationProfile(StrictContract):
@@ -75,6 +76,47 @@ class ProductRecommendationProfile(StrictContract):
     beginner_friendly: bool
     recommended_use_cases: list[UseCase]
     recommended_tasks: list[Task]
+
+
+class ProductFieldEvidence(StrictContract):
+    """카탈로그의 제품별 사실·추천 기준을 뒷받침하는 문서 ID 묶음이다.
+
+    각 키는 제품 레코드의 같은 이름 사실을 지지한다. 빈 목록은 해당 값이
+    카탈로그에 없거나(예: 확인하지 못한 크기), 추천 결과에 쓰지 않는다는 뜻이다.
+    """
+
+    identity: list[str] = Field(default_factory=list)
+    wireless: list[str] = Field(default_factory=list)
+    ethernet: list[str] = Field(default_factory=list)
+    gpio_header: list[str] = Field(default_factory=list)
+    camera_connector_count: list[str] = Field(default_factory=list)
+    display_output_count: list[str] = Field(default_factory=list)
+    built_in_keyboard: list[str] = Field(default_factory=list)
+    cpu: list[str] = Field(default_factory=list)
+    memory: list[str] = Field(default_factory=list)
+    dimensions: list[str] = Field(default_factory=list)
+    recommendation_profile: list[str] = Field(default_factory=list)
+    required_accessories: list[str] = Field(default_factory=list)
+    caveats: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def evidence_ids_are_unique(self) -> "ProductFieldEvidence":
+        for field_name in type(self).model_fields:
+            document_ids = getattr(self, field_name)
+            if len(document_ids) != len(set(document_ids)):
+                raise ValueError(f"evidence_by_field.{field_name}에 중복 document_id가 있습니다.")
+        return self
+
+    def all_document_ids(self) -> list[str]:
+        """필드별 근거를 정렬된 중복 없는 제품 근거 목록으로 만든다."""
+
+        return sorted(
+            {
+                document_id
+                for field_name in type(self).model_fields
+                for document_id in getattr(self, field_name)
+            }
+        )
 
 
 class ProductRecord(StrictContract):
@@ -91,6 +133,7 @@ class ProductRecord(StrictContract):
     recommendation_profile: ProductRecommendationProfile
     required_accessories: list[str] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
+    evidence_by_field: ProductFieldEvidence
     document_ids: list[str] = Field(min_length=1)
     product_url: HttpUrl
     image_url: HttpUrl | None
@@ -107,13 +150,43 @@ class ProductRecord(StrictContract):
             raise ValueError("aliases에 대소문자만 다른 중복 값이 있습니다.")
         if len(self.document_ids) != len(set(self.document_ids)):
             raise ValueError("document_ids에 중복 값이 있습니다.")
+        if self.document_ids != self.evidence_by_field.all_document_ids():
+            raise ValueError(
+                "document_ids는 evidence_by_field의 정렬된 중복 제거 합집합과 같아야 합니다."
+            )
+
+        required_evidence = (
+            "identity",
+            "wireless",
+            "ethernet",
+            "gpio_header",
+            "camera_connector_count",
+            "display_output_count",
+            "built_in_keyboard",
+            "cpu",
+            "memory",
+            "recommendation_profile",
+        )
+        missing = [
+            field_name
+            for field_name in required_evidence
+            if not getattr(self.evidence_by_field, field_name)
+        ]
+        if self.display.dimensions is not None and not self.evidence_by_field.dimensions:
+            missing.append("dimensions")
+        if self.required_accessories and not self.evidence_by_field.required_accessories:
+            missing.append("required_accessories")
+        if self.caveats and not self.evidence_by_field.caveats:
+            missing.append("caveats")
+        if missing:
+            raise ValueError(f"필드별 공식 근거가 없습니다: {sorted(missing)}")
         return self
 
 
 class ProductCatalog(StrictContract):
     """버전이 지정된 공식 출처와 추천 대상 제품 전체를 담는다."""
 
-    schema_version: str = Field(pattern=r"^1\.\d+\.\d+$")
+    schema_version: str = Field(pattern=r"^1\.1\.0$")
     catalog_version: str = Field(min_length=1, max_length=100)
     generated_at: datetime
     sources: list[SourceRecord] = Field(min_length=1)

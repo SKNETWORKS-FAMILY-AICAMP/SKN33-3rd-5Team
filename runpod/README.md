@@ -1,8 +1,9 @@
-# RunPod Pod: Qwen3-4B RAG QA 실행
+# RunPod Pod: Qwen3-4B RAG QA·제품 추천 실행
 
 이 문서는 HTTP endpoint나 vLLM 없이 RunPod Pod 안에서 RAG와 Qwen3-4B Base
-Instruct를 같은 Python 프로세스로 실행하는 절차다. 조건 JSON 추출용 LoRA adapter는
-QA 답변 생성에 사용하지 않는다.
+Instruct를 같은 Python 프로세스로 실행하는 절차다. 일반 QA에서는 조건 JSON 추출용
+LoRA adapter를 사용하지 않지만, 제품 추천 CLI에서는 같은 계열 모델의 LoRA adapter로
+조건만 추출한다.
 
 ## Pod 준비
 
@@ -31,17 +32,37 @@ ANSWER_MODEL_ID=Qwen/Qwen3-4B-Instruct-2507
 ANSWER_MODEL_REVISION=main
 ANSWER_LOAD_IN_4BIT=true
 ANSWER_MAX_NEW_TOKENS=512
+
+# v3 공식 corpus와 팀 내부 catalog/LoRA adapter 위치
+DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json
+CHROMA_PATH=data/indexed/chroma_official_v3
+CHROMA_COLLECTION_NAME=rpi_official
+PRODUCT_CATALOG=data/products/catalog.json
+CONDITION_EXTRACTOR=lora
+CONDITION_MODEL_ID=Qwen/Qwen3-4B-Instruct-2507
+LORA_ADAPTER_PATH=/workspace/models/picare-qwen3-4b-qlora
+CONDITION_LOAD_IN_4BIT=true
 ```
 
-실제 corpus가 준비된 뒤 Chroma를 색인하고 QA를 실행한다.
+`data/products/catalog.json`, `manifest_v3.json`, LoRA adapter는 Git 대상이 아니다.
+Pod의 영속 `/workspace` volume 또는 팀 공유 경로에서 받은 동일 버전을 사용한다.
+v3 corpus를 생성·배치한 뒤 Chroma를 색인하고 QA 또는 제품 추천을 실행한다.
 
 ```bash
 python3 -m src.services.rag_qa_cli --action index --reset
 python3 -m src.services.rag_qa_cli \
   --query "SSH를 활성화하려면?" \
   --trace
+
+# sLLM LoRA 조건 추출 + catalog + Hybrid RAG + Qwen 답변
+python3 -m src.services.recommendation_rag_cli \
+  --query "작은 스마트팜을 만들고 싶은데 어떤 모델이 좋을까?" \
+  --trace
 ```
 
 `--trace` 출력에는 검색 근거 수, `huggingface` provider, Qwen 모델명, 생성 시간,
 인용 검증 결과가 표시된다. 근거 부족·가격·재고·프롬프트 인젝션 요청은 Qwen을 로드하거나
 호출하지 않고 기존 보류·차단 정책을 따른다.
+
+제품 추천에서는 후보를 catalog 규칙으로 먼저 확정하고, 그 후보가 참조한 `document_id`만
+BM25와 Chroma 검색에 전달한다. 검색된 근거가 없는 후보는 카드와 답변에서 제외한다.

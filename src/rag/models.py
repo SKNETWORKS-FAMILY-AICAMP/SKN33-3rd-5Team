@@ -21,6 +21,9 @@ class RagFilters:
     product_models: tuple[str, ...] = ()
     use_cases: tuple[str, ...] = ()
     os_versions: tuple[str, ...] = ()
+    # 제품 추천은 catalog가 검증한 근거 문서 안에서만 답해야 한다. 빈 튜플은
+    # 기존 QA처럼 문서 ID로 검색 범위를 제한하지 않는다는 뜻이다.
+    document_ids: tuple[str, ...] = ()
     source_types: tuple[str, ...] = ()
     official_only: bool = True
 

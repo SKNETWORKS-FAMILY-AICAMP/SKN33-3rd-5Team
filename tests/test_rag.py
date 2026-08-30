@@ -54,6 +54,19 @@ def test_metadata_filter_is_applied_before_bm25_ranking() -> None:
     assert results[0].source_url.startswith("https://www.raspberrypi.com/")
 
 
+def test_document_id_filter_limits_bm25_candidates_to_catalog_evidence() -> None:
+    first = make_chunk("pi5", "server storage setup", ("server",))
+    second = DocumentChunk(**{**first.__dict__, "chunk_id": "zero", "document_id": "doc-zero"})
+    second = DocumentChunk(**{**second.__dict__, "content": "camera connector setup", "use_cases": ("camera",)})
+    first = DocumentChunk(**{**first.__dict__, "document_id": "doc-pi5"})
+    third = DocumentChunk(**{**first.__dict__, "chunk_id": "four", "document_id": "doc-pi4"})
+    retriever = HybridRetriever([first, second, third])
+
+    results = retriever.search("camera", RagFilters(document_ids=("doc-zero",)))
+
+    assert [result.chunk_id for result in results] == ["zero"]
+
+
 def test_evaluation_reports_hit_and_mrr() -> None:
     report = evaluate_rankings({"q1": ["x", "a"]}, {"q1": {"a"}}, k=2)
     assert report.hit_at_k == 1.0
@@ -267,6 +280,14 @@ def test_chroma_metadata_and_where_include_tag_filters() -> None:
     assert {tag_flag_key("product_models", "Raspberry Pi 5"): True} in where["$and"][1]["$or"]
     assert {tag_flag_key("use_cases", "camera"): True} in where["$and"][2]["$or"]
 
+    document_where = chroma_where(RagFilters(document_ids=("doc-pi5", "doc-zero")))
+    assert document_where == {
+        "$and": [
+            {"official_verified": True},
+            {"document_id": {"$in": ["doc-pi5", "doc-zero"]}},
+        ]
+    }
+
 
 def test_dense_configuration_error_is_not_silently_hidden(monkeypatch) -> None:
     retriever = HybridRetriever([make_chunk("camera", "camera", ("camera",))], chroma_path="missing-chroma")
@@ -348,3 +369,4 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     assert client.collection.upserted is not None
     metadata = client.collection.upserted["metadatas"][0]
     assert metadata[tag_flag_key("product_models", "Raspberry Pi 5")] is True
+    assert (tmp_path / "chroma" / "picare-index.json").is_file()

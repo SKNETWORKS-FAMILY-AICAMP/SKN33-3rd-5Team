@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from .prompts import (
     GROUNDED_ANSWER_SYSTEM_PROMPT,
+    RECOMMENDATION_ANSWER_SYSTEM_PROMPT,
     PromptBuildError,
     PromptEvidence,
     build_grounded_answer_messages,
+    build_recommendation_answer_messages,
 )
 from .safety import (
     AnswerSafetyError,
@@ -23,10 +25,12 @@ from .safety import (
 __all__ = [
     "AnswerSafetyError",
     "GROUNDED_ANSWER_SYSTEM_PROMPT",
+    "RECOMMENDATION_ANSWER_SYSTEM_PROMPT",
     "PromptBuildError",
     "PromptEvidence",
     "SafetyDecision",
     "build_grounded_answer_messages",
+    "build_recommendation_answer_messages",
     "evaluate_request",
     "extract_citation_ids",
     "validate_grounded_answer",

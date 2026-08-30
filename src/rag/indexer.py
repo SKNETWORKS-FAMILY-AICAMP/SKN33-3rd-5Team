@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .adapters import manifest_to_document_chunks
 from .chroma_metadata import chunk_to_chroma_metadata
+from .index_metadata import write_index_metadata
 from .settings import RagSettings, RagSettingsError
 
 
@@ -61,6 +62,13 @@ def build_chroma_index(
         embeddings=vectors,
         # 다중 tag는 scalar boolean flag로 저장해 Chroma ``where`` 조건에서 검색한다.
         metadatas=[chunk_to_chroma_metadata(chunk) for chunk in approved],
+    )
+    write_index_metadata(
+        chroma_path=chroma_path,
+        collection_name=collection_name,
+        embedding_model_name=embedding_model_name,
+        manifest_path=manifest_path,
+        indexed_chunk_count=len(approved),
     )
     return len(approved)
 

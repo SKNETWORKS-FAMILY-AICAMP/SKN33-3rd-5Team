@@ -57,7 +57,15 @@ def load_e5_tokenizer(name: str = DEFAULT_TOKENIZER_NAME) -> Tokenizer:
 
 def token_count(tokenizer: Tokenizer, text: str) -> int:
     """Count exactly what E5 receives, including its required passage prefix."""
-    return len(tokenizer.encode(f"passage: {text}", add_special_tokens=True))
+
+    # 큰 원본 block은 여기서 길이를 측정한 뒤 `split_block()`이 안전한 단위로
+    # 나눈다. Hugging Face tokenizer의 모델 길이 경고는 최종 청크 오류처럼
+    # 보일 수 있으므로 실제 구현에서만 verbose 출력을 끈다. 테스트 대역은
+    # 기존 두 인자 서명을 유지할 수 있도록 호환 경로를 둔다.
+    try:
+        return len(tokenizer.encode(f"passage: {text}", add_special_tokens=True, verbose=False))
+    except TypeError:
+        return len(tokenizer.encode(f"passage: {text}", add_special_tokens=True))
 
 
 def os_versions_for(source: SourceRecord) -> list[str]:

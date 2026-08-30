@@ -40,8 +40,15 @@ def build_recommendation_chat_response(
     agent_result: RecommendationAgentResult,
     search_response: SearchResponse,
     language: str = "ko",
+    answer: str | None = None,
+    used_citation_ids: set[str] | None = None,
 ) -> ChatResponse:
-    """공식 인용과 연결된 후보만 한국어 상태·설명과 함께 최종 응답에 담는다."""
+    """공식 인용과 연결된 후보만 최종 공통 응답에 담는다.
+
+    ``answer``가 없으면 기존의 결정적 카드 요약을 사용한다. 실제 Qwen 답변을
+    전달할 때는 이미 검증한 ``used_citation_ids``도 함께 넘겨 출처 카드가
+    모델 본문과 제품 카드 양쪽의 인용을 모두 포함하도록 한다.
+    """
 
     decision = agent_result.decision
     common = {
@@ -86,7 +93,7 @@ def build_recommendation_chat_response(
     contract_products: list[ProductRecommendation] = []
     media: list[MediaItem] = []
     answer_lines: list[str] = []
-    used_citation_ids: set[str] = set()
+    response_citation_ids: set[str] = set(used_citation_ids or ())
     result_by_citation = {item.citation_id: item for item in search_response.results}
 
     for candidate in decision.candidates:
@@ -97,7 +104,7 @@ def build_recommendation_chat_response(
         ]
         if not citation_ids:
             continue
-        used_citation_ids.update(citation_ids)
+        response_citation_ids.update(citation_ids)
         recommendation = ", ".join(candidate.matched_conditions) or "입력 조건 충족"
         limitations = list(candidate.tradeoffs)
         limitations.extend(
@@ -115,9 +122,8 @@ def build_recommendation_chat_response(
                 image_url=candidate.image_url,
             )
         )
-        answer_lines.append(
-            f"{candidate.name}: {recommendation} [{citation_ids[0]}]"
-        )
+        if answer is None:
+            answer_lines.append(f"{candidate.name}: {recommendation} [{citation_ids[0]}]")
         if candidate.image_url is not None:
             media.append(
                 MediaItem(
@@ -142,12 +148,12 @@ def build_recommendation_chat_response(
     citations = [
         _citation(result_by_citation[citation_id])
         for citation_id in result_by_citation
-        if citation_id in used_citation_ids
+        if citation_id in response_citation_ids
     ]
     return ChatResponse(
         **common,
         status="answered",
-        answer="\n".join(answer_lines),
+        answer=answer if answer is not None else "\n".join(answer_lines),
         citations=citations,
         products=contract_products,
         media=media,
