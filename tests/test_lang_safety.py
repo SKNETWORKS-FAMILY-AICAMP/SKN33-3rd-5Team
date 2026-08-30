@@ -83,6 +83,8 @@ class GroundedPromptTests(unittest.TestCase):
         self.assertIn("C1", messages[1]["content"])
         self.assertNotIn("https://", messages[1]["content"])
         self.assertIn("출처 metadata를 생성하거나 나열하지 마세요", messages[0]["content"])
+        self.assertIn("목록 항목 전체의 마지막", messages[0]["content"])
+        self.assertIn("중간 줄마다 인용 ID를 반복하지 마세요", messages[0]["content"])
 
     def test_retrieved_instructions_are_escaped_and_treated_as_data(self) -> None:
         messages = build_grounded_answer_messages(
@@ -120,6 +122,41 @@ class GeneratedAnswerValidationTests(unittest.TestCase):
         used = validate_grounded_answer(answer, allowed_citation_ids=["C1", "C2"])
         self.assertEqual(used, {"C1", "C2"})
 
+    def test_markdown_heading_and_multiline_steps_are_allowed(self) -> None:
+        answer = (
+            "## SSH 활성화 방법\n\n"
+            "1. Raspberry Pi 설정 도구를 엽니다.\n"
+            "   Interface Options에서 SSH를 선택하고\n"
+            "   SSH 서버를 활성화합니다. [C1]\n\n"
+            "2. 설정을 저장한 뒤 필요하면 재부팅합니다. [C2]"
+        )
+
+        used = validate_grounded_answer(answer, allowed_citation_ids=["C1", "C2"])
+
+        self.assertEqual(used, {"C1", "C2"})
+
+    def test_bold_heading_and_indented_child_items_are_allowed(self) -> None:
+        answer = (
+            "**Raspberry Pi Imager에서 설정**\n\n"
+            "1. OS 사용자 정의 설정을 엽니다.\n"
+            "   - Services 탭을 선택합니다.\n"
+            "   - SSH 활성화를 선택합니다. [C1]"
+        )
+
+        used = validate_grounded_answer(answer, allowed_citation_ids=["C1"])
+
+        self.assertEqual(used, {"C1"})
+
+    def test_multiline_paragraph_with_trailing_citation_is_allowed(self) -> None:
+        answer = (
+            "SSH는 기본적으로 비활성화되어 있습니다.\n"
+            "Raspberry Pi Imager에서 SSH를 활성화할 수 있습니다. [C1]"
+        )
+
+        used = validate_grounded_answer(answer, allowed_citation_ids=["C1"])
+
+        self.assertEqual(used, {"C1"})
+
     def test_unknown_citation_is_rejected(self) -> None:
         with self.assertRaises(AnswerSafetyError):
             validate_grounded_answer("설치할 수 있습니다. [C9]", allowed_citation_ids=["C1"])
@@ -131,10 +168,25 @@ class GeneratedAnswerValidationTests(unittest.TestCase):
                 allowed_citation_ids=["C1"],
             )
 
-    def test_uncited_answer_line_is_rejected(self) -> None:
+    def test_uncited_answer_paragraph_is_rejected(self) -> None:
+        with self.assertRaises(AnswerSafetyError):
+            validate_grounded_answer(
+                "전원을 확인하세요. [C1]\n\nLED 상태도 확인하세요.",
+                allowed_citation_ids=["C1"],
+            )
+
+    def test_citation_before_an_uncited_continuation_is_rejected(self) -> None:
         with self.assertRaises(AnswerSafetyError):
             validate_grounded_answer(
                 "전원을 확인하세요. [C1]\nLED 상태도 확인하세요.",
+                allowed_citation_ids=["C1"],
+            )
+
+    def test_uncited_top_level_list_item_is_rejected(self) -> None:
+        with self.assertRaises(AnswerSafetyError):
+            validate_grounded_answer(
+                "1. 전원을 확인하세요. [C1]\n"
+                "2. LED 상태도 확인하세요.",
                 allowed_citation_ids=["C1"],
             )
 

@@ -62,6 +62,11 @@ _UNSUPPORTED_MODIFICATION_PATTERNS = (
 )
 
 _CITATION_PATTERN = re.compile(r"\[(C[1-9][0-9]*)\]")
+_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+\s*$")
+_MARKDOWN_HEADING_PATTERN = re.compile(
+    r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
+)
+_LIST_ITEM_PATTERN = re.compile(r"^(?P<indent>\s*)(?:[-+*]|[1-9][0-9]*[.)])\s+\S")
 _URL_PATTERN = re.compile(
     r"(?i)(?:https?://|www\.|(?:raspberrypi|github)\.com/)[^\s)>\]]+"
 )
@@ -174,6 +179,50 @@ def extract_citation_ids(answer: str) -> set[str]:
     return set(_CITATION_PATTERN.findall(answer))
 
 
+def _grounded_content_blocks(answer: str) -> list[str]:
+    """Group prose by paragraph or top-level Markdown list item.
+
+    Markdown headings are structural labels, not factual content. Wrapped lines
+    and indented child items remain part of their parent paragraph/list item so
+    one citation at the end can ground the complete block.
+    """
+
+    blocks: list[str] = []
+    current_lines: list[str] = []
+    current_list_indent: int | None = None
+
+    def flush_current() -> None:
+        nonlocal current_lines, current_list_indent
+        if current_lines:
+            blocks.append("\n".join(current_lines))
+        current_lines = []
+        current_list_indent = None
+
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            flush_current()
+            continue
+        if _MARKDOWN_HEADING_PATTERN.fullmatch(stripped):
+            flush_current()
+            continue
+
+        list_item = _LIST_ITEM_PATTERN.match(line.expandtabs(4))
+        if list_item:
+            indent = len(list_item.group("indent"))
+            if current_lines and (
+                current_list_indent is None or indent <= current_list_indent
+            ):
+                flush_current()
+            if not current_lines:
+                current_list_indent = indent
+
+        current_lines.append(stripped)
+
+    flush_current()
+    return blocks
+
+
 def validate_grounded_answer(
     answer: str,
     *,
@@ -203,16 +252,15 @@ def validate_grounded_answer(
             f"검색 결과에 없는 인용 ID가 포함되었습니다: {', '.join(sorted(unknown))}"
         )
 
-    uncited_lines = []
-    for line in normalized.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not _CITATION_PATTERN.search(stripped):
-            uncited_lines.append(stripped)
-    if uncited_lines:
+    uncited_blocks = [
+        block
+        for block in _grounded_content_blocks(normalized)
+        if not _CITATION_SUFFIX_PATTERN.search(block)
+    ]
+    if uncited_blocks:
         raise AnswerSafetyError(
-            "인용 ID가 없는 답변 문단이 있습니다: " + " | ".join(uncited_lines)
+            "마지막에 인용 ID가 없는 답변 문단 또는 목록 항목이 있습니다: "
+            + " | ".join(block.replace("\n", " ") for block in uncited_blocks)
         )
     return referenced
 
