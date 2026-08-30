@@ -66,7 +66,9 @@ _CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+\s*$")
 _MARKDOWN_HEADING_PATTERN = re.compile(
     r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
 )
-_LIST_ITEM_PATTERN = re.compile(r"^(?P<indent>\s*)(?:[-+*]|[1-9][0-9]*[.)])\s+\S")
+_LIST_ITEM_PATTERN = re.compile(
+    r"^(?P<indent>\s*)(?P<marker>[-+*]|[1-9][0-9]*[.)])\s+\S"
+)
 _URL_PATTERN = re.compile(
     r"(?i)(?:https?://|www\.|(?:raspberrypi|github)\.com/)[^\s)>\]]+"
 )
@@ -183,41 +185,61 @@ def _grounded_content_blocks(answer: str) -> list[str]:
     """Group prose by paragraph or top-level Markdown list item.
 
     Markdown headings are structural labels, not factual content. Wrapped lines
-    and indented child items remain part of their parent paragraph/list item so
-    one citation at the end can ground the complete block.
+    and child items remain part of their parent paragraph/list item, including
+    across blank lines, so one citation at the end can ground the complete block.
     """
 
     blocks: list[str] = []
     current_lines: list[str] = []
     current_list_indent: int | None = None
+    current_list_kind: Literal["ordered", "unordered"] | None = None
+    pending_blank = False
 
     def flush_current() -> None:
-        nonlocal current_lines, current_list_indent
+        nonlocal current_lines, current_list_indent, current_list_kind, pending_blank
         if current_lines:
             blocks.append("\n".join(current_lines))
         current_lines = []
         current_list_indent = None
+        current_list_kind = None
+        pending_blank = False
 
     for line in answer.splitlines():
         stripped = line.strip()
         if not stripped:
-            flush_current()
+            if current_list_indent is None:
+                flush_current()
+            else:
+                pending_blank = True
             continue
         if _MARKDOWN_HEADING_PATTERN.fullmatch(stripped):
             flush_current()
             continue
 
-        list_item = _LIST_ITEM_PATTERN.match(line.expandtabs(4))
+        expanded = line.expandtabs(4)
+        list_item = _LIST_ITEM_PATTERN.match(expanded)
         if list_item:
             indent = len(list_item.group("indent"))
-            if current_lines and (
-                current_list_indent is None or indent <= current_list_indent
-            ):
+            marker = list_item.group("marker")
+            list_kind: Literal["ordered", "unordered"] = (
+                "ordered" if marker[0].isdigit() else "unordered"
+            )
+            is_child = current_list_indent is not None and (
+                indent > current_list_indent
+                or (current_list_kind == "ordered" and list_kind == "unordered")
+            )
+            if current_lines and not is_child:
                 flush_current()
             if not current_lines:
                 current_list_indent = indent
+                current_list_kind = list_kind
+        elif pending_blank and current_list_indent is not None:
+            continuation_indent = len(expanded) - len(expanded.lstrip())
+            if continuation_indent <= current_list_indent:
+                flush_current()
 
         current_lines.append(stripped)
+        pending_blank = False
 
     flush_current()
     return blocks

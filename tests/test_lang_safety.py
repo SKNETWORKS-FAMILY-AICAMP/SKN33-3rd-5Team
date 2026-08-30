@@ -84,7 +84,7 @@ class GroundedPromptTests(unittest.TestCase):
         self.assertNotIn("https://", messages[1]["content"])
         self.assertIn("출처 metadata를 생성하거나 나열하지 마세요", messages[0]["content"])
         self.assertIn("목록 항목 전체의 마지막", messages[0]["content"])
-        self.assertIn("중간 줄마다 인용 ID를 반복하지 마세요", messages[0]["content"])
+        self.assertIn("빈 줄과 하위 설명 포함", messages[0]["content"])
 
     def test_retrieved_instructions_are_escaped_and_treated_as_data(self) -> None:
         messages = build_grounded_answer_messages(
@@ -147,6 +147,28 @@ class GeneratedAnswerValidationTests(unittest.TestCase):
 
         self.assertEqual(used, {"C1"})
 
+    def test_blank_line_between_numbered_title_and_child_item_is_allowed(self) -> None:
+        answer = (
+            "1. SSH 설정\n\n"
+            "- SSH를 활성화합니다. [C1]\n\n"
+            "2. 연결 확인\n\n"
+            "   - 다른 기기에서 SSH로 연결합니다. [C2]"
+        )
+
+        used = validate_grounded_answer(answer, allowed_citation_ids=["C1", "C2"])
+
+        self.assertEqual(used, {"C1", "C2"})
+
+    def test_blank_line_before_indented_child_description_is_allowed(self) -> None:
+        answer = (
+            "1. SSH 설정\n\n"
+            "   Interface Options에서 SSH를 활성화합니다. [C1]"
+        )
+
+        used = validate_grounded_answer(answer, allowed_citation_ids=["C1"])
+
+        self.assertEqual(used, {"C1"})
+
     def test_multiline_paragraph_with_trailing_citation_is_allowed(self) -> None:
         answer = (
             "SSH는 기본적으로 비활성화되어 있습니다.\n"
@@ -187,6 +209,14 @@ class GeneratedAnswerValidationTests(unittest.TestCase):
             validate_grounded_answer(
                 "1. 전원을 확인하세요. [C1]\n"
                 "2. LED 상태도 확인하세요.",
+                allowed_citation_ids=["C1"],
+            )
+
+    def test_blank_line_before_uncited_general_paragraph_is_rejected(self) -> None:
+        with self.assertRaises(AnswerSafetyError):
+            validate_grounded_answer(
+                "1. 전원을 확인하세요. [C1]\n\n"
+                "LED 상태도 확인하세요.",
                 allowed_citation_ids=["C1"],
             )
 
