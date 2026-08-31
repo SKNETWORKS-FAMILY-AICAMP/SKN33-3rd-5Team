@@ -500,4 +500,4 @@ def test_manifest_adapter_rejects_legacy_manifest_schema(tmp_path) -> None:
     path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
 
     with pytest.raises(ValueError, match="schema_version 1.1.0"):
-        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")
+        HybridRetriever.from_manifest(path)
