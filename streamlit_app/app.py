@@ -1,12 +1,10 @@
-"""PiCare Streamlit mock UI for product recommendations and document-grounded QA."""
+"""PiCare Streamlit UI connected to the shared recommendation and RAG services."""
 
 from __future__ import annotations
 
-import base64
 import html
-import mimetypes
 import sys
-import time
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,13 +13,14 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 
-from mock_data import (
-    PRODUCTS,
-    RECOMMENDATION_SOURCES,
-    recommendation_conditions,
+from src.condition_extraction.ui_input import RecommendationFormInput
+from src.contracts import ChatResponse
+from streamlit_app.runtime import (
+    build_qa_service,
+    build_recommendation_service,
+    check_runtime_readiness,
 )
-from src.services.chat_service import build_default_mock_chat_service
-from styles import APP_CSS
+from streamlit_app.styles import APP_CSS
 
 
 st.set_page_config(
@@ -33,21 +32,21 @@ st.set_page_config(
 st.markdown(APP_CSS, unsafe_allow_html=True)
 
 
+RUNTIME_READINESS = check_runtime_readiness(ROOT)
+
+
 @st.cache_resource(show_spinner=False)
 def qa_chat_service():
-    """Keep one replaceable mock QA service for the Streamlit process."""
+    """Keep one real QA service for the Streamlit process."""
 
-    return build_default_mock_chat_service()
+    return build_qa_service(ROOT)
 
 
-@st.cache_data(show_spinner=False)
-def image_data_uri(relative_path: str) -> str:
-    """Read a repository image as a data URI for stable custom cards."""
+@st.cache_resource(show_spinner=False)
+def recommendation_service():
+    """Keep the model, catalog, and retriever assembly across Streamlit reruns."""
 
-    path = ROOT / relative_path
-    mime = mimetypes.guess_type(path.name)[0] or "image/jpeg"
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+    return build_recommendation_service(ROOT)
 
 
 def current_page() -> str:
@@ -95,7 +94,7 @@ def render_hero(title: str, highlighted: str | None, subtitle: str) -> None:
     st.markdown(
         f"""
         <div class="hero">
-          <div class="mock-ribbon">✨ MOCK DATA · sLLM/RAG 연동 전 화면</div>
+          <div class="mock-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.1.0</div>
           <h1>{safe_title}</h1>
           <p>{html.escape(subtitle)}</p>
         </div>
@@ -114,49 +113,56 @@ def section_title(title: str, pill: str | None = None) -> None:
     )
 
 
-def render_sources(sources: list[dict]) -> None:
+def _value(item, name: str, default=""):
+    """Read a field from a Pydantic contract or a legacy mapping."""
+
+    return getattr(item, name, item.get(name, default) if isinstance(item, dict) else default)
+
+
+def render_sources(sources) -> None:
     """Render citation metadata without asking an LLM to generate it."""
 
     if not sources:
         st.info("표시할 공식 검색 근거가 없습니다. 출처를 추측하지 않습니다.")
         return
     for source in sources:
-        citation = source.get("citation_id", "")
+        citation = _value(source, "citation_id")
         citation_text = f"{html.escape(citation)} · " if citation else ""
+        title = str(_value(source, "title"))
+        section = str(_value(source, "section"))
+        license_name = str(_value(source, "license"))
+        url = str(_value(source, "source_url", _value(source, "url")))
         st.markdown(
             f"""
             <div class="source-card">
               <div class="source-icon">📄</div>
               <div>
-                <div class="source-title">{citation_text}{html.escape(source['title'])}</div>
-                <div class="source-meta">Section: {html.escape(source['section'])} &nbsp; · &nbsp; {html.escape(source['license'])}</div>
+                <div class="source-title">{citation_text}{html.escape(title)}</div>
+                <div class="source-meta">Section: {html.escape(section)} &nbsp; · &nbsp; {html.escape(license_name)}</div>
               </div>
-              <a class="source-link" href="{html.escape(source['url'], quote=True)}" target="_blank" rel="noopener noreferrer" aria-label="공식 문서 열기">↗</a>
+              <a class="source-link" href="{html.escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" aria-label="공식 문서 열기">↗</a>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
 
-def product_card(product: dict) -> None:
-    """Render a product card backed by repository-owned licensed assets."""
+def product_card(product) -> None:
+    """Render one server-validated ProductRecommendation contract."""
 
-    image_uri = image_data_uri(product["image"])
-    limitations = " ".join(product["limitations"])
+    name = str(product.product_model)
+    image = str(product.image_url) if product.image_url else ""
+    limitations = " ".join(product.limitations) or "추가 유의사항 없음"
+    citation_ids = ", ".join(product.citation_ids)
     st.markdown(
         f"""
         <div class="product-card">
-          <span class="product-badge tone-{html.escape(product['badge_tone'])}">{html.escape(product['badge'])}</span>
-          <img src="{image_uri}" alt="{html.escape(product['name'])}" style="width:100%;height:155px;object-fit:contain;" />
-          <div class="product-name">{html.escape(product['name'])}</div>
-          <div class="spec-grid">
-            <strong>⚙ CPU</strong><span>{html.escape(product['cpu'])}</span>
-            <strong>▦ RAM</strong><span>{html.escape(product['memory'])}</span>
-            <strong>⌑ 무선</strong><span>{html.escape(product['wireless'])}</span>
-          </div>
-          <div class="product-reason">{html.escape(product['reason'])}</div>
+          <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
+          {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" style="width:100%;height:155px;object-fit:contain;" />' if image else ''}
+          <div class="product-name">{html.escape(name)}</div>
+          <div class="product-reason">{html.escape(product.recommendation)}</div>
           <div style="color:#677180;font-size:.72rem;margin-top:.55rem;line-height:1.55;">{html.escape(limitations)}</div>
-          <a href="{html.escape(product['url'], quote=True)}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:.65rem;text-align:center;border:1px solid #ed003f;border-radius:7px;padding:.42rem;color:#ed003f;text-decoration:none;font-size:.8rem;font-weight:700;">자세히 보기 ↗</a>
+          <a href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:.65rem;text-align:center;border:1px solid #ed003f;border-radius:7px;padding:.42rem;color:#ed003f;text-decoration:none;font-size:.8rem;font-weight:700;">자세히 보기 ↗</a>
         </div>
         """,
         unsafe_allow_html=True,
@@ -164,7 +170,7 @@ def product_card(product: dict) -> None:
 
 
 def render_recommendation_page() -> None:
-    """Render the mock product recommendation form and results."""
+    """Render the product form and the real recommendation service response."""
 
     render_hero(
         "나에게 맞는 Raspberry Pi 찾기",
@@ -195,47 +201,51 @@ def render_recommendation_page() -> None:
             monitor_absent = st.toggle("모니터 없음", value=True)
         submitted = st.form_submit_button("추천 결과 보기  ✨", use_container_width=True)
 
-    if "recommendation_conditions" not in st.session_state:
-        st.session_state.recommendation_conditions = recommendation_conditions(
-            purpose, user_level, performance, wifi, camera, gpio, monitor_absent
-        )
-
     if submitted:
         if not purpose.strip():
             st.error("사용 목적을 한 문장 이상 입력해 주세요.")
             return
-        with st.spinner("입력 조건을 분석하고 공식 사양을 확인하는 중입니다…"):
-            time.sleep(0.35)
-        st.session_state.purpose = purpose
-        st.session_state.recommendation_conditions = recommendation_conditions(
-            purpose, user_level, performance, wifi, camera, gpio, monitor_absent
+        form = RecommendationFormInput.from_widget_values(
+            request_id=str(uuid.uuid4()),
+            free_text=purpose.strip(),
+            user_level_label=user_level,
+            performance_priority_label=performance,
+            wireless_required=wifi,
+            camera_required=camera,
+            gpio_required=gpio,
+            monitor_absent=monitor_absent,
         )
+        try:
+            with st.spinner("조건 분석 → catalog 필터 → Hybrid RAG → 답변 검증 중…"):
+                st.session_state.recommendation_response = recommendation_service().answer_form(
+                    form=form,
+                    trace=True,
+                )
+            st.session_state.purpose = purpose
+        except Exception as exc:
+            st.error(f"제품 추천 런타임을 준비하지 못했습니다: {exc}")
 
-    with st.expander("🧩 추출된 조건 JSON · mock", expanded=False):
-        st.json(st.session_state.recommendation_conditions)
-        st.caption("실제 연동 후에는 sLLM이 생성하고 JSON Schema를 통과한 값만 표시됩니다.")
+    response: ChatResponse | None = st.session_state.get("recommendation_response")
+    if response is None:
+        if not RUNTIME_READINESS.ready:
+            st.warning(RUNTIME_READINESS.message)
+        return
 
-    section_title("추천 제품 3가지", "조건 충족")
-    columns = st.columns(3, gap="medium")
-    for column, product in zip(columns, PRODUCTS, strict=True):
-        with column:
-            product_card(product)
+    render_answer(response)
+    if response.conditions is not None:
+        with st.expander("🧩 검증된 조건 JSON", expanded=False):
+            st.json(response.conditions.model_dump(mode="json"))
 
-    section_title("한눈에 비교")
-    comparison_rows = {
-        "항목": ["성능", "무선 연결", "크기", "추천 용도"],
-        **{
-            product["name"]: [
-                product["performance"], product["wireless"], product["size"], product["use_case"]
-            ]
-            for product in PRODUCTS
-        },
-    }
-    st.dataframe(comparison_rows, hide_index=True, use_container_width=True)
+    section_title(f"추천 제품 {len(response.products)}개", response.status)
+    if response.products:
+        columns = st.columns(len(response.products), gap="medium")
+        for column, product in zip(columns, response.products, strict=True):
+            with column:
+                product_card(product)
 
     section_title("추천 근거")
-    render_sources(RECOMMENDATION_SOURCES)
-    st.caption("제품 이미지: © Raspberry Pi Ltd · Raspberry Pi Documentation · CC BY-SA 4.0 · 변경 없음(파일명만 변경)")
+    render_sources(response.citations)
+    st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
 def answer_label_class(status: str) -> str:
@@ -251,36 +261,44 @@ def answer_label_class(status: str) -> str:
     return "blocked" if status in blocked else ""
 
 
-def render_answer(response: dict) -> None:
-    """Render the answer body, steps, and safe warning."""
+def render_answer(response: ChatResponse) -> None:
+    """Render the canonical answer without reinterpreting service output."""
 
-    rows = "".join(
-        f'<div class="step-row"><span class="step-number">{index}</span><strong>{html.escape(step)}</strong></div>'
-        for index, step in enumerate(response["steps"], start=1)
-    )
+    status_labels = {
+        "answered": "근거 확인 완료",
+        "needs_clarification": "추가 정보 필요",
+        "insufficient_evidence": "근거 부족",
+        "out_of_scope": "답변 범위 외",
+        "safety_blocked": "안전 정책으로 보류",
+        "error": "실행 오류",
+    }
+    status = response.status
     st.markdown(
-        f"""
-        <div class="answer-card">
-          <div class="answer-label {answer_label_class(response['status'])}">● {html.escape(response['label'])}</div>
-          <h3>{html.escape(response['title'])}</h3>
-          <p>{html.escape(response['intro'])}</p>
-          {rows}
-          <div class="warning-box">⚠ {html.escape(response['warning'])}</div>
-        </div>
-        """,
+        f'<div class="answer-label {answer_label_class(status)}">● {html.escape(status_labels[status])}</div>',
         unsafe_allow_html=True,
     )
+    st.markdown(response.answer)
+    for question in response.clarification_questions:
+        st.info(question)
+    if response.warnings:
+        with st.expander("실행 추적 정보", expanded=False):
+            st.code("\n".join(response.warnings), language=None)
 
 
 def submit_qa(question: str) -> None:
-    """Run the mock document-grounded chain and store its safe response."""
+    """Run the real document-grounded chain and store its contract response."""
 
     st.session_state.qa_question = question.strip()
-    st.session_state.qa_response = qa_chat_service().answer(question)
+    st.session_state.qa_response = qa_chat_service().answer(
+        request_id=str(uuid.uuid4()),
+        question=question.strip(),
+        retrieval_mode="hybrid",
+        trace=True,
+    )
 
 
 def render_qa_page() -> None:
-    """Render the mock document-grounded question answering screen."""
+    """Render the document-grounded QA screen."""
 
     render_hero(
         "무엇이 궁금하신가요?",
@@ -295,33 +313,17 @@ def render_qa_page() -> None:
         with column:
             st.markdown(f'<div class="qa-category"><span style="font-size:1.5rem">{icon}</span>&nbsp;&nbsp;{label}</div>', unsafe_allow_html=True)
 
-    if "qa_question" not in st.session_state:
-        submit_qa("Raspberry Pi 5에 OS를 설치했는데 부팅이 되지 않아요.")
-    response = st.session_state.qa_response
-
-    st.markdown(f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>', unsafe_allow_html=True)
-    left, right = st.columns([1.35, 1], gap="large")
-    with left:
-        render_answer(response)
-        with st.expander("🧩 조건 JSON과 응답 상태 · mock", expanded=False):
-            st.json(
-                {
-                    "status": response["status"],
-                    "reason_code": response.get("reason_code"),
-                    "mode": response.get("mode", "mock_chain"),
-                    "conditions": response["conditions"],
-                }
-            )
-    with right:
-        section_title(f"공식 문서 출처 {len(response['sources'])}건")
-        render_sources(response["sources"])
-        section_title("관련 질문")
-        for index, related in enumerate(response["related"]):
-            if st.button(f"{related}  ›", key=f"related_{index}", use_container_width=True):
-                with st.spinner("공식 문서 근거를 확인하는 중입니다…"):
-                    time.sleep(0.25)
-                submit_qa(related)
-                st.rerun()
+    response: ChatResponse | None = st.session_state.get("qa_response")
+    if response is not None:
+        st.markdown(f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>', unsafe_allow_html=True)
+        left, right = st.columns([1.35, 1], gap="large")
+        with left:
+            render_answer(response)
+        with right:
+            section_title(f"공식 문서 출처 {len(response.citations)}건")
+            render_sources(response.citations)
+    elif not RUNTIME_READINESS.ready:
+        st.warning(RUNTIME_READINESS.message)
 
     st.markdown("---")
     with st.form("qa_form", clear_on_submit=False):
@@ -335,10 +337,12 @@ def render_qa_page() -> None:
         if not question.strip():
             st.warning("질문을 입력해 주세요.")
         else:
-            with st.spinner("질문을 분석하고 공식 문서를 검색하는 중입니다…"):
-                time.sleep(0.35)
-            submit_qa(question)
-            st.rerun()
+            try:
+                with st.spinner("공식 문서 Hybrid 검색과 답변 인용 검증 중…"):
+                    submit_qa(question)
+                st.rerun()
+            except Exception as exc:
+                st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
 
 
 def render_about_page() -> None:
@@ -358,7 +362,10 @@ def render_about_page() -> None:
     for column, (icon, title, text) in zip(cards, items, strict=True):
         with column:
             st.markdown(f'<div class="answer-card" style="text-align:center;min-height:180px"><div style="font-size:2.2rem">{icon}</div><h3>{title}</h3><p>{text}</p></div>', unsafe_allow_html=True)
-    st.info("현재 화면은 mock 데이터로 동작합니다. sLLM·RAG·metadata 연동 후에도 동일한 표시 계약을 사용할 예정입니다.")
+    if RUNTIME_READINESS.ready:
+        st.success(RUNTIME_READINESS.message)
+    else:
+        st.warning(RUNTIME_READINESS.message)
 
 
 page = render_header(current_page())
