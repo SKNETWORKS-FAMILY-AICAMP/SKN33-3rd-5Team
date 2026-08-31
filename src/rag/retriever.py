@@ -91,6 +91,10 @@ class HybridRetriever:
         """검색 점수를 계산하기 전에 공식 여부와 metadata 조건을 검사한다."""
         return (
             (not filters.official_only or chunk.official_verified)
+            # Manifest 1.1의 승인 전 청크는 BM25·Dense의 최종 안전장치에서도
+            # 제외한다. Dense DB에는 indexer가 애초에 넣지 않지만, BM25는
+            # manifest에서 직접 만들기 때문이다.
+            and chunk.quality_status == "approved"
             and self._matches(filters.document_ids, (chunk.document_id,))
             and self._matches(filters.product_models, chunk.product_models)
             and self._matches(filters.use_cases, chunk.use_cases)

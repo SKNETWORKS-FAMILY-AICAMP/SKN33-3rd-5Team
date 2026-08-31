@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from document_pipeline.ingestion.build_manifest import chunk_section
+from document_pipeline.ingestion.build_manifest import _processing_metadata, chunk_section, sha256
 from document_pipeline.ingestion.fetch import REGISTRY_PATH, included_sources
 from document_pipeline.ingestion.parse_asciidoc import parse_asciidoc
 from document_pipeline.ingestion.validate_foundation import validate_source_registry
@@ -99,8 +99,10 @@ def test_manifest_adapter_maps_collected_at_without_dropping_manifest_contract()
             "os_versions": ["Raspberry Pi OS"],
             "document_checksum": "sha256:" + "a" * 64,
             "chunk_checksum": "sha256:" + "b" * 64,
+            "embedding_checksum": "sha256:" + "c" * 64,
             "parser_version": "asciidoc-semantic-2.0.0",
             "official_verified": True,
+            "quality_status": "approved",
             "image_url": None,
             "video_url": None,
         }
@@ -109,10 +111,24 @@ def test_manifest_adapter_maps_collected_at_without_dropping_manifest_contract()
     assert chunk.retrieved_at == "2026-08-28"
     assert chunk.use_cases == ("headless_remote_management",)
     assert chunk.official_verified is True
+    assert chunk.quality_status == "approved"
 
 
 V2_REGISTRY_PATH = REGISTRY_PATH.with_name("source_registry_v2.csv")
 V3_REGISTRY_PATH = REGISTRY_PATH.with_name("source_registry_v3.csv")
+
+
+def test_processing_metadata_uses_the_selected_source_registry() -> None:
+    processing = _processing_metadata(
+        registry_path=V3_REGISTRY_PATH,
+        tokenizer_name="test-tokenizer",
+        tokenizer_revision="test-revision",
+        target_tokens=360,
+        max_tokens=460,
+        overlap_tokens=60,
+    )
+
+    assert processing["source_registry_checksum"] == sha256(V3_REGISTRY_PATH.read_bytes())
 
 
 def test_original_registry_remains_the_nine_document_baseline() -> None:

@@ -94,6 +94,7 @@ def test_huggingface_generator_is_lazy_and_decodes_only_new_tokens(monkeypatch) 
     assert response.text.endswith("[C1]")
     assert tokenizer.messages == list(_messages())
     assert tokenizer.options["add_generation_prompt"] is True
+    assert tokenizer.options["enable_thinking"] is False
     assert tokenizer.options["return_tensors"] == "pt"
     assert model.generate_kwargs["max_new_tokens"] == 32
     assert model.generate_kwargs["do_sample"] is False

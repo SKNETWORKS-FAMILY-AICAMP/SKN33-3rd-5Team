@@ -62,7 +62,9 @@ python3 -m src.services.rag_qa_cli --action index --reset
 
 `raw_v3`, `processed_v3`, `manifest_v3.json`, `chroma_official_v3` 및 실제
 `data/products/catalog.json`은 재생성·내부 공유 데이터이므로 Git에 커밋하지 않는다.
-현재 검증 기준 v3 manifest는 18개 문서·266개 청크이며, 최대 E5 입력 길이는 459 tokens다.
+Manifest는 **1.1.0만** 지원한다. 현재 고정 commit 기준 v3 manifest는 18개 문서·270개
+승인 청크이며, corpus 또는 처리 설정이 바뀌면 manifest를 재생성하고 `--reset`으로 Chroma를
+다시 색인한다.
 
 ## Retriever 단위 점검: 실행 위치와 명령어
 
@@ -136,22 +138,27 @@ python3 -m src.services.rag_qa_cli --action index --reset
 않고 출처 카드에서 표시한다. 자세한 Pod 실행 절차는 [RunPod QA 안내](../../runpod/README.md)를
 참고한다.
 
-문서 파이프라인의 canonical manifest는 `collected_at`을 사용하며,
-`src.rag.adapters`가 기존 RAG 모델의 `retrieved_at`으로 호환 변환한다. 실제 검색 결과의
-출처 카드에는 제목·절·공식 URL·수집일·라이선스·문서 버전 metadata를 유지한다.
+문서 파이프라인의 canonical manifest 1.1은 `collected_at`, `quality_status`,
+`embedding_checksum`, 최상위 `processing` metadata를 사용한다. `src.rag.adapters`가
+기존 RAG 모델의 `retrieved_at`으로만 호환 변환하며, `quality_status=approved`가 아닌
+청크는 색인·검색·인용 대상에서 제외한다. 실제 검색 결과의 출처 카드에는 제목·절·공식 URL·
+수집일·라이선스·문서 버전 metadata를 유지한다.
 
 > [!IMPORTANT]
 > 현재 이 패키지는 검색 동작을 검증하기 위한 프로토타입입니다. 필드명과 반환 형식의 기준은 기존 `RagResult` 구현이 아니라 `src/contracts/models.py`와 `docs/schemas/search-response.schema.json`입니다. 프로토타입을 서비스에 연결할 때는 공통 계약을 만족하도록 교체하거나 adapter를 구현해야 합니다.
 
 이 패키지는 문서 수집·청킹, sLLM 조건 추출, 챗봇 UI에 의존하지 않는다. 문서·데이터 담당이 검수한 `manifest.json`을 입력으로 받아 E5/Chroma Dense 검색, BM25, RRF, metadata filter와 Hit@k·MRR 평가를 제공한다. 현재 추천 MVP corpus는 설치·원격 접속·카메라·GPIO·전원·NVMe·외장 저장장치·키보드형 컴퓨터 비교를 다룬다. 가격·재고·A/S·리콜은 corpus 범위 밖이므로 근거 부족으로 보류하며, 후속 공식 웹 검색 단계에서 처리한다.
 
-## 프로토타입 입력 형식
+## Manifest 1.1 입력 계약
 
-아래 형식은 현재 검색 동작 테스트에만 사용하며 확정 계약이 아니다. 신규 수집·검색 구현은 `docs/schemas/search-response.schema.json`의 `collected_at`, `indexed_at`, `citation_id`와 검증 필드를 사용해야 한다.
+RAG는 `schema_version: "1.1.0"`의 canonical manifest만 받는다. 최상위에는
+`generated_at`, `source_registry`, `processing`, `chunks`가 있어야 하며, 청크는
+`source_anchor`, `collected_at`, `embedding_checksum`, `quality_status`를 포함한
+`docs/schemas/search-response.schema.json`의 정적 metadata 계약을 따라야 한다.
 
-`manifest.json`은 `chunks` 배열을 포함한다. 현재 프로토타입 청크는 `chunk_id`, `document_id`, `title`, `section`, `content`, `source_url`, `retrieved_at`, `document_version`, `license`, `product_models`, `use_cases`, `os_versions`, `source_type`, `official_verified`를 사용한다.
-
-`official_verified`가 `true`인 청크만 Chroma index에 넣고, 기본 검색 결과에도 포함한다.
+`official_verified=true`이고 `quality_status=approved`인 청크만 Chroma·BM25·인용 근거로
+사용한다. 이전 1.0 manifest나 그로부터 만든 Chroma DB는 호환 대상으로 취급하지 않으며,
+manifest 재생성 후 `--reset` 색인을 수행한다.
 
 ## Retriever 구현 단위 사용 방법
 

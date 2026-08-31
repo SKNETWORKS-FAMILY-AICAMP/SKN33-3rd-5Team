@@ -24,6 +24,7 @@ from .integration_adapters import (
     condition_payload_to_rag_filters,
     rag_results_to_search_response,
 )
+from .grounded_generation import CitationRepairError, generate_validated_grounded_answer
 from .recommendation_agent import RecommendationAgent, RecommendationAgentResult
 from .recommendation_response import build_recommendation_chat_response
 
@@ -339,6 +340,26 @@ class RecommendationRagService:
                 conditions=decision.conditions,
                 warnings=[*agent_result.warnings, f"generation_error={type(exc).__name__}"],
             )
+        except CitationRepairError as exc:
+            return self._response(
+                request_id=request_id,
+                status="error",
+                answer="생성된 제품 추천이 인용·안전 검사를 통과하지 못해 표시를 보류합니다.",
+                conditions=decision.conditions,
+                warnings=[
+                    *agent_result.warnings,
+                    f"generation_error={type(exc).__name__}",
+                    *(
+                        [
+                            "trace.generation_attempts=2",
+                            "trace.citation_repair=failed",
+                            f"trace.citation_failure={exc.final_reason_code}",
+                        ]
+                        if trace
+                        else []
+                    ),
+                ],
+            )
         except (AnswerSafetyError, PromptBuildError, ValueError) as exc:
             return self._response(
                 request_id=request_id,
@@ -375,6 +396,8 @@ class RecommendationRagService:
                         f"trace.generator={generation.provider}",
                         f"trace.model_id={generation.model_id}",
                         f"trace.generation_elapsed_ms={generation.elapsed_ms:.1f}",
+                        f"trace.generation_attempts={validated_generation.attempts}",
+                        f"trace.citation_repair={'applied' if validated_generation.repair_attempted else 'not_needed'}",
                         "trace.citation_validation=passed",
                     ]
                     if trace

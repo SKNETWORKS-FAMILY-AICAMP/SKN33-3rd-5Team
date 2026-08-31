@@ -46,7 +46,8 @@ CONDITION_LOAD_IN_4BIT=true
 
 `data/products/catalog.json`, `manifest_v3.json`, LoRA adapter는 Git 대상이 아니다.
 Pod의 영속 `/workspace` volume 또는 팀 공유 경로에서 받은 동일 버전을 사용한다.
-v3 corpus를 생성·배치한 뒤 Chroma를 색인하고 QA 또는 제품 추천을 실행한다.
+Manifest 1.1만 지원하므로 v3 corpus를 생성·배치한 뒤 Chroma를 반드시 `--reset`으로
+재색인하고 QA 또는 제품 추천을 실행한다.
 
 ```bash
 python3 -m src.services.rag_qa_cli --action index --reset
@@ -61,7 +62,9 @@ python3 -m src.services.recommendation_rag_cli \
 ```
 
 `--trace` 출력에는 검색 근거 수, `huggingface` provider, Qwen 모델명, 생성 시간,
-인용 검증 결과가 표시된다. 근거 부족·가격·재고·프롬프트 인젝션 요청은 Qwen을 로드하거나
+생성 시도 횟수와 인용 검증 결과가 표시된다. 최초 Qwen 출력이 인용 형식만 어기면 공식
+근거와 허용된 citation ID를 그대로 사용해 한 번만 형식 수정 재생성한다. 두 번째도 실패하면
+원문 답변은 노출하지 않고 `error`로 보류한다. 근거 부족·가격·재고·프롬프트 인젝션 요청은 Qwen을 로드하거나
 호출하지 않고 기존 보류·차단 정책을 따른다.
 
 제품 추천에서는 후보를 catalog 규칙으로 먼저 확정하고, 그 후보가 참조한 `document_id`만

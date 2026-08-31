@@ -126,8 +126,10 @@ class IntegrationAdapterTests(unittest.TestCase):
                         "source_type": "documentation",
                         "document_checksum": "sha256:document",
                         "chunk_checksum": "sha256:chunk",
+                        "embedding_checksum": "sha256:embedding",
                         "parser_version": "asciidoc-semantic-2.0.0",
                         "official_verified": True,
+                        "quality_status": "approved",
                         "source_anchor": "camera",
                         "published_at": None,
                         "updated_at": None,
@@ -146,6 +148,7 @@ class IntegrationAdapterTests(unittest.TestCase):
 
         self.assertEqual(mapped["camera-001"].source_anchor, "camera")
         self.assertEqual(mapped["camera-001"].tasks, ("camera_setup",))
+        self.assertEqual(mapped["camera-001"].quality_status, "approved")
 
     def test_missing_metadata_is_not_silently_invented(self) -> None:
         with self.assertRaisesRegex(IntegrationAdapterError, "metadata가 없습니다"):

@@ -10,7 +10,7 @@ LLM 담당자와 RAG 담당자가 연결하는 기준이다.
   → Hybrid RAG 검색 (BM25 + Chroma Dense + RRF)
   → 공식 문서 근거 청크
   → Qwen 답변 생성
-  → [C1] 인용 검증
+  → [C1] 인용 검증 (실패 시 형식 수정 1회)
   → ChatResponse + 출처 카드
 ```
 
@@ -24,7 +24,7 @@ Instruct를 직접 실행하도록 준비되어 있다.
 | --- | --- | --- |
 | `src/rag` | RAG 담당 | 공식 문서 Hybrid 검색, Chroma, BM25, RRF, 근거 부족 보류 |
 | `src/rag_to_llm` | RAG·LLM 연결 | 검색 근거를 생성 모델에 전달하고 실행 정보를 반환 |
-| `src/services/rag_qa_service.py` | 통합 계층 | 검색 → 생성 → 인용 검증 → `ChatResponse` 조합 |
+| `src/services/rag_qa_service.py` | 통합 계층 | 검색 → 생성 → 인용 검증·형식 수정 1회 → `ChatResponse` 조합 |
 | 조건 JSON QLoRA | LLM 담당 | 제품 추천용 사용자 조건 추출 |
 | Qwen Base Instruct | LLM 담당 | 공식 근거 기반 한국어 QA 답변 생성 |
 
@@ -53,6 +53,11 @@ GenerationResult(
 `messages`에는 기존 안전 프롬프트와 사용자 질문, `[C1]` 형식의 공식 근거가 포함된다.
 답변 본문에는 허용된 인용 ID만 사용해야 하며 URL, 별도 출처 목록, 추측을 넣으면 안 된다.
 URL과 출처 카드는 모델이 아니라 서버가 RAG metadata로 조합한다.
+
+Hugging Face Qwen의 첫 출력이 인용 검증에만 실패하면, 서버는 첫 출력을 비신뢰 데이터로
+감싸고 같은 공식 근거·허용 citation ID만 제공하는 형식 수정 프롬프트를 **한 번** 호출한다.
+수정 출력도 URL·가짜 인용·인용 없는 문단 검증을 통과해야 한다. 두 번째 실패 시 template
+fallback이나 실패 원문 노출 없이 `error`로 보류한다.
 
 현재 Qwen 구현 위치는 아래다.
 
@@ -107,6 +112,8 @@ trace.evidence_chunks=...
 trace.generator=huggingface
 trace.model_id=Qwen/Qwen3-4B-Instruct-2507
 trace.generation_elapsed_ms=...
+trace.generation_attempts=1
+trace.citation_repair=not_needed
 trace.citation_validation=passed
 ```
 
@@ -117,7 +124,7 @@ trace.citation_validation=passed
 | corpus에 근거가 없는 스마트팜 배선 질문 | `insufficient_evidence` |
 | 실시간 가격·재고 질문 | `out_of_scope` |
 | 프롬프트 인젝션 요청 | `safety_blocked` |
-| URL·가짜 인용·인용 없는 문단이 포함된 모델 답변 | `error` |
+| URL·가짜 인용·인용 없는 문단이 포함된 모델 답변 | 형식 수정 1회 후에도 실패하면 `error` |
 | CUDA·모델 로드 실패 | `error`, 템플릿 자동 대체 없음 |
 
 ## 6. LLM 담당자 확인 항목

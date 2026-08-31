@@ -14,10 +14,10 @@ from typing import Callable, Protocol, Sequence
 from src.contracts.retrieval_text import build_e5_passage
 
 try:  # Supports both `python -m` and direct script execution.
-    from .fetch import PIPELINE_ROOT, SourceRecord, included_sources
+    from .fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources, registry_reference
     from .parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 except ImportError:  # pragma: no cover - direct invocation path
-    from fetch import PIPELINE_ROOT, SourceRecord, included_sources
+    from fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources, registry_reference
     from parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 
 
@@ -507,13 +507,13 @@ def _tokenizer_revision(tokenizer: Tokenizer, explicit_revision: str | None) -> 
 
 def _processing_metadata(
     *,
+    registry_path: Path,
     tokenizer_name: str,
     tokenizer_revision: str,
     target_tokens: int,
     max_tokens: int,
     overlap_tokens: int,
 ) -> dict[str, object]:
-    registry_path = PIPELINE_ROOT / "data" / "source_registry.csv"
     config: dict[str, object] = {
         "pipeline_version": PIPELINE_VERSION,
         "parser_version": PARSER_VERSION,
@@ -668,8 +668,10 @@ def build_manifest(
     target_tokens: int = DEFAULT_TARGET_TOKENS,
     max_tokens: int = DEFAULT_MAX_TOKENS,
     overlap_tokens: int = DEFAULT_OVERLAP_TOKENS,
+    registry_path: Path = REGISTRY_PATH,
 ) -> dict[str, object]:
     """Transform the current raw collection into a token-aware static RAG manifest."""
+    registry_path = registry_path.resolve()
     tokenizer = tokenizer or load_e5_tokenizer(tokenizer_name)
     resolved_tokenizer_revision = _tokenizer_revision(tokenizer, tokenizer_revision)
     ledger = _load_collection_ledger(raw_root)
@@ -682,7 +684,7 @@ def build_manifest(
     all_chunks: list[dict[str, object]] = []
     review_items: list[dict[str, object]] = []
     parsed_sections: dict[str, list[dict[str, object]]] = {}
-    for source in included_sources():
+    for source in included_sources(registry_path):
         entry = ledger_by_source.get(source.source_id)
         if entry is None:
             raise ValueError(f"collection ledger does not contain approved source: {source.source_id}")
@@ -709,6 +711,7 @@ def build_manifest(
     all_chunks, exact_duplicates = _remove_exact_duplicates(all_chunks)
     review_items.extend(exact_duplicates)
     processing = _processing_metadata(
+        registry_path=registry_path,
         tokenizer_name=tokenizer_name,
         tokenizer_revision=resolved_tokenizer_revision,
         target_tokens=target_tokens,
@@ -720,7 +723,7 @@ def build_manifest(
     manifest: dict[str, object] = {
         "schema_version": "1.1.0",
         "generated_at": generated_at,
-        "source_registry": "document_pipeline/data/source_registry.csv",
+        "source_registry": registry_reference(registry_path),
         "processing": processing,
         "chunks": all_chunks,
     }

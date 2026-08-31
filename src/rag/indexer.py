@@ -64,7 +64,13 @@ def build_chroma_index(
         # reset은 명시적으로 요청했을 때만 수행한다. 평소 upsert는 같은 ID만 갱신한다.
         existing = client.list_collections()
 
-        existing_names = {item.name if hasattr(item, "name") else str(item) for item in existing}
+        # Chroma 0.5 이하는 Collection 객체를, 0.6 이상은 이름 문자열을
+        # 반환한다. ``hasattr``는 최신 Collection의 ``__getattr__``가
+        # NotImplementedError를 내므로 타입으로 먼저 분기한다.
+        existing_names = {
+            item if isinstance(item, str) else item.name
+            for item in existing
+        }
         if collection_name in existing_names:
             client.delete_collection(collection_name)
     collection = client.get_or_create_collection(collection_name)
