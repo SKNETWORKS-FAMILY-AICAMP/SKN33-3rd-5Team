@@ -145,6 +145,16 @@ class GroundedPromptTests(unittest.TestCase):
 
 
 class GeneratedAnswerValidationTests(unittest.TestCase):
+    def test_sentence_punctuation_after_adjacent_citations_is_allowed(self) -> None:
+        self.assertEqual(
+            validate_grounded_answer("SSH를 활성화하세요 [C1][C2].", allowed_citation_ids=["C1", "C2"]),
+            {"C1", "C2"},
+        )
+
+    def test_punctuation_does_not_allow_an_uncited_following_claim(self) -> None:
+        with self.assertRaises(AnswerSafetyError):
+            validate_grounded_answer("SSH를 활성화하세요 [C1]. 비밀번호는 항상 같습니다.", allowed_citation_ids=["C1"])
+
     def test_valid_grounded_answer_returns_used_citations(self) -> None:
         answer = (
             "Raspberry Pi Imager에서 기기와 OS를 선택하세요. [C1]\n"

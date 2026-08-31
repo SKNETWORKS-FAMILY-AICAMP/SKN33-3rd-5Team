@@ -63,7 +63,7 @@ _UNSUPPORTED_MODIFICATION_PATTERNS = (
 
 _CITATION_PATTERN = re.compile(r"\[(C[1-9][0-9]*)\]")
 INSUFFICIENT_EVIDENCE_MARKER = "[INSUFFICIENT_EVIDENCE]"
-_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+\s*$")
+_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+[.!?。！？]?\s*$")
 _MARKDOWN_HEADING_PATTERN = re.compile(
     r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
 )

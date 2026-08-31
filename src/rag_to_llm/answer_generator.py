@@ -9,6 +9,12 @@ from time import perf_counter
 from typing import Mapping, Protocol, Sequence
 
 from src.lang.prompts import PromptEvidence
+from src.lang.safety import (
+    AnswerSafetyError,
+    INSUFFICIENT_EVIDENCE_MARKER,
+    is_evidence_abstention,
+    validate_grounded_answer,
+)
 
 
 class AnswerGenerationError(RuntimeError):
@@ -23,6 +29,7 @@ class GenerationResult:
     provider: str
     model_id: str
     elapsed_ms: float
+    attempts: int = 1
 
     def __post_init__(self) -> None:
         if not self.text.strip():
@@ -45,6 +52,19 @@ class AnswerGenerator(Protocol):
 
 
 _URL_PATTERN = re.compile(r"(?i)(?:https?://|www\.)[^\s)>\]]+")
+_CITATION_GROUP_PATTERN = re.compile(r"\[\s*(C[1-9][0-9]*(?:\s*,\s*C[1-9][0-9]*)*)\s*\]")
+
+
+def _normalize_citation_groups(answer: str) -> str:
+    """공백·쉼표가 있는 인용만 정규화하며 명령어와 코드 원문은 보존한다."""
+
+    pieces = re.split(r"(```[\s\S]*?```|`[^`]*`)", answer)
+    for index in range(0, len(pieces), 2):
+        pieces[index] = _CITATION_GROUP_PATTERN.sub(
+            lambda match: " ".join(f"[{item.strip()}]" for item in match.group(1).split(",")),
+            pieces[index],
+        )
+    return "".join(pieces)
 
 
 class EvidenceTemplateGenerator:
@@ -196,12 +216,58 @@ class HuggingFaceAnswerGenerator:
         messages: Sequence[Mapping[str, str]],
         evidence: Sequence[PromptEvidence],
     ) -> GenerationResult:
-        """공식 근거 프롬프트로 Qwen 답변을 생성하고 신규 토큰만 decode한다."""
+        """같은 근거로 최대 두 번 생성하며 인용·형식 실패는 표시하지 않는다."""
 
         if not messages or not evidence:
             raise ValueError("Qwen 답변 생성에는 질문 메시지와 공식 근거가 필요합니다.")
         started_at = perf_counter()
         self._load_model()
+        attempt_messages = list(messages)
+        for attempt in range(2):
+            answer = _normalize_citation_groups(self._generate_text(attempt_messages))
+            # 모델이 독립된 보류 표식과 설명을 함께 썼다면 설명 전체를 버린다.
+            # 혼합 답변을 검증 통과시키지 않고, 출처·주장이 없는 보류만 반환한다.
+            if INSUFFICIENT_EVIDENCE_MARKER in {line.strip() for line in answer.splitlines()}:
+                answer = INSUFFICIENT_EVIDENCE_MARKER
+            if is_evidence_abstention(answer):
+                break
+            try:
+                validate_grounded_answer(
+                    answer,
+                    allowed_citation_ids=[item.citation_id for item in evidence],
+                    require_korean=True,
+                )
+                break
+            except AnswerSafetyError as exc:
+                if attempt == 1:
+                    raise AnswerGenerationError(
+                        "Qwen 답변이 두 차례 인용·형식 검사를 통과하지 못해 표시를 보류합니다."
+                    ) from exc
+                # 실패한 답변을 새 근거로 넣거나 인용을 서버가 임의로 붙이지 않는다.
+                # 원래 질문·검색 근거는 그대로 유지하고 표시 형식만 재요청한다.
+                attempt_messages = [*messages, {
+                    "role": "user",
+                    "content": (
+                        "이전 생성은 인용·출력 형식 검사를 통과하지 못했습니다. "
+                        "원래 질문과 제공된 공식 근거만 다시 검토하여 새로 답하세요. "
+                        "서론·제목·맺음말·하위 목록 없이 최대 3개의 짧은 번호 항목만 쓰고, "
+                        "각 항목을 완성된 한국어 문장과 허용된 인용 ID로 끝내세요. "
+                        "URL이나 근거에 없는 명령어·사실을 추가하지 마세요. "
+                        f"질문의 핵심 답을 근거에서 확인할 수 없으면 {INSUFFICIENT_EVIDENCE_MARKER} "
+                        "한 줄만 출력하고 설명이나 인용을 덧붙이지 마세요."
+                    ),
+                }]
+        return GenerationResult(
+            text=answer,
+            provider=self.provider,
+            model_id=self.model_id,
+            elapsed_ms=(perf_counter() - started_at) * 1000,
+            attempts=attempt + 1,
+        )
+
+    def _generate_text(self, messages: Sequence[Mapping[str, str]]) -> str:
+        """신규 토큰만 decode한다. 재시도에서도 같은 모델·생성 설정을 사용한다."""
+
         assert self._model is not None
         assert self._tokenizer is not None
         assert self._torch is not None
@@ -232,12 +298,7 @@ class HuggingFaceAnswerGenerator:
             self._completion_ids(output_ids, prompt_length),
             skip_special_tokens=True,
         ).strip()
-        return GenerationResult(
-            text=answer,
-            provider=self.provider,
-            model_id=self.model_id,
-            elapsed_ms=(perf_counter() - started_at) * 1000,
-        )
+        return answer
 
 
 __all__ = [

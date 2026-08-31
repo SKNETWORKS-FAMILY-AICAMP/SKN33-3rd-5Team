@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from unittest.mock import Mock
+
+import pytest
 
 from src.lang import PromptEvidence
 from src.rag_to_llm import HuggingFaceAnswerGenerator
+from src.rag_to_llm.answer_generator import AnswerGenerationError
 
 
 class FakeInputIds:
@@ -101,3 +105,67 @@ def test_huggingface_generator_is_lazy_and_decodes_only_new_tokens(monkeypatch) 
 
     generator.generate(_messages(), _evidence())
     assert load_calls == 1
+
+
+def test_invalid_generation_retries_once_with_original_evidence_not_failed_claim(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(side_effect=["근거에 없는 위험한 주장입니다. [C99]", "SSH를 활성화하세요. [C1]"])
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    result = generator.generate(_messages(), _evidence())
+    assert result.text == "SSH를 활성화하세요. [C1]"
+    assert generate.call_count == 2
+    retry_messages = generate.call_args.args[0]
+    assert retry_messages[:-1] == list(_messages())
+    assert "위험한 주장" not in str(retry_messages)
+
+
+def test_repeated_invalid_output_fails_closed_after_two_attempts(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(return_value="출처를 확인하세요 https://example.com. [C1]")
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    with pytest.raises(AnswerGenerationError):
+        generator.generate(_messages(), _evidence())
+    assert generate.call_count == 2
+
+
+def test_mixed_abstention_is_regenerated_without_exposing_explanation(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(side_effect=["모델이 추측한 설명 [INSUFFICIENT_EVIDENCE]", "[INSUFFICIENT_EVIDENCE]"])
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    assert generator.generate(_messages(), _evidence()).text == "[INSUFFICIENT_EVIDENCE]"
+    assert generate.call_count == 2
+
+
+def test_standalone_abstention_marker_discards_all_surrounding_claims(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(return_value="검증되지 않은 주장을 포함한 설명 [C99]\n\n[INSUFFICIENT_EVIDENCE]")
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    result = generator.generate(_messages(), _evidence())
+    assert result.text == "[INSUFFICIENT_EVIDENCE]"
+    assert "C99" not in result.text
+    assert generate.call_count == 1
+
+
+def test_grouped_citations_are_normalized_but_literal_commands_are_preserved(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(return_value="명령 `echo [ C1 ]`의 원문을 확인하세요 [ C1, C2 ].")
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    evidence = (*_evidence(), PromptEvidence(citation_id="C2", content="A second official excerpt."))
+    result = generator.generate(_messages(), evidence)
+    assert result.text == "명령 `echo [ C1 ]`의 원문을 확인하세요 [C1] [C2]."
+    assert generate.call_count == 1
+
+
+def test_normalizing_grouped_citations_does_not_accept_unknown_ids(monkeypatch):
+    generator = HuggingFaceAnswerGenerator(model_id="Qwen/test")
+    monkeypatch.setattr(generator, "_load_model", lambda: None)
+    generate = Mock(return_value="알려지지 않은 인용을 포함합니다 [ C1, C99 ].")
+    monkeypatch.setattr(generator, "_generate_text", generate)
+    with pytest.raises(AnswerGenerationError):
+        generator.generate(_messages(), _evidence())
+    assert generate.call_count == 2
