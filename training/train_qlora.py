@@ -7,6 +7,7 @@ split 누수를 검증한 뒤 지도학습을 시작한다.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -21,8 +22,10 @@ if __package__ in {None, ""}:
 from src.condition_extraction.dataset import (
     assert_no_split_leakage,
     load_received_jsonl,
+    validate_expected_product_ids,
 )
 from src.condition_extraction.prompts import build_training_example
+from training.preflight import validate_token_lengths
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,6 +43,11 @@ def parse_args() -> argparse.Namespace:
         help="받은 파일의 스키마와 split 누수만 확인하고 학습하지 않습니다.",
     )
     parser.add_argument(
+        "--check-token-lengths",
+        action="store_true",
+        help="--validate-only와 함께 train/dev 정답의 토큰 잘림도 검사합니다. 토크나이저만 필요합니다.",
+    )
+    parser.add_argument(
         "--hub-repo-id",
         help="학습·로컬 저장 완료 후 백업할 Hub 저장소. 예: t91004/picare-qwen3-4b-qlora",
     )
@@ -53,6 +61,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--hub-public에는 --hub-repo-id가 필요합니다.")
     if args.validate_only and args.hub_repo_id:
         parser.error("--validate-only는 --hub-repo-id와 함께 사용할 수 없습니다.")
+    if args.check_token_lengths and not args.validate_only:
+        parser.error("--check-token-lengths에는 --validate-only가 필요합니다. 실제 학습은 항상 길이를 검사합니다.")
     return args
 
 
@@ -90,6 +100,16 @@ def received_splits(config: dict[str, Any]):
     dev = load_received_jsonl(data_config["dev_file"])
     holdout = load_received_jsonl(data_config["holdout_file"])
     assert_no_split_leakage(train=train, dev=dev, holdout=holdout)
+    if any(record.expected_product_ids for split in (train, dev, holdout) for record in split):
+        from src.recommendation.schema import ProductCatalog
+
+        catalog = ProductCatalog.from_received_file(
+            data_config.get("catalog_file", "data/products/catalog.json")
+        )
+        validate_expected_product_ids(
+            (record for split in (train, dev, holdout) for record in split),
+            (product.product_id for product in catalog.products),
+        )
     return train, dev, holdout
 
 
@@ -105,15 +125,17 @@ def to_hf_dataset(records):
 def train(config: dict[str, Any]) -> None:
     """4-bit Base를 고정하고 LoRA adapter만 학습·저장하며 manifest를 남긴다."""
 
+    # 잘못된 전달 파일은 GPU 패키지 import·가중치 다운로드 전에 거부한다.
+    train_records, dev_records, holdout_records = received_splits(config)
+
     import torch
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, set_seed as set_model_seed
     from trl import SFTConfig, SFTTrainer
 
     if not torch.cuda.is_available():
         raise RuntimeError("QLoRA 학습에는 CUDA GPU가 필요합니다.")
 
-    train_records, dev_records, holdout_records = received_splits(config)
     print(
         "validated records:",
         {"train": len(train_records), "dev": len(dev_records), "holdout": len(holdout_records)},
@@ -123,6 +145,7 @@ def train(config: dict[str, Any]) -> None:
     quant_config = config["quantization"]
     lora_values = config["lora"]
     train_values = config["training"]
+    set_model_seed(int(train_values["seed"]))
     model_id = model_config["id"]
     revision = model_config.get("revision", "main")
     output_dir = Path(train_values["output_dir"])
@@ -142,6 +165,10 @@ def train(config: dict[str, Any]) -> None:
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    token_report = validate_token_lengths(
+        tokenizer, max_length=train_values["max_length"], train=train_records, dev=dev_records,
+    )
+    print("token validation passed:", token_report)
 
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
@@ -207,6 +234,8 @@ def train(config: dict[str, Any]) -> None:
     result = trainer.train()
     trainer.save_model(str(output_dir))
     tokenizer.save_pretrained(str(output_dir))
+    # step 간격보다 짧게 실행해도 저장한 최종 adapter의 dev loss를 확인한다.
+    eval_metrics = trainer.evaluate()
 
     resolved_revision = getattr(model.config, "_commit_hash", None) or revision
     manifest = {
@@ -219,7 +248,13 @@ def train(config: dict[str, Any]) -> None:
             "holdout_not_used_for_training": len(holdout_records),
         },
         "seed": train_values["seed"],
+        "dataset_sha256": {
+            split: hashlib.sha256(Path(config["data"][f"{split}_file"]).read_bytes()).hexdigest()
+            for split in ("train", "dev", "holdout")
+        },
+        "token_validation": token_report,
         "train_metrics": result.metrics,
+        "eval_metrics": eval_metrics,
         "config": config,
     }
     (output_dir / "run_manifest.json").write_text(
@@ -238,6 +273,16 @@ def main() -> None:
     set_seed(seed)
     if args.validate_only:
         train_records, dev_records, holdout_records = received_splits(config)
+        if args.check_token_lengths:
+            from transformers import AutoTokenizer
+
+            tokenizer = AutoTokenizer.from_pretrained(
+                config["model"]["id"], revision=config["model"].get("revision", "main"),
+            )
+            print("token validation passed:", validate_token_lengths(
+                tokenizer, max_length=config["training"]["max_length"],
+                train=train_records, dev=dev_records,
+            ))
         print(
             "validation passed:",
             {"train": len(train_records), "dev": len(dev_records), "holdout": len(holdout_records)},

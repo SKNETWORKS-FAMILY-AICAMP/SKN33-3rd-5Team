@@ -63,9 +63,7 @@ _UNSUPPORTED_MODIFICATION_PATTERNS = (
 
 _CITATION_PATTERN = re.compile(r"\[(C[1-9][0-9]*)\]")
 INSUFFICIENT_EVIDENCE_MARKER = "[INSUFFICIENT_EVIDENCE]"
-# 인용 뒤에 한국어 문장 종결 마침표·물음표 등이 붙는 자연스러운 출력을 허용한다.
-# 실제 Qwen 출력은 "...했습니다 [C1]."처럼 인용 다음에 마침표를 붙이는 경우가 흔하다.
-_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+[.!?,:;)]*\s*$")
+_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+[.!?。！？]?\s*$")
 _MARKDOWN_HEADING_PATTERN = re.compile(
     r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
 )
@@ -197,18 +195,15 @@ def has_korean_prose(answer: str) -> bool:
     return bool(re.search(r"[가-힣]", prose))
 
 
-def _grounded_content_blocks(answer: str) -> list[tuple[str, bool]]:
+def _grounded_content_blocks(answer: str) -> list[str]:
     """Group prose by paragraph or top-level Markdown list item.
 
     Markdown headings are structural labels, not factual content. Wrapped lines
     and child items remain part of their parent paragraph/list item, including
     across blank lines, so one citation at the end can ground the complete block.
-    Each block is paired with whether it is itself a top-level list item, so a
-    plain lead-in paragraph immediately before a list can be told apart from a
-    genuine standalone claim.
     """
 
-    blocks: list[tuple[str, bool]] = []
+    blocks: list[str] = []
     current_lines: list[str] = []
     current_list_indent: int | None = None
     current_list_kind: Literal["ordered", "unordered"] | None = None
@@ -217,7 +212,7 @@ def _grounded_content_blocks(answer: str) -> list[tuple[str, bool]]:
     def flush_current() -> None:
         nonlocal current_lines, current_list_indent, current_list_kind, pending_blank
         if current_lines:
-            blocks.append(("\n".join(current_lines), current_list_indent is not None))
+            blocks.append("\n".join(current_lines))
         current_lines = []
         current_list_indent = None
         current_list_kind = None
@@ -298,21 +293,11 @@ def validate_grounded_answer(
             f"검색 결과에 없는 인용 ID가 포함되었습니다: {', '.join(sorted(unknown))}"
         )
 
-    blocks = _grounded_content_blocks(normalized)
-
-    def _self_grounded(text: str) -> bool:
-        return bool(_CITATION_SUFFIX_PATTERN.search(text)) or text.rstrip().endswith(":")
-
-    uncited_blocks: list[str] = []
-    for index, (text, is_list_item) in enumerate(blocks):
-        if _self_grounded(text):
-            continue
-        # A plain lead-in sentence directly before a list (e.g. "종류는 다음과
-        # 같습니다.") introduces the list rather than asserting a fact of its
-        # own; the list items that follow still need their own citations.
-        if not is_list_item and index + 1 < len(blocks) and blocks[index + 1][1]:
-            continue
-        uncited_blocks.append(text)
+    uncited_blocks = [
+        block
+        for block in _grounded_content_blocks(normalized)
+        if not _CITATION_SUFFIX_PATTERN.search(block)
+    ]
     if uncited_blocks:
         raise AnswerSafetyError(
             "마지막에 인용 ID가 없는 답변 문단 또는 목록 항목이 있습니다: "

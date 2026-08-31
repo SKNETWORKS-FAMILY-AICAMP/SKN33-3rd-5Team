@@ -72,8 +72,8 @@ def generate_validated_grounded_answer(
         return ValidatedGeneration(
             generation=first,
             used_citation_ids=set(),
-            attempts=1,
-            repair_attempted=False,
+            attempts=first.attempts,
+            repair_attempted=first.attempts > 1,
         )
     try:
         used = validate_grounded_answer(
@@ -90,6 +90,13 @@ def generate_validated_grounded_answer(
             evidence=evidence,
         )
         repaired = generator.generate(repair_messages, evidence)
+        if is_evidence_abstention(repaired.text):
+            return ValidatedGeneration(
+                generation=repaired,
+                used_citation_ids=set(),
+                attempts=first.attempts + repaired.attempts,
+                repair_attempted=True,
+            )
         try:
             used = validate_grounded_answer(
                 repaired.text,
@@ -101,14 +108,14 @@ def generate_validated_grounded_answer(
         return ValidatedGeneration(
             generation=repaired,
             used_citation_ids=used,
-            attempts=2,
+            attempts=first.attempts + repaired.attempts,
             repair_attempted=True,
         )
     return ValidatedGeneration(
         generation=first,
         used_citation_ids=used,
-        attempts=1,
-        repair_attempted=False,
+        attempts=first.attempts,
+        repair_attempted=first.attempts > 1,
     )
 
 

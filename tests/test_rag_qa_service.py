@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import Mock
 
 from src.lang import INSUFFICIENT_EVIDENCE_MARKER, PromptEvidence, validate_grounded_answer
 from src.rag import RagResult, RetrievalDecision
@@ -59,6 +60,28 @@ def retrieved_decision() -> RetrievalDecision:
     """답변 가능한 단일 근거 검색 결과를 만든다."""
 
     return RetrievalDecision(status="retrieved", results=(result(),))
+
+
+def test_media_only_uses_cited_chunks_and_deduplicates_urls():
+    generator = Mock()
+    generator.generate.return_value = GenerationResult("SSH를 활성화하세요. [C1]", "test", "fixture", 0)
+    image = {"media_type": "image", "title": "SSH 설정", "url": "https://www.raspberrypi.com/ssh.png"}
+    video = {"media_type": "video", "title": "설정 영상", "url": "https://www.youtube.com/embed/example"}
+    service = RagQaService(
+        retriever=StaticRetriever(decision=RetrievalDecision(
+            status="retrieved", results=(result(), result(rank=2, chunk_id="unused")),
+        )),
+        answer_generator=generator,
+        media_by_chunk_id={"ssh-001": [image, image, video], "unused": [dict(image, url="https://www.raspberrypi.com/unused.png")]},
+    )
+    response = service.answer(request_id="cited-media", question="SSH를 활성화하려면?", retrieval_mode="bm25")
+    assert response.status == "answered"
+    assert [str(item.url) for item in response.media] == [image["url"], video["url"]]
+    assert all(item.source_citation_id == "C1" for item in response.media)
+    generator.generate.return_value = GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
+    abstention = service.answer(request_id="no-media-on-abstention", question="SSH를 활성화하려면?", retrieval_mode="bm25")
+    assert abstention.status == "insufficient_evidence"
+    assert abstention.media == []
 
 
 def insufficient_decision() -> RetrievalDecision:

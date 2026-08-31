@@ -175,7 +175,7 @@ class RecommendationRagService:
                 answer=request_decision.message,
                 warnings=[
                     f"safety_reason={request_decision.reason_code}",
-                    *( ["trace.generator_invoked=false"] if trace else [] ),
+                    *(["trace.generator_invoked=false"] if trace else []),
                 ],
             )
 

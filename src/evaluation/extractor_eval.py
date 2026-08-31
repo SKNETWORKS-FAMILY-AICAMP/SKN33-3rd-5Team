@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.condition_extraction.baseline import BaselineConditionExtractor
-from src.condition_extraction.dataset import load_received_jsonl
+from src.condition_extraction.dataset import load_received_jsonl, validate_expected_product_ids
 from src.condition_extraction.lora import LoraConditionExtractor
 from src.contracts import ConditionPayload
 from src.recommendation.engine import ProductRecommender
@@ -99,6 +99,10 @@ def calculate_metrics(
 
     labels = [record.target for record in records]
     count = len(records)
+    if not count:
+        raise ValueError("평가 데이터가 비어 있습니다.")
+    if len(predictions) != count:
+        raise ValueError("평가 레코드와 예측 개수가 다릅니다.")
     valid_count = sum(prediction is not None for prediction in predictions)
     exact_count = sum(
         prediction is not None and prediction == label
@@ -131,9 +135,11 @@ def calculate_metrics(
     recommendation_correct = 0
     if recommender is not None:
         for record, prediction in zip(records, predictions):
-            if prediction is None or not record.expected_product_ids:
+            if not record.expected_product_ids:
                 continue
             recommendation_total += 1
+            if prediction is None:
+                continue
             decision = recommender.recommend(prediction)
             if decision.candidates:
                 recommendation_correct += (
@@ -165,6 +171,12 @@ def main() -> None:
 
     args = parse_args()
     records = load_received_jsonl(args.data)
+    recommender = None
+    if args.catalog:
+        catalog = ProductCatalog.from_received_file(args.catalog)
+        validate_expected_product_ids(records, (product.product_id for product in catalog.products))
+        recommender = ProductRecommender(catalog)
+
     if args.mode == "baseline":
         extractor = BaselineConditionExtractor(model_id=args.model_id)
     else:
@@ -172,12 +184,6 @@ def main() -> None:
             raise ValueError("--mode lora에는 --adapter-path가 필요합니다.")
         extractor = LoraConditionExtractor(
             args.adapter_path, model_id=args.model_id
-        )
-
-    recommender = None
-    if args.catalog:
-        recommender = ProductRecommender(
-            ProductCatalog.from_received_file(args.catalog)
         )
 
     predictions: list[ConditionPayload | None] = []

@@ -9,6 +9,7 @@ data:
   train_file: data/finetuning/train.jsonl
   dev_file: data/finetuning/dev.jsonl
   holdout_file: data/finetuning/holdout.jsonl
+  catalog_file: data/products/catalog.json
 
 quantization:
   quant_type: nf4
@@ -32,7 +33,9 @@ training:
   warmup_ratio: 0.05
   weight_decay: 0.01
   max_grad_norm: 0.3
-  max_length: 1024
+  # 전체 스키마가 포함된 프롬프트만 약 1,500토큰이다.
+  # train/dev의 정답까지 이 길이에 들어오는지 학습 전에 검사한다.
+  max_length: 4096
   logging_steps: 10
   eval_steps: 50
   save_steps: 50
