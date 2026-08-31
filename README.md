@@ -416,6 +416,11 @@ RAG 평가 질문 50개는 개발 중 사용하는 **Dev set 40개**와 마지�
 | 다국어 | 교차 언어 Hit@k, 한국어 답변 준수율 | 한국어 질문으로 영어 근거를 찾고 기술 용어를 보존해 한국어로 답하는가 |
 | 운영 | 응답 시간, 오류율 | Streamlit에서 안정적으로 사용할 수 있는가 |
 
+LLM 답변 평가의 실행·검수·채점은 [답변 품질 평가 가이드](docs/llm-answer-evaluation.md)의
+`python -m src.evaluation.answer_eval_cli`를 사용합니다. Faithfulness·관련성·의미상 인용 정확도는
+검수 기반으로 집계하며 미검수 값은 `null`로 남깁니다. 인용 ID 형식 통과와 실제 근거 지지는 별개입니다.
+보류 정확도·과도한 보류율·필수 명령어 원문 일치는 자동으로 계산하며, 실제 Qwen 실행과 template 점수를 구분합니다.
+
 ### sLLM 평가
 
 | 평가 대상 | 지표 | 확인 내용 |
@@ -534,6 +539,10 @@ python -m src.evaluation.extractor_eval --mode lora
 ```
 
 학습 데이터·모델 cache·checkpoint는 RunPod의 /workspace에 저장하고, 학습 후 adapter·설정·평가 결과를 외부에 백업합니다. API Key, Hugging Face token, 개인정보와 원문 내부 문서는 Git에 커밋하지 않습니다. .env.example에는 변수 이름만 제공합니다.
+
+어댑터를 Hugging Face 모델 저장소에 별도로 보관하는 명령과 다시 불러오는 방법은
+[모델 별도 저장 가이드](training/README.md)를 참고하세요. 기본은 비공개 백업이며,
+실제 학습 결과가 있어야 업로드할 수 있습니다.
 
 ## 역할 분담
 
