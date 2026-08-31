@@ -169,6 +169,7 @@ document_pipeline/data/raw/*
 document_pipeline/data/processed/*
 !document_pipeline/data/processed/README.md
 document_pipeline/data/manifest.json
+document_pipeline/data/media_chunk_map*.json
 !document_pipeline/data/source_registry.csv
 document_pipeline/data/raw_v*/
 document_pipeline/data/processed_v*/

@@ -227,13 +227,15 @@ Licence: CC BY-SA 4.0 또는 문서에 표시된 라이선스
 Changes: 파싱·정규화·청킹·번역 여부
 ```
 
-### 공식 이미지 자산
+### 공식 미디어 자산
 
-제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개를 [`assets/media/`](assets/media/)에 수집했습니다. 제품 대표 이미지 5개와 사용 지원 이미지 14개이며, 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json)에서 관리합니다.
+제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개와 공식 사용법 영상 링크 4개를 [`assets/media/`](assets/media/)에서 관리합니다. 이미지의 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json), 영상의 공식 채널·게시일·임베드 URL·연결 문서는 [`video_manifest.json`](assets/media/video_manifest.json)에 기록합니다.
 
 - 원본은 Raspberry Pi 공식 documentation 저장소의 `documentation/` 하위 파일로 제한합니다.
 - 이미지 바이트는 수정하지 않고 서비스용 파일명만 적용했습니다.
 - 사용 지원 이미지는 검색된 citation의 문서·주제와 일치할 때만 챗봇에 표시합니다.
+- 영상은 다운로드하거나 재배포하지 않고 공식 YouTube player로만 임베드하며, 최신 공식 문서를 사실 근거로 우선합니다.
+- 문서 청크와 미디어의 자동 연결 및 제외 기준은 [`미디어–RAG 통합 파이프라인`](docs/media-rag-integration-pipeline.md)에 정리했습니다.
 - 제품·마케팅 페이지의 권리 조건이 불명확한 사진과 CC BY-ND 제품 PDF에서 잘라낸 이미지는 포함하지 않습니다.
 
 ## 인터페이스 계약
