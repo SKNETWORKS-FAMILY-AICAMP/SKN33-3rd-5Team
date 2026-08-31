@@ -25,8 +25,8 @@ from src.rag_to_llm import (
     AnswerGeneratorSettingsError,
     build_answer_generator,
 )
-from src.presentation import CitationPresenter, load_citation_presenter
 
+from .media_lookup import load_media_by_chunk_id
 from .rag_qa_service import RagQaService
 
 
@@ -142,7 +142,7 @@ def _run_indexer(settings: RagSettings, *, reset: bool) -> int:
     return 0
 
 
-def _print_human_response(response, presenter: CitationPresenter | None = None) -> None:
+def _print_human_response(response) -> None:
     """터미널 시연용으로 답변과 출처 카드를 읽기 좋게 출력한다."""
 
     print(f"[{response.status}]")
@@ -154,15 +154,13 @@ def _print_human_response(response, presenter: CitationPresenter | None = None) 
     if response.citations:
         print("\n출처:")
         for citation in response.citations:
-            if presenter is not None:
-                lines = presenter.present(citation).cli_lines()
-            else:
-                lines = (
-                    f"[{citation.citation_id}] {citation.title}",
-                    f"섹션: {citation.section.rsplit(' > ', maxsplit=1)[-1]}",
-                    "태그: 없음",
-                )
-            print("\n".join(lines))
+            print(f"[{citation.citation_id}] {citation.title} / {citation.section}")
+            print(citation.source_url)
+    if response.media:
+        print("\n관련 이미지·영상:")
+        for item in response.media:
+            print(f"[{item.source_citation_id}] ({item.media_type}) {item.title}")
+            print(item.url)
     if response.warnings:
         print("\n실행 정보:")
         for warning in response.warnings:
@@ -211,6 +209,7 @@ def main() -> int:
             retriever=retriever,
             answer_generator=answer_generator,
             top_k=settings.top_k,
+            media_by_chunk_id=load_media_by_chunk_id(settings.project_root),
         )
         response = service.answer(
             request_id=request_id,
@@ -221,11 +220,7 @@ def main() -> int:
     if args.json:
         print(response.model_dump_json(indent=2))
     else:
-        try:
-            presenter = load_citation_presenter(settings.manifest_path)
-        except (OSError, ValueError):
-            presenter = None
-        _print_human_response(response, presenter)
+        _print_human_response(response)
     return 1 if response.status == "error" else 0
 
 

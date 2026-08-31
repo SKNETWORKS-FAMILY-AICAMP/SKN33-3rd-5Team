@@ -14,6 +14,7 @@ from src.recommendation import (
     load_and_validate_catalog,
 )
 from src.services.integration_adapters import manifest_to_rag_result_metadata
+from src.services.media_lookup import load_media_by_chunk_id
 from src.services.rag_qa_service import RagQaService
 from src.services.recommendation_agent import RecommendationAgent
 from src.services.recommendation_rag_service import RecommendationRagService
@@ -66,6 +67,7 @@ def build_qa_service(project_root: Path) -> RagQaService:
         retriever=retriever,
         answer_generator=answer_generator,
         top_k=rag_settings.top_k,
+        media_by_chunk_id=load_media_by_chunk_id(project_root),
     )
 
 

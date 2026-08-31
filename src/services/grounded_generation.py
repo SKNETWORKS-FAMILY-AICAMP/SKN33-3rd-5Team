@@ -43,17 +43,12 @@ class CitationRepairError(AnswerSafetyError):
 
 @dataclass(frozen=True)
 class ValidatedGeneration:
-    """생성 결과와 인용·재생성 실행 정보를 보관한다.
-
-    ``abstained``인 경우는 모델이 명시적으로 근거 부족을 선언한 정상 종료다.
-    이때는 인용 검증이나 형식 수정 재생성을 시도하지 않는다.
-    """
+    """검증된 생성 결과와 인용·재생성 실행 정보를 보관한다."""
 
     generation: GenerationResult
     used_citation_ids: set[str]
     attempts: int
     repair_attempted: bool
-    abstained: bool = False
 
 
 def generate_validated_grounded_answer(
@@ -61,11 +56,14 @@ def generate_validated_grounded_answer(
     generator: AnswerGenerator,
     messages: Sequence[Mapping[str, str]],
     evidence: Sequence[PromptEvidence],
+    require_korean: bool = False,
 ) -> ValidatedGeneration:
     """Qwen 출력만 1회 형식 수정 후 다시 엄격하게 검증한다.
 
     Template·테스트 생성기는 기존처럼 한 번만 검증한다. 실제 Qwen만 재생성해야
     로컬 검증 흐름의 성격을 바꾸지 않으며 GPU 비용도 예측 가능하다.
+    근거 부족 표식은 형식 오류가 아니므로 검증·재생성 없이 그대로 반환하며,
+    호출자가 `is_evidence_abstention()`으로 판단해 별도 상태로 처리한다.
     """
 
     allowed_citation_ids = [item.citation_id for item in evidence]
@@ -76,13 +74,12 @@ def generate_validated_grounded_answer(
             used_citation_ids=set(),
             attempts=1,
             repair_attempted=False,
-            abstained=True,
         )
     try:
         used = validate_grounded_answer(
             first.text,
             allowed_citation_ids=allowed_citation_ids,
-            require_korean=True,
+            require_korean=require_korean,
         )
     except AnswerSafetyError as first_error:
         if first.provider != "huggingface":
@@ -97,7 +94,7 @@ def generate_validated_grounded_answer(
             used = validate_grounded_answer(
                 repaired.text,
                 allowed_citation_ids=allowed_citation_ids,
-                require_korean=True,
+                require_korean=require_korean,
             )
         except AnswerSafetyError as final_error:
             raise CitationRepairError(first_error=first_error, final_error=final_error) from final_error

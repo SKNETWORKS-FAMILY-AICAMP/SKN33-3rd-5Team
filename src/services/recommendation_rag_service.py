@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import Literal, Mapping, Protocol, Sequence
 
 from src.condition_extraction.schema import SurveyAnswer, SurveyResponse
+from src.condition_extraction.ui_input import RecommendationFormInput
 from src.contracts import ChatResponse, ConditionPayload
 from src.lang import (
     AnswerSafetyError,
@@ -13,6 +14,7 @@ from src.lang import (
     PromptEvidence,
     build_recommendation_answer_messages,
     evaluate_request,
+    is_evidence_abstention,
 )
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
@@ -187,6 +189,64 @@ class RecommendationRagService:
                 warnings=[f"condition_extraction_error={type(exc).__name__}"],
             )
 
+        return self._answer_from_agent_result(
+            request_id=request_id,
+            question=question,
+            agent_result=agent_result,
+            trace=trace,
+        )
+
+    def answer_form(
+        self,
+        *,
+        form: RecommendationFormInput,
+        trace: bool = False,
+    ) -> ChatResponse:
+        """Streamlit 폼 입력을 조건 추출부터 인용 포함 제품 추천까지 처리한다.
+
+        위젯의 명시적 선택값(사용자 수준, 성능, Wi-Fi·카메라·GPIO·모니터 여부)은
+        `RecommendationAgent.recommend_form`을 통해 sLLM 추출값보다 우선 적용된다.
+        """
+
+        request_decision = evaluate_request(form.free_text)
+        if not request_decision.allowed:
+            return self._response(
+                request_id=form.request_id,
+                status=request_decision.status,
+                answer=request_decision.message,
+                warnings=[
+                    f"safety_reason={request_decision.reason_code}",
+                    *( ["trace.generator_invoked=false"] if trace else [] ),
+                ],
+            )
+
+        try:
+            agent_result = self.recommendation_agent.recommend_form(form)
+        except Exception as exc:
+            return self._response(
+                request_id=form.request_id,
+                status="error",
+                answer="제품 추천 조건을 분석하지 못해 답변을 보류합니다.",
+                warnings=[f"condition_extraction_error={type(exc).__name__}"],
+            )
+
+        return self._answer_from_agent_result(
+            request_id=form.request_id,
+            question=form.free_text,
+            agent_result=agent_result,
+            trace=trace,
+        )
+
+    def _answer_from_agent_result(
+        self,
+        *,
+        request_id: str,
+        question: str,
+        agent_result: RecommendationAgentResult,
+        trace: bool,
+    ) -> ChatResponse:
+        """조건 추출 이후의 catalog 매칭·RAG 검색·인용 생성을 공통 처리한다."""
+
         decision = agent_result.decision
         if decision.status.value == "needs_clarification":
             return self._response(
@@ -305,9 +365,10 @@ class RecommendationRagService:
                 generator=self.answer_generator,
                 messages=messages,
                 evidence=evidence,
+                require_korean=True,
             )
             generation = validated_generation.generation
-            if validated_generation.abstained:
+            if is_evidence_abstention(generation.text):
                 return self._response(
                     request_id=request_id,
                     status="insufficient_evidence",
@@ -317,17 +378,7 @@ class RecommendationRagService:
                         *agent_result.warnings,
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(
-                            [
-                                "trace.generator_invoked=true",
-                                f"trace.model_id={generation.model_id}",
-                                "trace.generation_attempts=1",
-                                "trace.citation_repair=not_needed",
-                                "trace.citation_validation=skipped_abstention",
-                            ]
-                            if trace
-                            else []
-                        ),
+                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
                     ],
                 )
             used_citation_ids = validated_generation.used_citation_ids
