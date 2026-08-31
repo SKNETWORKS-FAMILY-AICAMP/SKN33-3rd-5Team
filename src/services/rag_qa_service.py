@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal, Protocol, Sequence
+from typing import Literal, Mapping, Protocol, Sequence
 
-from src.contracts import ChatCitation, ChatResponse
+from src.contracts import ChatCitation, ChatResponse, MediaItem
 from src.lang import (
     AnswerSafetyError,
     PromptBuildError,
@@ -47,12 +47,14 @@ class RagQaService:
         retriever: QaRetriever,
         answer_generator: AnswerGenerator | None = None,
         top_k: int = 5,
+        media_by_chunk_id: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
     ) -> None:
         if not 1 <= top_k <= 20:
             raise ValueError("top_k must be between 1 and 20.")
         self.retriever = retriever
         self.answer_generator = answer_generator or EvidenceTemplateGenerator()
         self.top_k = top_k
+        self.media_by_chunk_id = media_by_chunk_id or {}
 
     @staticmethod
     def _status_response(
@@ -124,6 +126,29 @@ class RagQaService:
             license=result.license,
             quote=result.content,
         )
+
+    def _media(self, results: Sequence[RagResult], used_citation_ids: set[str]) -> list[MediaItem]:
+        """실제 인용에 쓰인 근거 청크에 연결된 공식 이미지·영상만 표시한다."""
+
+        media: list[MediaItem] = []
+        seen_urls: set[str] = set()
+        for result in results:
+            citation_id = f"C{result.rank}"
+            if citation_id not in used_citation_ids:
+                continue
+            for candidate in self.media_by_chunk_id.get(result.chunk_id, ()):
+                if candidate["url"] in seen_urls:
+                    continue
+                seen_urls.add(candidate["url"])
+                media.append(
+                    MediaItem(
+                        media_type=candidate["media_type"],
+                        title=candidate["title"],
+                        url=candidate["url"],
+                        source_citation_id=citation_id,
+                    )
+                )
+        return media
 
     def answer(
         self,
@@ -264,7 +289,7 @@ class RagQaService:
             conditions=None,
             citations=citations,
             products=[],
-            media=[],
+            media=self._media(results, used_citation_ids),
             clarification_questions=[],
             warnings=[
                 f"retrieval_mode={retrieval_mode}",

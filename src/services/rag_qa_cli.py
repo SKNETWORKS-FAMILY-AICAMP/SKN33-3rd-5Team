@@ -26,6 +26,7 @@ from src.rag_to_llm import (
     build_answer_generator,
 )
 
+from .media_lookup import load_media_by_chunk_id
 from .rag_qa_service import RagQaService
 
 
@@ -155,6 +156,11 @@ def _print_human_response(response) -> None:
         for citation in response.citations:
             print(f"[{citation.citation_id}] {citation.title} / {citation.section}")
             print(citation.source_url)
+    if response.media:
+        print("\n관련 이미지·영상:")
+        for item in response.media:
+            print(f"[{item.source_citation_id}] ({item.media_type}) {item.title}")
+            print(item.url)
     if response.warnings:
         print("\n실행 정보:")
         for warning in response.warnings:
@@ -203,6 +209,7 @@ def main() -> int:
             retriever=retriever,
             answer_generator=answer_generator,
             top_k=settings.top_k,
+            media_by_chunk_id=load_media_by_chunk_id(settings.project_root),
         )
         response = service.answer(
             request_id=request_id,
