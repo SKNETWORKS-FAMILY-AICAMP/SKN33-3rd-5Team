@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "evaluated_at": "2026-08-31",
+  "branch": "feat/chain",
+  "commit": "5cfb27f",
+  "main_commit": "e241987",
+  "scope": "deterministic repository smoke chain; not final Manifest/Chroma/LoRA/Qwen quality",
+  "test_suite": {
+    "total": 164,
+    "passed": 159,
+    "failed": 5,
+    "pass_rate": 0.9695121951,
+    "elapsed_seconds": 0.80
+  },
+  "streamlit": {
+    "py_compile_passed": true,
+    "app_test_exceptions": 0,
+    "app_test_errors": 0,
+    "app_test_warnings": 1,
+    "server_started": true,
+    "health_response": "ok",
+    "root_http_status": 200,
+    "live_backend_ready": false,
+    "recommendation_answer_form_present": false,
+    "live_backend_blockers": [
+      "Project .env is absent or incomplete: TOP_K is missing.",
+      "Official Manifest 1.1 and its matching Chroma index are absent.",
+      "Grounded generation is imported but not wired into QA and recommendation services.",
+      "RecommendationRagService.answer_form is absent while Streamlit calls it."
+    ]
+  },
+  "evaluation_set": {
+    "path": "eval/questions_v1.jsonl",
+    "case_count": 10,
+    "positive_class": "expected status is answered",
+    "method": "deterministic mock/form fixture smoke; not actual RAG or model execution"
+  },
+  "metrics": {
+    "requested_metrics": {
+      "hit_at_5": null,
+      "mrr": null,
+      "citation_precision": null,
+      "abstention_accuracy": null,
+      "status": "not_measured_missing_official_runtime_qrels_and_completed_citation_reviews"
+    },
+    "supplementary_smoke_metrics": {
+      "status_exact_accuracy": 0.8,
+      "answerability_precision": 1.0,
+      "answerability_recall": 0.7142857143,
+      "answerability_f1": 0.8333333333,
+      "non_answer_route_exact_accuracy": 1.0
+    }
+  },
+  "confusion_matrix": {
+    "tp": 5,
+    "fp": 0,
+    "fn": 2,
+    "tn": 3
+  },
+  "cases": [
+    {"id": "Q001", "expected": "answered", "actual": "answered", "source_count": 1},
+    {"id": "Q002", "expected": "answered", "actual": "answered", "source_count": 1},
+    {"id": "Q003", "expected": "answered", "actual": "answered", "source_count": 1},
+    {"id": "Q004", "expected": "answered", "actual": "insufficient_evidence", "source_count": 0},
+    {"id": "Q005", "expected": "answered", "actual": "insufficient_evidence", "source_count": 0},
+    {"id": "Q006", "expected": "answered", "actual": "answered", "source_count": 1},
+    {"id": "Q007", "expected": "answered", "actual": "answered", "source_count": 2},
+    {"id": "Q008", "expected": "needs_clarification", "actual": "needs_clarification", "source_count": 0},
+    {"id": "Q009", "expected": "out_of_scope", "actual": "out_of_scope", "source_count": 0},
+    {"id": "Q010", "expected": "safety_blocked", "actual": "safety_blocked", "source_count": 0}
+  ],
+  "integration_failures": [
+    "missing legacy manifest test fixture",
+    "QA grounded-generation wiring and trace NameError",
+    "QA citation repair is not invoked",
+    "recommendation grounded-generation wiring and trace NameError",
+    "Streamlit recommendation calls a missing answer_form method"
+  ]
+}
