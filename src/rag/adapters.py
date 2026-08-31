@@ -13,12 +13,15 @@ RAG_INPUT_FIELDS = {
     "section",
     "content",
     "source_url",
+    "source_anchor",
     "document_version",
     "license",
     "product_models",
     "use_cases",
     "os_versions",
     "official_verified",
+    "quality_status",
+    "embedding_checksum",
 }
 
 
@@ -43,6 +46,7 @@ def manifest_chunk_to_document_chunk(value: dict[str, Any]) -> DocumentChunk:
         section=value["section"],
         content=value["content"],
         source_url=value["source_url"],
+        source_anchor=value["source_anchor"],
         retrieved_at=retrieved_at,
         document_version=value["document_version"],
         license=value["license"],
@@ -51,6 +55,8 @@ def manifest_chunk_to_document_chunk(value: dict[str, Any]) -> DocumentChunk:
         os_versions=tuple(value["os_versions"]),
         source_type=value.get("source_type", "documentation"),
         official_verified=value["official_verified"],
+        quality_status=value["quality_status"],
+        embedding_checksum=value["embedding_checksum"],
     )
 
 

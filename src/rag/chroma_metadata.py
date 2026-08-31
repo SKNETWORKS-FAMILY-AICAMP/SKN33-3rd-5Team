@@ -29,6 +29,7 @@ def chunk_to_chroma_metadata(chunk: DocumentChunk) -> dict[str, Any]:
     metadata: dict[str, Any] = {
         "document_id": chunk.document_id,
         "official_verified": chunk.official_verified,
+        "quality_status": chunk.quality_status,
         "source_type": chunk.source_type,
     }
     _add_tag_flags(metadata, "product_models", chunk.product_models)
@@ -61,11 +62,17 @@ def chroma_where(filters: RagFilters) -> dict[str, Any] | None:
     conditions: list[dict[str, Any]] = []
     if filters.official_only:
         conditions.append({"official_verified": True})
+        conditions.append({"quality_status": "approved"})
     if filters.source_types:
         if len(filters.source_types) == 1:
             conditions.append({"source_type": filters.source_types[0]})
         else:
             conditions.append({"source_type": {"$in": list(filters.source_types)}})
+    if filters.document_ids:
+        if len(filters.document_ids) == 1:
+            conditions.append({"document_id": filters.document_ids[0]})
+        else:
+            conditions.append({"document_id": {"$in": list(filters.document_ids)}})
     for group, values in (
         ("product_models", filters.product_models),
         ("use_cases", filters.use_cases),

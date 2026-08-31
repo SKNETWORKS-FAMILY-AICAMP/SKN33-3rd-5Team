@@ -50,10 +50,13 @@ python document_pipeline/ingestion/run_pipeline.py
 실행 결과는 다음과 같다.
 
 - `data/raw/*.adoc`: 변경하지 않은 공식 원문과 `collection.json` 수집 대장
-- `data/processed/parsed_sections.json`: 실제 anchor와 heading 경로, 문단·목록·코드·주의문·표·이미지 블록을 보존한 중간 결과
-- `data/manifest.json`: RAG에 전달하는 청크와 metadata
+- `data/processed/parsed_sections.json`: 실제 anchor와 heading 경로, 문단·목록·코드·주의문·표·이미지·탭 블록을 보존한 중간 결과
+- `data/processed/qa_report.json`: 파싱 검수 대상, 자동 제외한 완전 중복과 검토할 근접 중복
+- `data/manifest.json`: `official_verified=true`, `quality_status=approved`인 청크와 재현 설정 metadata
 
-이 파일들은 모두 Git 제외 대상이다. 파싱 로직만 다시 실행하려면 `python document_pipeline/ingestion/build_manifest.py`를 사용한다. 기본값은 `multilingual-e5-base` 토크나이저 기준 목표 360 tokens, 하드 최대 460 tokens, 완전한 문단 블록만 60 tokens 이내로 겹치게 한다. 코드·표·이미지는 겹치지 않는다.
+이 파일들은 모두 Git 제외 대상이다. 파싱 로직만 다시 실행하려면 `python document_pipeline/ingestion/build_manifest.py`를 사용한다. 기본값은 `multilingual-e5-base` 토크나이저 기준 목표 360 tokens, 하드 최대 460 tokens다. 제한은 본문만이 아니라 `passage: + 제목 + 섹션 경로 + 본문` 전체에 적용한다. 완전한 서술 블록만 60 tokens 이내로 겹치며 코드·표·이미지는 겹치지 않는다.
+
+파서는 AsciiDoc 표의 선언 열 수, 셀 내부 이미지 캡션, `[tabs]`의 분기, description label과 continuation을 구조적으로 처리한다. 코드 블록은 속성 잔여 검사에서 제외한다. 제품 태그는 `product_media_registry.json`에서 승인된 정확한 모델명만 결정적으로 대조하며 LLM으로 추론하지 않는다.
 
 ## 다음 합의 사항
 

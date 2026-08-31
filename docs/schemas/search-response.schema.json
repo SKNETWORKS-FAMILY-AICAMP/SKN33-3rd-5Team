@@ -28,6 +28,14 @@
           "title": "Os Versions",
           "type": "array"
         },
+        "document_ids": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Document Ids",
+          "type": "array"
+        },
         "source_types": {
           "items": {
             "enum": [
@@ -244,6 +252,11 @@
           "title": "Chunk Checksum",
           "type": "string"
         },
+        "embedding_checksum": {
+          "minLength": 1,
+          "title": "Embedding Checksum",
+          "type": "string"
+        },
         "parser_version": {
           "minLength": 1,
           "title": "Parser Version",
@@ -253,6 +266,11 @@
           "const": true,
           "title": "Official Verified",
           "type": "boolean"
+        },
+        "quality_status": {
+          "const": "approved",
+          "title": "Quality Status",
+          "type": "string"
         },
         "image_url": {
           "anyOf": [
@@ -310,8 +328,10 @@
         "os_versions",
         "document_checksum",
         "chunk_checksum",
+        "embedding_checksum",
         "parser_version",
         "official_verified",
+        "quality_status",
         "image_url",
         "video_url"
       ],

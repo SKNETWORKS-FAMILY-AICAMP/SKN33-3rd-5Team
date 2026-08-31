@@ -1,6 +1,7 @@
 """Fetch approved Raspberry Pi AsciiDoc sources at one fixed Git commit."""
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -12,6 +13,7 @@ from urllib.request import Request, urlopen
 
 
 PIPELINE_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = PIPELINE_ROOT.parent
 REGISTRY_PATH = PIPELINE_ROOT / "data" / "source_registry.csv"
 RAW_ROOT = PIPELINE_ROOT / "data" / "raw"
 GITHUB_REPOSITORY = "https://github.com/raspberrypi/documentation.git"
@@ -104,6 +106,15 @@ def _safe_raw_path(raw_root: Path, source_id: str) -> Path:
     return raw_root / f"{source_id}.adoc"
 
 
+def registry_reference(registry_path: Path) -> str:
+    """Return a reproducible project-relative registry reference for the ledger."""
+
+    try:
+        return registry_path.resolve().relative_to(REPOSITORY_ROOT).as_posix()
+    except ValueError as exc:
+        raise ValueError("source registry must be inside the project repository") from exc
+
+
 def _download_text(url: str) -> bytes:
     request = Request(url, headers={"User-Agent": USER_AGENT})
     with urlopen(request, timeout=30) as response:  # nosec B310 - registry URLs are validated by project policy
@@ -112,13 +123,19 @@ def _download_text(url: str) -> bytes:
         return response.read()
 
 
-def fetch_sources(*, commit: str | None = None, raw_root: Path = RAW_ROOT) -> dict[str, object]:
+def fetch_sources(
+    *,
+    commit: str | None = None,
+    raw_root: Path = RAW_ROOT,
+    registry_path: Path = REGISTRY_PATH,
+) -> dict[str, object]:
     """Download approved raw documents and write one local collection ledger."""
+    registry_path = registry_path.resolve()
     raw_root.mkdir(parents=True, exist_ok=True)
     resolved_commit = commit or resolve_commit()
     collected_at = datetime.now(UTC).date().isoformat()
     documents: list[dict[str, str]] = []
-    for source in included_sources():
+    for source in included_sources(registry_path):
         url = pinned_raw_url(source.collection_url, resolved_commit)
         payload = _download_text(url)
         destination = _safe_raw_path(raw_root, source.source_id)
@@ -136,6 +153,7 @@ def fetch_sources(*, commit: str | None = None, raw_root: Path = RAW_ROOT) -> di
         "repository": GITHUB_REPOSITORY,
         "commit": resolved_commit,
         "collected_at": collected_at,
+        "source_registry": registry_reference(registry_path),
         "documents": documents,
     }
     (raw_root / "collection.json").write_text(
@@ -145,7 +163,17 @@ def fetch_sources(*, commit: str | None = None, raw_root: Path = RAW_ROOT) -> di
 
 
 def main() -> None:
-    ledger = fetch_sources()
+    parser = argparse.ArgumentParser(description="Fetch approved Raspberry Pi AsciiDoc sources.")
+    parser.add_argument("--commit", help="Optional 40-character Raspberry Pi documentation commit SHA")
+    parser.add_argument("--source-registry", type=Path, default=REGISTRY_PATH)
+    parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
+    args = parser.parse_args()
+
+    ledger = fetch_sources(
+        commit=args.commit,
+        registry_path=args.source_registry,
+        raw_root=args.raw_root,
+    )
     print(f"fetched {len(ledger['documents'])} approved documents")
     print(f"commit: {ledger['commit']}")
 

@@ -1,7 +1,7 @@
 # Manifest 계약
 
-- 계약 버전: `1.0.0`
-- 구현 상태: 검토 요청
+- 계약 버전: `1.1.0`
+- 구현 상태: 구현 및 자동 검증 완료
 - 기준 계약: `src/contracts/models.py::SearchResultMetadata`
 - 기계 검증 스키마: `manifest.schema.json`
 
@@ -16,9 +16,9 @@
 | 문서·청크 식별 | 문서·데이터 | `document_id`, `chunk_id`, `chunk_index` |
 | 원문과 본문 | 문서·데이터 | `title`, `publisher`, `section`, `content`, `source_url`, `source_anchor`, `language`, `source_type` |
 | 날짜와 버전 | 문서·데이터 | `published_at`, `updated_at`, `collected_at`, `document_version` |
-| 권리와 출처 | 문서·데이터 | `license`, `official_verified` |
+| 권리와 출처 | 문서·데이터 | `license`, `official_verified`, `quality_status` |
 | 검색 filter | 문서·데이터 | `product_models`, `use_cases`, `tasks`, `categories`, `os_versions` |
-| 무결성 | 문서·데이터 | `document_checksum`, `chunk_checksum`, `parser_version` |
+| 무결성 | 문서·데이터 | `document_checksum`, `chunk_checksum`, `embedding_checksum`, `parser_version` |
 | 미디어 연결 | 문서·데이터 | `image_url`, `video_url` |
 | 색인 시각 | RAG | `indexed_at` |
 | 검색 결과 순위 | RAG | `rank` |
@@ -26,12 +26,12 @@
 
 ## 결정 사항
 
-1. manifest의 최상위 객체는 `schema_version`, `generated_at`, `source_registry`, `chunks`를 가진다.
+1. manifest의 최상위 객체는 `schema_version`, `generated_at`, `source_registry`, `processing`, `chunks`를 가진다. `processing`은 tokenizer revision, token limit, registry checksum과 설정 fingerprint를 기록한다.
 2. `chunks`는 RAG가 문서 조인 없이 검색할 수 있도록 출처 metadata를 청크마다 포함한다.
 3. 날짜는 ISO 8601을 사용하고 checksum은 `sha256:<64 hex>` 형식을 사용한다.
-4. `official_verified`가 `true`이고 source registry에서 `collection_decision=include`인 자료만 manifest에 포함한다.
+4. `official_verified=true`, `quality_status=approved`이고 source registry에서 `collection_decision=include`인 자료만 manifest에 포함한다. 파싱 검수 대상은 `processed/qa_report.json`에만 기록한다.
 5. `rank`, `citation_id`, `indexed_at`은 런타임 필드이므로 manifest에 넣지 않는다.
-6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. `src/rag/adapters.py`가 `collected_at`을 보존해 변환하며, manifest 계약 자체는 줄이지 않는다.
+6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. `src/rag/adapters.py`가 `collected_at`과 `source_anchor`를 보존해 변환하며, manifest 계약 자체는 줄이지 않는다.
 7. corpus의 `image_url`, `video_url`은 명확한 재사용 권리가 확인된 공식 URL만 사용하며, 파일 자체는 corpus에 복제하지 않는다.
 8. `license_url`, 검토 상태와 attribution 문구는 `source_registry.csv`와 Document Card에서 관리한다. RAG manifest에는 canonical 계약의 `license`만 전달한다.
 9. 제품 페이지 사진은 corpus manifest에 넣지 않는다. 교육용 제품 카드의 원격 표시는 `data/product_media_registry.json`에서 별도로 통제한다.
@@ -42,11 +42,11 @@ RAG 담당자의 테스트 chunk는 검색 품질을 빠르게 확인하기 위�
 
 | 테스트 chunk 필드 | 최종 manifest 필드 | 처리 |
 |---|---|---|
-| `chunk_id`, `document_id`, `title`, `section`, `content`, `source_url`, `document_version`, `license`, `product_models`, `use_cases`, `os_versions`, `source_type`, `official_verified` | 같은 이름 | 그대로 사용 |
+| `chunk_id`, `document_id`, `title`, `section`, `content`, `source_url`, `document_version`, `license`, `product_models`, `use_cases`, `os_versions`, `source_type`, `official_verified`, `quality_status` | 같은 이름 | 그대로 사용 |
 | `retrieved_at` | `collected_at` | 수집 시각이므로 이름을 바꿔 전달. 검색 시각으로 사용하지 않음 |
 | 없음 | `chunk_index`, `publisher`, `source_anchor`, `language` | 문서 파이프라인이 채움 |
 | 없음 | `published_at`, `updated_at`, `tasks`, `categories` | 원문과 source registry에서 채움. 값이 없으면 `null` 또는 빈 배열 |
-| 없음 | `document_checksum`, `chunk_checksum`, `parser_version` | 문서 파이프라인이 생성하여 재현성·변경 감지에 사용 |
+| 없음 | `document_checksum`, `chunk_checksum`, `embedding_checksum`, `parser_version` | 문서 파이프라인이 생성하여 원문·인용문·실제 임베딩 입력의 변경을 각각 추적 |
 | 없음 | `image_url`, `video_url` | 명확한 재사용 권리가 있는 경우에만 채움 |
 | 없음 | `indexed_at`, `rank`, `citation_id` | RAG/통합 계층이 검색·응답 시 생성 |
 
@@ -68,4 +68,4 @@ manifest chunk
 - [ ] 통합 담당: `SearchResponse` 생성 시 런타임 필드 주입 확인
 - [ ] 전체: 호환되지 않는 변경 시 `schema_version` 증가 규칙 확인
 
-체크리스트 승인 전까지 `src/contracts/models.py`의 필드명은 이 작업에서 변경하지 않는다.
+계약 1.1.0의 `embedding_checksum`과 `quality_status`는 `src/contracts/models.py`와 배포용 JSON Schema에 동기화한다.

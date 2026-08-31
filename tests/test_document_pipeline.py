@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from document_pipeline.ingestion.build_manifest import chunk_section
+from document_pipeline.ingestion.fetch import REGISTRY_PATH, included_sources
 from document_pipeline.ingestion.parse_asciidoc import parse_asciidoc
+from document_pipeline.ingestion.validate_foundation import validate_source_registry
 from src.rag.adapters import manifest_chunk_to_document_chunk
 
 
@@ -107,3 +109,50 @@ def test_manifest_adapter_maps_collected_at_without_dropping_manifest_contract()
     assert chunk.retrieved_at == "2026-08-28"
     assert chunk.use_cases == ("headless_remote_management",)
     assert chunk.official_verified is True
+
+
+V2_REGISTRY_PATH = REGISTRY_PATH.with_name("source_registry_v2.csv")
+V3_REGISTRY_PATH = REGISTRY_PATH.with_name("source_registry_v3.csv")
+
+
+def test_original_registry_remains_the_nine_document_baseline() -> None:
+    assert validate_source_registry() == (17, 9, 8)
+
+
+def test_recommendation_mvp_v2_registry_has_15_approved_official_documents() -> None:
+    total, included, reference_only = validate_source_registry(V2_REGISTRY_PATH)
+    sources = {source.source_id: source for source in included_sources(V2_REGISTRY_PATH)}
+    original_sources = {source.source_id: source for source in included_sources()}
+
+    assert (total, included, reference_only) == (23, 15, 8)
+    assert set(original_sources).issubset(sources)
+    assert all(sources[source_id] == source for source_id, source in original_sources.items())
+    assert {
+        "rpi-doc-power-supplies",
+        "rpi-doc-boot-nvme",
+        "rpi-doc-external-storage",
+        "rpi-doc-keyboard-computers",
+        "rpi-doc-raspberry-pi-connect",
+        "rpi-doc-interfaces",
+    }.issubset(sources)
+    assert sources["rpi-doc-boot-nvme"].product_models == ["Raspberry Pi 5"]
+    assert sources["rpi-doc-keyboard-computers"].product_models == [
+        "Raspberry Pi 500",
+        "Raspberry Pi 400",
+    ]
+    assert sources["rpi-doc-raspberry-pi-connect"].official_verified is True
+
+
+def test_catalog_to_rag_v3_registry_keeps_v2_and_adds_product_evidence_documents() -> None:
+    total, included, reference_only = validate_source_registry(V3_REGISTRY_PATH)
+    v2_sources = {source.source_id: source for source in included_sources(V2_REGISTRY_PATH)}
+    v3_sources = {source.source_id: source for source in included_sources(V3_REGISTRY_PATH)}
+
+    assert (total, included, reference_only) == (26, 18, 8)
+    assert set(v2_sources).issubset(v3_sources)
+    assert {
+        "rpi-doc-camera-multicam",
+        "rpi-doc-frequency-management",
+        "rpi-doc-getting-started-setting-up",
+    }.issubset(v3_sources)
+    assert v3_sources["rpi-doc-camera-multicam"].product_models == ["Raspberry Pi 5"]

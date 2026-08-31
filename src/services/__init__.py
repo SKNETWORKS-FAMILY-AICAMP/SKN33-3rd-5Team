@@ -4,11 +4,13 @@ from .chat_service import ChatService, build_default_mock_chat_service
 
 from .recommendation_agent import RecommendationAgent, RecommendationAgentResult
 from .recommendation_response import build_recommendation_chat_response
+from .recommendation_rag_service import RecommendationRagService
 
 __all__ = [
     "ChatService",
     "RecommendationAgent",
     "RecommendationAgentResult",
+    "RecommendationRagService",
     "build_default_mock_chat_service",
     "build_recommendation_chat_response",
 ]

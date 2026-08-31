@@ -9,9 +9,9 @@
 
 아래 형식은 현재 검색 동작 테스트에만 사용하며 확정 계약이 아니다. 신규 수집·검색 구현은 `docs/schemas/search-response.schema.json`의 `collected_at`, `indexed_at`, `citation_id`와 검증 필드를 사용해야 한다.
 
-`manifest.json`은 `chunks` 배열을 포함한다. 현재 프로토타입 청크는 `chunk_id`, `document_id`, `title`, `section`, `content`, `source_url`, `retrieved_at`, `document_version`, `license`, `product_models`, `use_cases`, `os_versions`, `source_type`, `official_verified`를 사용한다.
+`manifest.json`은 `chunks` 배열을 포함한다. 현재 프로토타입은 canonical manifest에서 `chunk_id`, `document_id`, `title`, `section`, `content`, `source_url`, `source_anchor`, `collected_at`, `document_version`, `license`, `product_models`, `use_cases`, `os_versions`, `source_type`, `official_verified`, `quality_status`, `embedding_checksum`을 읽는다.
 
-`official_verified`가 `true`인 청크만 Chroma index에 넣고, 기본 검색 결과에도 포함한다.
+`official_verified=true`, `quality_status=approved`인 청크만 Chroma index와 검색 결과에 포함한다. Dense 임베딩에는 제목·섹션 경로·본문을 사용하지만 Chroma의 `documents`와 사용자 인용에는 원문 기반 `content`만 저장한다.
 
 ## 사용 방법
 
@@ -29,7 +29,7 @@ TOP_K=3
 ```
 
 색인은 명시적으로 실행한다. `--reset`은 기존 컬렉션을 삭제한 뒤 manifest 전체를
-다시 색인하며, 옵션 없이 실행하면 같은 `chunk_id`만 upsert한다.
+다시 색인한다. 옵션 없이 실행하면 같은 `chunk_id`를 upsert하고 새 manifest에 없는 stale ID를 삭제한다.
 
 ```bash
 python3 -m src.rag.indexer --reset

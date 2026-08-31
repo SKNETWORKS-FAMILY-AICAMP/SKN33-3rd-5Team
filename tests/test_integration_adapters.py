@@ -11,6 +11,7 @@ from src.services.integration_adapters import (
     IntegrationAdapterError,
     RagResultMetadata,
     condition_payload_to_rag_filters,
+    manifest_to_rag_result_metadata,
     rag_results_to_search_response,
 )
 
@@ -52,7 +53,7 @@ def rag_result(*, retrieved_at: str = "2026-08-27", rank: int = 1) -> RagResult:
     )
 
 
-def metadata(*, official_verified: bool = True) -> RagResultMetadata:
+def metadata(*, official_verified: bool = True, quality_status: str = "approved") -> RagResultMetadata:
     return RagResultMetadata(
         chunk_index=0,
         publisher="Raspberry Pi Ltd",
@@ -61,8 +62,10 @@ def metadata(*, official_verified: bool = True) -> RagResultMetadata:
         indexed_at=datetime.fromisoformat("2026-08-28T12:00:00+09:00"),
         document_checksum="sha256:document",
         chunk_checksum="sha256:chunk",
+        embedding_checksum="sha256:embedding",
         parser_version="1.0.0",
         official_verified=official_verified,
+        quality_status=quality_status,
         product_models=("Raspberry Pi 5",),
         use_cases=("camera_monitoring",),
         tasks=("troubleshooting",),
@@ -109,6 +112,40 @@ class IntegrationAdapterTests(unittest.TestCase):
         self.assertEqual(result.collected_at.isoformat(), "2026-08-27")
         self.assertEqual(result.publisher, "Raspberry Pi Ltd")
         self.assertEqual(response.applied_filters.product_models, ["Raspberry Pi 5"])
+        self.assertEqual(response.applied_filters.document_ids, [])
+
+    def test_manifest_metadata_adapter_preserves_canonical_chunk_metadata(self) -> None:
+        mapped = manifest_to_rag_result_metadata(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "camera-001",
+                        "chunk_index": 0,
+                        "publisher": "Raspberry Pi Ltd",
+                        "language": "en",
+                        "source_type": "documentation",
+                        "document_checksum": "sha256:document",
+                        "chunk_checksum": "sha256:chunk",
+                        "parser_version": "asciidoc-semantic-2.0.0",
+                        "official_verified": True,
+                        "source_anchor": "camera",
+                        "published_at": None,
+                        "updated_at": None,
+                        "product_models": ["Raspberry Pi 5"],
+                        "use_cases": ["camera_monitoring"],
+                        "tasks": ["camera_setup"],
+                        "categories": ["camera"],
+                        "os_versions": ["Raspberry Pi OS"],
+                        "image_url": None,
+                        "video_url": None,
+                    }
+                ]
+            },
+            indexed_at=datetime.fromisoformat("2026-08-30T12:00:00+00:00"),
+        )
+
+        self.assertEqual(mapped["camera-001"].source_anchor, "camera")
+        self.assertEqual(mapped["camera-001"].tasks, ("camera_setup",))
 
     def test_missing_metadata_is_not_silently_invented(self) -> None:
         with self.assertRaisesRegex(IntegrationAdapterError, "metadata가 없습니다"):
@@ -145,6 +182,20 @@ class IntegrationAdapterTests(unittest.TestCase):
                 applied_filters=RagFilters(),
                 metadata_by_chunk_id={
                     "camera-001": metadata(official_verified=False)
+                },
+            )
+
+    def test_unapproved_result_is_rejected(self) -> None:
+        with self.assertRaisesRegex(IntegrationAdapterError, "품질 승인되지 않은"):
+            rag_results_to_search_response(
+                [rag_result()],
+                query_id="query-1",
+                query_language="ko",
+                retrieval_method="dense",
+                top_k=3,
+                applied_filters=RagFilters(),
+                metadata_by_chunk_id={
+                    "camera-001": metadata(quality_status="needs_review")
                 },
             )
 

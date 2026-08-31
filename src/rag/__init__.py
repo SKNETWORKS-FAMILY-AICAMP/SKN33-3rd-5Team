@@ -4,9 +4,10 @@ from typing import Any
 
 from .evaluation import RetrievalEvaluation, evaluate_rankings, hit_at_k, mean_reciprocal_rank
 from .adapters import manifest_chunk_to_document_chunk, manifest_to_document_chunks
-from .models import DocumentChunk, RagFilters, RagResult
+from .models import DocumentChunk, RagFilters, RagResult, RetrievalDecision
 from .retriever import DenseRetrievalError, HybridRetriever, rrf_fuse
 from .settings import RagSettings, RagSettingsError
+from .index_metadata import IndexMetadataError, load_indexed_at
 
 
 def build_chroma_index(*args: Any, **kwargs: Any) -> int:
@@ -19,14 +20,17 @@ __all__ = [
     "DocumentChunk",
     "DenseRetrievalError",
     "HybridRetriever",
+    "IndexMetadataError",
     "RagFilters",
     "RagResult",
     "RagSettings",
     "RagSettingsError",
     "RetrievalEvaluation",
+    "RetrievalDecision",
     "build_chroma_index",
     "evaluate_rankings",
     "hit_at_k",
+    "load_indexed_at",
     "mean_reciprocal_rank",
     "manifest_chunk_to_document_chunk",
     "manifest_to_document_chunks",

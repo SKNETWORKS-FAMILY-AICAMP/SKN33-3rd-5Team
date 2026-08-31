@@ -17,9 +17,15 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
 
 ## 최소 JSON 계약
 
+현재 제품 추천 통합 계약은 `schema_version: "1.1.0"`이다. 이 버전부터 제품의
+각 사실과 추천 기준은 `evidence_by_field`로 공식 `document_id`를 반드시 연결한다.
+`document_ids`는 이를 중복 제거·정렬한 합집합이며, 두 값이 다르면 런타임 검증에서
+실패한다. 카탈로그 문서의 `sources`도 현재 RAG manifest에 있는 공식 검증 문서와
+제목·URL·라이선스가 일치해야 한다.
+
 ```json
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "catalog_version": "YYYY-MM-DD-or-commit",
   "generated_at": "2026-08-27T12:00:00+09:00",
   "sources": [
@@ -61,7 +67,22 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
       },
       "required_accessories": ["팀이 공식 근거로 확인한 필수 구성품"],
       "caveats": ["팀이 공식 근거로 확인한 주의사항"],
-      "document_ids": ["official-doc-001"],
+      "evidence_by_field": {
+        "identity": ["official-doc-001"],
+        "wireless": ["official-doc-001"],
+        "ethernet": ["official-doc-001"],
+        "gpio_header": ["official-doc-001"],
+        "camera_connector_count": ["official-doc-002"],
+        "display_output_count": ["official-doc-001"],
+        "built_in_keyboard": ["official-doc-001"],
+        "cpu": ["official-doc-001"],
+        "memory": ["official-doc-001"],
+        "dimensions": ["official-doc-001"],
+        "recommendation_profile": ["official-doc-001"],
+        "required_accessories": ["official-doc-003"],
+        "caveats": ["official-doc-003"]
+      },
+      "document_ids": ["official-doc-001", "official-doc-002", "official-doc-003"],
       "product_url": "https://www.raspberrypi.com/products/example/",
       "image_url": null
     }
@@ -69,12 +90,23 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
 }
 ```
 
-`performance_tier`, `recommended_use_cases`, `recommended_tasks`는 LLM 생성값이 아니라 팀이 공식 근거와 서비스 범위를 기준으로 검수한 추천 기준표다. 실시간 가격은 다루지 않는다.
+`performance_tier`, `recommended_use_cases`, `recommended_tasks`는 LLM 생성값이 아니라 팀이 공식 근거와 서비스 범위를 기준으로 검수한 추천 기준표다. 실시간 가격은 다루지 않는다. 공식 corpus에 크기처럼 확인되지 않은 값은 빈 문자열로 추측하지 않고 `null`로 둔다.
 
 ## 전달 전 확인
 
-- 모든 `document_id`가 `sources`에 존재하고 RAG metadata의 `document_id`와 같다.
+- 모든 `evidence_by_field.*`의 `document_id`가 `sources`에 존재하고 RAG manifest의 `document_id`와 같다.
+- `document_ids`가 `evidence_by_field`의 정렬된 중복 제거 합집합과 같다.
+- `identity`, 네트워크·GPIO·카메라·디스플레이·키보드 기능, CPU·메모리, 추천 기준에는 최소 하나의 공식 근거가 있다.
 - `retrieved_at`, `catalog_version`과 라이선스가 기록됐다.
 - 단종 제품은 `is_current=false`다.
 - `required_accessories`, `caveats`, 추천 태그에 검수 근거가 있다.
 - 제품 이미지 URL은 온라인 문서와 같은 라이선스라고 가정하지 않고 UI용 별도 메타데이터에서 관리한다.
+
+## v3 corpus와 추천 실행
+
+`source_registry_v3.csv`는 v2의 15개 색인 문서를 보존하고 Pi 5 멀티카메라,
+주파수·냉각, 초기 하드웨어 설정 문서 3개를 더한 18개 공식 색인 문서다. 제품 페이지
+8개는 이미지·공식 URL 카드용 `reference_only`로 남기며 RAG 본문에는 색인하지 않는다.
+
+실제 `catalog.json`과 `manifest_v3.json`은 Git에 올리지 않는다. 같은 RunPod volume에
+배치한 뒤, catalog의 필드 근거 문서만 `document_ids` 검색 필터로 전달한다.

@@ -33,8 +33,10 @@ class RagResultMetadata:
     indexed_at: datetime
     document_checksum: str
     chunk_checksum: str
+    embedding_checksum: str
     parser_version: str
     official_verified: bool
+    quality_status: str
     source_anchor: str | None = None
     published_at: date | None = None
     updated_at: date | None = None
@@ -76,6 +78,79 @@ def _collected_at(retrieved_at: str) -> date:
             ) from exc
 
 
+def _optional_date(value: object, *, field_name: str, chunk_id: str) -> date | None:
+    """manifest의 선택 날짜를 SearchResponse용 date로 정규화한다."""
+
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise IntegrationAdapterError(f"{chunk_id}: {field_name} 형식이 잘못되었습니다.")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise IntegrationAdapterError(
+            f"{chunk_id}: {field_name}을 date로 변환할 수 없습니다: {value}"
+        ) from exc
+
+
+def manifest_to_rag_result_metadata(
+    manifest: Mapping[str, object], *, indexed_at: datetime
+) -> dict[str, RagResultMetadata]:
+    """canonical manifest의 정적 metadata를 RAG 결과 adapter용 map으로 만든다."""
+
+    chunks = manifest.get("chunks")
+    if not isinstance(chunks, list):
+        raise IntegrationAdapterError("manifest에는 chunks 목록이 필요합니다.")
+    metadata_by_chunk_id: dict[str, RagResultMetadata] = {}
+    required_fields = {
+        "chunk_id",
+        "chunk_index",
+        "publisher",
+        "language",
+        "source_type",
+        "document_checksum",
+        "chunk_checksum",
+        "parser_version",
+        "official_verified",
+    }
+    for chunk in chunks:
+        if not isinstance(chunk, Mapping):
+            raise IntegrationAdapterError("manifest chunk 형식이 잘못되었습니다.")
+        missing = required_fields - set(chunk)
+        if missing:
+            raise IntegrationAdapterError(f"manifest chunk에 metadata가 없습니다: {sorted(missing)}")
+        chunk_id = chunk["chunk_id"]
+        if not isinstance(chunk_id, str) or not chunk_id:
+            raise IntegrationAdapterError("manifest chunk_id가 비어 있습니다.")
+        if chunk_id in metadata_by_chunk_id:
+            raise IntegrationAdapterError(f"manifest에 중복 chunk_id가 있습니다: {chunk_id}")
+        try:
+            metadata_by_chunk_id[chunk_id] = RagResultMetadata(
+                chunk_index=int(chunk["chunk_index"]),
+                publisher=str(chunk["publisher"]),
+                language=str(chunk["language"]),
+                source_type=str(chunk["source_type"]),
+                indexed_at=indexed_at,
+                document_checksum=str(chunk["document_checksum"]),
+                chunk_checksum=str(chunk["chunk_checksum"]),
+                parser_version=str(chunk["parser_version"]),
+                official_verified=chunk["official_verified"] is True,
+                source_anchor=chunk.get("source_anchor") if isinstance(chunk.get("source_anchor"), str) else None,
+                published_at=_optional_date(chunk.get("published_at"), field_name="published_at", chunk_id=chunk_id),
+                updated_at=_optional_date(chunk.get("updated_at"), field_name="updated_at", chunk_id=chunk_id),
+                product_models=tuple(chunk.get("product_models") or ()),
+                use_cases=tuple(chunk.get("use_cases") or ()),
+                tasks=tuple(chunk.get("tasks") or ()),
+                categories=tuple(chunk.get("categories") or ()),
+                os_versions=tuple(chunk.get("os_versions") or ()),
+                image_url=chunk.get("image_url") if isinstance(chunk.get("image_url"), str) else None,
+                video_url=chunk.get("video_url") if isinstance(chunk.get("video_url"), str) else None,
+            )
+        except (TypeError, ValueError) as exc:
+            raise IntegrationAdapterError(f"manifest metadata 형식이 잘못되었습니다: {chunk_id}") from exc
+    return metadata_by_chunk_id
+
+
 def rag_results_to_search_response(
     results: Sequence[RagResult],
     *,
@@ -115,6 +190,10 @@ def rag_results_to_search_response(
             raise IntegrationAdapterError(
                 f"공식 검증되지 않은 검색 결과는 변환할 수 없습니다: {result.chunk_id}"
             )
+        if metadata.quality_status != "approved":
+            raise IntegrationAdapterError(
+                f"품질 승인되지 않은 검색 결과는 변환할 수 없습니다: {result.chunk_id}"
+            )
 
         converted_results.append(
             {
@@ -144,8 +223,10 @@ def rag_results_to_search_response(
                 "os_versions": list(metadata.os_versions),
                 "document_checksum": metadata.document_checksum,
                 "chunk_checksum": metadata.chunk_checksum,
+                "embedding_checksum": metadata.embedding_checksum,
                 "parser_version": metadata.parser_version,
                 "official_verified": True,
+                "quality_status": "approved",
                 "image_url": metadata.image_url,
                 "video_url": metadata.video_url,
             }
@@ -153,7 +234,7 @@ def rag_results_to_search_response(
 
     return SearchResponse.model_validate(
         {
-                "schema_version": "1.1.0",
+            "schema_version": "1.1.0",
             "query_id": query_id,
             "query_language": query_language,
             "retrieval_method": retrieval_method,
@@ -162,6 +243,7 @@ def rag_results_to_search_response(
                 "product_models": list(applied_filters.product_models),
                 "use_cases": list(applied_filters.use_cases),
                 "os_versions": list(applied_filters.os_versions),
+                "document_ids": list(applied_filters.document_ids),
                 "source_types": list(applied_filters.source_types),
                 "official_only": applied_filters.official_only,
             },
@@ -174,5 +256,6 @@ __all__ = [
     "IntegrationAdapterError",
     "RagResultMetadata",
     "condition_payload_to_rag_filters",
+    "manifest_to_rag_result_metadata",
     "rag_results_to_search_response",
 ]

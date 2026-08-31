@@ -22,6 +22,7 @@ class RagSettings:
     chroma_collection_name: str
     e5_model_name: str
     top_k: int
+    dense_max_distance: float
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "RagSettings":
@@ -48,6 +49,14 @@ class RagSettings:
         if not 1 <= top_k <= 20:
             raise RagSettingsError("TOP_K must be an integer between 1 and 20.")
 
+        dense_max_distance_raw = os.getenv("DENSE_MAX_DISTANCE", "0.48").strip()
+        try:
+            dense_max_distance = float(dense_max_distance_raw)
+        except ValueError as exc:
+            raise RagSettingsError("DENSE_MAX_DISTANCE must be a number between 0 and 2.") from exc
+        if not 0 < dense_max_distance < 2:
+            raise RagSettingsError("DENSE_MAX_DISTANCE must be a number between 0 and 2.")
+
         settings = cls(
             project_root=root,
             manifest_path=resolve_path("DOCUMENT_MANIFEST"),
@@ -55,6 +64,7 @@ class RagSettings:
             chroma_collection_name=required("CHROMA_COLLECTION_NAME"),
             e5_model_name=required("E5_MODEL_NAME"),
             top_k=top_k,
+            dense_max_distance=dense_max_distance,
         )
         if not settings.manifest_path.is_file():
             raise RagSettingsError(

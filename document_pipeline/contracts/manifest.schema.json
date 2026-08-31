@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://picare.local/schemas/document-manifest-1.0.0.json",
+  "$id": "https://picare.local/schemas/document-manifest-1.1.0.json",
   "title": "PiCare Document Manifest",
   "description": "Static, reviewed document chunks handed from the document pipeline to RAG.",
   "type": "object",
@@ -9,11 +9,12 @@
     "schema_version",
     "generated_at",
     "source_registry",
+    "processing",
     "chunks"
   ],
   "properties": {
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.1.0"
     },
     "generated_at": {
       "type": "string",
@@ -21,7 +22,10 @@
     },
     "source_registry": {
       "type": "string",
-      "const": "document_pipeline/data/source_registry.csv"
+      "pattern": "^document_pipeline/data/source_registry(?:_v[0-9]+)?\\.csv$"
+    },
+    "processing": {
+      "$ref": "#/$defs/processing"
     },
     "chunks": {
       "type": "array",
@@ -31,6 +35,60 @@
     }
   },
   "$defs": {
+    "processing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pipeline_version",
+        "parser_version",
+        "tokenizer_name",
+        "tokenizer_revision",
+        "target_tokens",
+        "max_tokens",
+        "overlap_tokens",
+        "source_registry_checksum",
+        "product_registry_checksum",
+        "config_fingerprint"
+      ],
+      "properties": {
+        "pipeline_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "parser_version": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tokenizer_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tokenizer_revision": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "target_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "overlap_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_registry_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "product_registry_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "config_fingerprint": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "nonEmptyString": {
       "type": "string",
       "minLength": 1
@@ -91,8 +149,10 @@
         "os_versions",
         "document_checksum",
         "chunk_checksum",
+        "embedding_checksum",
         "parser_version",
         "official_verified",
+        "quality_status",
         "image_url",
         "video_url"
       ],
@@ -193,11 +253,18 @@
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
+        "embedding_checksum": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "parser_version": {
           "$ref": "#/$defs/nonEmptyString"
         },
         "official_verified": {
           "const": true
+        },
+        "quality_status": {
+          "const": "approved"
         },
         "image_url": {
           "$ref": "#/$defs/nullableUri"
