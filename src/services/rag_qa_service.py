@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Literal, Mapping, Protocol, Sequence
 
 from src.contracts import ChatCitation, ChatResponse, MediaItem
@@ -143,11 +144,22 @@ class RagQaService:
                 if candidate["url"] in seen_urls:
                     continue
                 seen_urls.add(candidate["url"])
+                media_type = candidate["media_type"]
+                url = candidate["url"]
                 media.append(
                     MediaItem(
-                        media_type=candidate["media_type"],
+                        # Legacy lookup tables predate ChatResponse 1.2.0. Keep
+                        # them usable only when no validated MediaResolver exists,
+                        # while adapting their official URL metadata to the current
+                        # response contract.
+                        media_id="media-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:20],
+                        media_type=media_type,
                         title=candidate["title"],
-                        url=candidate["url"],
+                        url=url,
+                        alt_text=candidate.get("alt_text") or candidate["title"],
+                        display_mode="inline" if media_type == "image" else "external_embed",
+                        license=candidate.get("license") or "See official source manifest",
+                        attribution=candidate.get("attribution") or "Raspberry Pi Ltd",
                         source_citation_id=citation_id,
                     )
                 )
@@ -220,12 +232,12 @@ class RagQaService:
         try:
             messages = build_grounded_answer_messages(question, evidence)
             validated_generation = generate_validated_grounded_answer(
-                        generator=self.answer_generator,
-                        messages=messages,
-                        evidence=evidence,
-                        require_korean=True,
-                    )
-            generation = self.answer_generator.generate(messages, evidence)
+                generator=self.answer_generator,
+                messages=messages,
+                evidence=evidence,
+                require_korean=True,
+            )
+            generation = validated_generation.generation
             if is_evidence_abstention(generation.text):
                 return self._status_response(
                     request_id=request_id,
@@ -234,7 +246,15 @@ class RagQaService:
                     warnings=[
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                        *(
+                            [
+                                "trace.generator_invoked=true",
+                                f"trace.model_id={generation.model_id}",
+                                "trace.citation_validation=skipped_abstention",
+                            ]
+                            if trace
+                            else []
+                        ),
                     ],
                 )
             used_citation_ids = validated_generation.used_citation_ids
@@ -283,7 +303,11 @@ class RagQaService:
             for result in results
             if f"C{result.rank}" in used_citation_ids
         ]
-        media = self.media_resolver.resolve(citations) if self.media_resolver is not None else []
+        media = (
+            self.media_resolver.resolve(citations)
+            if self.media_resolver is not None
+            else self._media(results, used_citation_ids)
+        )
         return ChatResponse(
             schema_version="1.2.0",
             request_id=request_id,

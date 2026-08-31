@@ -265,7 +265,11 @@ def render_recommendation_page() -> None:
                 product_card(product)
 
     section_title("추천 근거")
-    render_sources(response.citations)
+    render_sources(
+        response.citations,
+        preferred_use_case=response.conditions.use_case if response.conditions else None,
+    )
+    render_citation_media(response.media)
     st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
@@ -316,7 +320,6 @@ def render_answer(response: ChatResponse) -> None:
         unsafe_allow_html=True,
     )
     st.markdown(response.answer)
-    render_media(response.media)
     for question in response.clarification_questions:
         st.info(question)
     if response.warnings:

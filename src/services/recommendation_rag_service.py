@@ -394,22 +394,23 @@ class RecommendationRagService:
                         *agent_result.warnings,
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                        *(
+                            [
+                                "trace.generator_invoked=true",
+                                f"trace.model_id={generation.model_id}",
+                                "trace.citation_validation=skipped_abstention",
+                            ]
+                            if trace
+                            else []
+                        ),
                     ],
                 )
             used_citation_ids = validated_generation.used_citation_ids
-            # 로컬 템플릿은 원문을 그대로 인용하므로 비교 문서에 비선정 제품이
-            # 언급될 수 있다. 이 경우 최종 본문은 아래에서 서버 선정 후보로 만든다.
-            # 실제 생성 모델에는 기존의 비선정 제품 추가 금지 검사를 유지한다.
-            if not isinstance(self.answer_generator, EvidenceTemplateGenerator):
-                self._reject_unselected_catalog_products(generation.text, supported_agent_result)
-            
             self._reject_unselected_catalog_products(
-                            generation.text,
-                            supported_agent_result,
-                            provider=generation.provider,
-                        )
-            
+                generation.text,
+                supported_agent_result,
+                provider=generation.provider,
+            )
             self._require_selected_candidate_in_model_answer(
                 generation.text,
                 supported_agent_result,

@@ -97,7 +97,6 @@ def generate_validated_grounded_answer(
                 attempts=first.attempts + repaired.attempts,
                 repair_attempted=True,
             )
-            return ValidatedGeneration(repaired, set(), attempts=2, repair_attempted=True)
         try:
             used = validate_grounded_answer(
                 repaired.text,
