@@ -229,8 +229,10 @@ def search_response() -> SearchResponse:
                     "os_versions": [],
                     "document_checksum": "sha256:doc",
                     "chunk_checksum": "sha256:chunk",
+                    "embedding_checksum": "sha256:embedding",
                     "parser_version": "1.0.0",
                     "official_verified": True,
+                    "quality_status": "approved",
                     "image_url": None,
                     "video_url": None,
                 }

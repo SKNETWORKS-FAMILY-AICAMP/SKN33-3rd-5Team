@@ -50,6 +50,9 @@ class DocumentChunk:
     os_versions: tuple[str, ...] = ()
     source_type: str = "documentation"
     official_verified: bool = False
+    quality_status: str = "unreviewed"
+    source_anchor: str | None = None
+    embedding_checksum: str | None = None
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> "DocumentChunk":
@@ -79,6 +82,7 @@ class RagResult:
     license: str
     retrieved_at: str
     document_version: str | None
+    source_anchor: str | None = None
 
     @classmethod
     def from_chunk(cls, chunk: DocumentChunk, rank: int) -> "RagResult":
@@ -94,6 +98,7 @@ class RagResult:
             license=chunk.license,
             retrieved_at=chunk.retrieved_at,
             document_version=chunk.document_version,
+            source_anchor=chunk.source_anchor,
         )
 
 

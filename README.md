@@ -317,8 +317,10 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
       "os_versions": [],
       "document_checksum": "sha256:document...",
       "chunk_checksum": "sha256:chunk...",
-      "parser_version": "1.0.0",
+      "embedding_checksum": "sha256:embedding...",
+      "parser_version": "asciidoc-semantic-3.0.0",
       "official_verified": true,
+      "quality_status": "approved",
       "image_url": null,
       "video_url": null
     }
@@ -326,7 +328,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 }
 ```
 
-`official_verified: true`인 청크만 최종 근거로 사용할 수 있습니다. `document_checksum`은 수집 원문, `chunk_checksum`은 정제된 청크의 변경 여부를 추적합니다. 전체 필드와 타입은 [`search-response.schema.json`](docs/schemas/search-response.schema.json)을 기준으로 합니다.
+`official_verified: true`이면서 `quality_status: approved`인 청크만 최종 근거로 사용할 수 있습니다. `document_checksum`은 수집 원문, `chunk_checksum`은 정제된 인용문, `embedding_checksum`은 제목·섹션을 포함한 실제 E5 입력의 변경 여부를 추적합니다. 전체 필드와 타입은 [`search-response.schema.json`](docs/schemas/search-response.schema.json)을 기준으로 합니다.
 
 ### 3. 챗봇 최종 응답 형식
 

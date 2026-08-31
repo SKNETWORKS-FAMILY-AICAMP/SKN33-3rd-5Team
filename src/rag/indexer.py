@@ -6,8 +6,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+
+from src.contracts.retrieval_text import build_e5_passage
 
 from .adapters import manifest_to_document_chunks
 from .chroma_metadata import chunk_to_chroma_metadata
@@ -35,14 +38,24 @@ def build_chroma_index(
     payload = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
     chunks = manifest_to_document_chunks(payload)
     # 미검수 문서는 검색 근거와 Chroma DB 모두에서 제외한다.
-    approved = [chunk for chunk in chunks if chunk.official_verified]
+    approved = [
+        chunk
+        for chunk in chunks
+        if chunk.official_verified and chunk.quality_status == "approved"
+    ]
     if not approved:
         raise ValueError("No official_verified chunks found. Do not index unreviewed documents.")
     # normalize_embeddings=True: 코사인 유사도 검색에 맞춘 단위 벡터를 저장한다.
     model = SentenceTransformer(embedding_model_name)
-    encoded_vectors = model.encode(
-        [f"passage: {chunk.content}" for chunk in approved], normalize_embeddings=True
-    )
+    passages = [
+        build_e5_passage(title=chunk.title, section=chunk.section, content=chunk.content)
+        for chunk in approved
+    ]
+    for chunk, passage in zip(approved, passages, strict=True):
+        checksum = f"sha256:{hashlib.sha256(passage.encode('utf-8')).hexdigest()}"
+        if chunk.embedding_checksum and chunk.embedding_checksum != checksum:
+            raise ValueError(f"Embedding input checksum mismatch: {chunk.chunk_id}")
+    encoded_vectors = model.encode(passages, normalize_embeddings=True)
     # sentence-transformers 기본값은 NumPy 배열이지만, 테스트·대체 구현은 list를 반환할 수도 있다.
     vectors = encoded_vectors.tolist() if hasattr(encoded_vectors, "tolist") else list(encoded_vectors)
     # PersistentClient이므로 생성된 벡터 DB는 chroma_path에 남아 재사용할 수 있다.
@@ -51,11 +64,16 @@ def build_chroma_index(
         # reset은 명시적으로 요청했을 때만 수행한다. 평소 upsert는 같은 ID만 갱신한다.
         existing = client.list_collections()
 
-        # existing_names = {item.name if hasattr(item, "name") else str(item) for item in existing}
-        existing_names = {str(item) for item in existing}
+        existing_names = {item.name if hasattr(item, "name") else str(item) for item in existing}
         if collection_name in existing_names:
             client.delete_collection(collection_name)
     collection = client.get_or_create_collection(collection_name)
+    existing_payload = collection.get()
+    existing_ids = set(existing_payload.get("ids", []))
+    approved_ids = {chunk.chunk_id for chunk in approved}
+    stale_ids = sorted(existing_ids - approved_ids)
+    if stale_ids:
+        collection.delete(ids=stale_ids)
     collection.upsert(
         ids=[chunk.chunk_id for chunk in approved],
         documents=[chunk.content for chunk in approved],
