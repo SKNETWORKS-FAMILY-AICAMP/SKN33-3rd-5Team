@@ -1,5 +1,13 @@
 # 받게 되는 파일: 공식 문서 RAG corpus
 
+> 아래는 초기 프로토타입의 최소 형식을 기록한 문서다. 현재 팀 전달 파일은
+> `document_pipeline/data/manifest_v3.json`이며, 반드시
+> [canonical manifest 계약](../../document_pipeline/contracts/manifest-contract.md)과
+> [기계 검증 스키마](../../document_pipeline/contracts/manifest.schema.json)를 따른다.
+> 신규 파일에는 `retrieved_at` 대신 `collected_at`을 사용한다. 현재 청킹 기본값은
+> E5 토크나이저 목표 360 / 최대 460 tokens이며, 아래의 250~700 단어 지침을 적용하지 않는다.
+> 실제 전달 목록·검증 명령은 [팀 데이터 인수인계](team-handoff.md)에 정리되어 있다.
+
 `data/corpora/<corpus_id>/manifest.json`은 문서·데이터 담당이 공식 원문을
 수집·정제·청킹·검수한 뒤 RAG 담당에게 전달하는 파일이다. RAG는 이 파일을
 직접 수집하거나 재청킹하지 않고, `official_verified=true`인 청크만 BM25와
@@ -8,7 +16,7 @@ Chroma에 색인한다.
 `data/`는 저장소 정책상 Git에서 제외한다. 따라서 이 문서는 전달 계약을
 고정하고, 실제 corpus는 팀 내부 저장소 또는 RunPod volume에서 공유한다.
 
-## 현재 프로토타입 manifest 계약
+## 이전 프로토타입 manifest 계약 — 신규 전달에 사용하지 않음
 
 현재 `src/rag/models.py`의 `DocumentChunk`가 읽는 형식이다. 각 청크는 하나의
 제목·소제목 안에서 의미가 완결되어야 하며, 다른 문서의 정보를 임의로 합치지

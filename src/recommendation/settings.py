@@ -26,7 +26,7 @@ class RecommendationSettings:
     catalog_path: Path
     condition_extractor: Literal["baseline", "lora"]
     condition_model_id: str
-    lora_adapter_path: Path | None
+    lora_adapter_path: Path | str | None
     condition_load_in_4bit: bool
 
     @classmethod
@@ -55,19 +55,38 @@ class RecommendationSettings:
                 "CONDITION_LOAD_IN_4BIT must be either 'true' or 'false'."
             )
 
-        adapter_path: Path | None = None
+        adapter_path: Path | str | None = None
         if extractor == "lora":
             adapter_raw = os.getenv("LORA_ADAPTER_PATH", "").strip()
             if not adapter_raw:
                 raise RecommendationSettingsError(
                     "CONDITION_EXTRACTOR=lora requires LORA_ADAPTER_PATH."
                 )
-            adapter_path = Path(adapter_raw).expanduser()
-            adapter_path = adapter_path if adapter_path.is_absolute() else (root / adapter_path).resolve()
-            if not adapter_path.exists():
+            local_path = Path(adapter_raw).expanduser()
+            resolved_path = local_path if local_path.is_absolute() else (root / local_path).resolve()
+            if resolved_path.is_dir():
+                adapter_path = resolved_path
+            elif (
+                local_path.is_absolute()
+                or adapter_raw.startswith((".", "~"))
+                or "\\" in adapter_raw
+                or adapter_raw.count("/") != 1
+                or resolved_path.exists()
+            ):
                 raise RecommendationSettingsError(
-                    f"LORA_ADAPTER_PATH does not exist: {adapter_path}"
+                    f"LORA_ADAPTER_PATH directory does not exist: {resolved_path}"
                 )
+            else:
+                # Hub 저장소 ID는 로컬 절대경로로 바꾸지 않고 PEFT에 그대로 넘긴다.
+                from huggingface_hub.utils import validate_repo_id
+
+                try:
+                    validate_repo_id(adapter_raw)
+                except ValueError as exc:
+                    raise RecommendationSettingsError(
+                        "LORA_ADAPTER_PATH must be a local directory or a valid 'owner/repo' Hub ID."
+                    ) from exc
+                adapter_path = adapter_raw
 
         return cls(
             project_root=root,

@@ -71,7 +71,6 @@ FEW_SHOT_EXAMPLES = (
             use_case="education_coding",
             task="desktop_programming",
             user_level="beginner",
-            performance_priority="medium",
             wireless_required=True,
             monitor_available=True,
         ),
@@ -82,7 +81,7 @@ FEW_SHOT_EXAMPLES = (
                 SurveyAnswer(
                     question_id="purpose",
                     question="사용 목적이 무엇인가요?",
-                    answer="온습도 센서를 달아 화면 없이 원격으로 확인하고 싶어요.",
+                    answer="스마트팜의 온습도 센서를 달아 화면 없이 원격으로 확인하고 싶어요.",
                 ),
                 SurveyAnswer(
                     question_id="features",
@@ -94,7 +93,6 @@ FEW_SHOT_EXAMPLES = (
         _target(
             use_case="smart_farm_monitoring",
             task="sensor_monitoring",
-            performance_priority="low",
             wireless_required=True,
             camera_required=False,
             gpio_required=True,

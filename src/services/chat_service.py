@@ -12,6 +12,7 @@ from src.lang import (
     PromptEvidence,
     build_grounded_answer_messages,
     evaluate_request,
+    is_evidence_abstention,
     validate_grounded_answer,
 )
 
@@ -405,6 +406,12 @@ class ChatService:
         try:
             messages = build_grounded_answer_messages(question, evidence)
             generated_answer = self.model.generate(messages, documents)
+            if is_evidence_abstention(generated_answer):
+                return _status_response(
+                    question, "insufficient_evidence",
+                    "검색된 공식 문서만으로 질문에 답할 수 없어 답변을 보류합니다.",
+                    reason_code="model_insufficient_evidence",
+                )
             used_citations = validate_grounded_answer(
                 generated_answer,
                 allowed_citation_ids=[item.citation_id for item in documents],
