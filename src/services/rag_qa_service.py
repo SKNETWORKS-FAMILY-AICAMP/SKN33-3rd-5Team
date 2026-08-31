@@ -11,6 +11,7 @@ from src.lang import (
     PromptEvidence,
     build_grounded_answer_messages,
     evaluate_request,
+    is_evidence_abstention,
     validate_grounded_answer,
 )
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
@@ -190,9 +191,21 @@ class RagQaService:
         try:
             messages = build_grounded_answer_messages(question, evidence)
             generation = self.answer_generator.generate(messages, evidence)
+            if is_evidence_abstention(generation.text):
+                return self._status_response(
+                    request_id=request_id,
+                    status="insufficient_evidence",
+                    answer="검색된 공식 문서만으로 질문에 답할 수 없어 답변을 보류합니다.",
+                    warnings=[
+                        "abstention_reason=model_insufficient_evidence",
+                        f"answer_generator={generation.provider}",
+                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                    ],
+                )
             used_citation_ids = validate_grounded_answer(
                 generation.text,
                 allowed_citation_ids=[item.citation_id for item in evidence],
+                require_korean=True,
             )
         except AnswerGenerationError as exc:
             return self._status_response(

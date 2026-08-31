@@ -29,6 +29,19 @@ class MustNotRunModel:
 
 
 class ChatServiceEdgeCaseTests(unittest.TestCase):
+    def test_shared_prompt_abstention_is_supported_by_mock_chat_chain(self):
+        from src.lang import INSUFFICIENT_EVIDENCE_MARKER
+
+        class AbstainingModel:
+            def generate(self, messages, evidence):
+                return INSUFFICIENT_EVIDENCE_MARKER
+
+        response = ChatService(retriever=MockRetriever(), model=AbstainingModel()).answer(
+            "Raspberry Pi 5에서 SSH를 설정하려면?"
+        )
+        self.assertEqual(response["status"], "insufficient_evidence")
+        self.assertEqual(response["sources"], [])
+
     def test_retrieval_error_returns_safe_response_without_calling_model(self) -> None:
         service = ChatService(
             retriever=FailingRetriever(),

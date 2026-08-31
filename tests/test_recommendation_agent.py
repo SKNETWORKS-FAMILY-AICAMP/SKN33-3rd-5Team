@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from datetime import datetime
 
 from src.condition_extraction.schema import SurveyAnswer, SurveyResponse
@@ -531,6 +532,22 @@ class CatalogToRagTests(unittest.TestCase):
         self.assertEqual(response.status, "error")
         self.assertEqual(response.products, [])
 
+    def test_template_comparison_evidence_does_not_add_unselected_products(self):
+        result = replace(
+            self._result(),
+            content="Compact Board provides wireless GPIO; Fast Board is a larger board in the same family.",
+        )
+        retriever = self.StaticRetriever(RetrievalDecision(status="retrieved", results=(result,)))
+        response = self._service(retriever).answer(
+            request_id="template-comparison",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+        )
+        self.assertEqual(response.status, "answered")
+        self.assertEqual([product.product_id for product in response.products], ["compact-board"])
+        self.assertIn("Compact Board", response.answer)
+        self.assertNotIn("Fast Board", response.answer)
+        self.assertIn("[C1]", response.answer)
+
     def test_actual_generator_must_name_a_selected_candidate(self):
         class MissingCandidateGenerator:
             def generate(self, messages, evidence):
@@ -551,6 +568,40 @@ class CatalogToRagTests(unittest.TestCase):
 
         self.assertEqual(response.status, "error")
         self.assertEqual(response.products, [])
+
+    def test_model_abstention_removes_product_cards_even_when_candidates_exist(self):
+        from src.lang import INSUFFICIENT_EVIDENCE_MARKER
+
+        class AbstainingGenerator:
+            def generate(self, messages, evidence):
+                return GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
+
+        retriever = self.StaticRetriever(RetrievalDecision(status="retrieved", results=(self._result(),)))
+        response = self._service(retriever, generator=AbstainingGenerator()).answer(
+            request_id="recommendation-abstention", question="작은 센서용 보드를 추천해줘",
+        )
+        self.assertEqual(response.status, "insufficient_evidence")
+        self.assertEqual(response.products, [])
+        self.assertEqual(response.citations, [])
+
+    def test_evaluation_capture_preserves_template_recommendation_behavior(self):
+        from src.evaluation.answer_capture import recording_generator
+        from src.evaluation.answer_eval import AnswerEvalCase
+
+        item = replace(self._result(), content="Compact Board provides GPIO. Fast Board is larger.")
+        retriever = self.StaticRetriever(RetrievalDecision(status="retrieved", results=(item,)))
+        capture = recording_generator(EvidenceTemplateGenerator())
+        response = self._service(retriever, generator=capture).answer(
+            request_id="captured-recommendation", question="작은 센서용 보드를 추천해줘",
+        )
+        self.assertEqual(response.status, "answered")
+        self.assertNotIn("Fast Board", response.answer)
+        case = AnswerEvalCase(id="captured-recommendation", question="작은 센서용 보드를 추천해줘",
+                              route="recommendation", split="smoke", expected_status="answered")
+        record = capture.record(case=case, response=response, run_id="fixture")
+        self.assertIn("Fast Board", record.raw_answer)
+        self.assertNotIn("Fast Board", record.response.answer)
+        self.assertEqual(record.evidence[0].content, item.content)
 
 
 if __name__ == "__main__":

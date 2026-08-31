@@ -13,6 +13,7 @@ from src.lang import (
     PromptEvidence,
     build_recommendation_answer_messages,
     evaluate_request,
+    is_evidence_abstention,
     validate_grounded_answer,
 )
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
@@ -302,11 +303,29 @@ class RecommendationRagService:
                 evidence=evidence,
             )
             generation = self.answer_generator.generate(messages, evidence)
+            if is_evidence_abstention(generation.text):
+                return self._response(
+                    request_id=request_id,
+                    status="insufficient_evidence",
+                    answer="검색된 공식 문서만으로 제품 추천을 뒷받침할 수 없어 답변을 보류합니다.",
+                    conditions=decision.conditions,
+                    warnings=[
+                        *agent_result.warnings,
+                        "abstention_reason=model_insufficient_evidence",
+                        f"answer_generator={generation.provider}",
+                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                    ],
+                )
             used_citation_ids = validate_grounded_answer(
                 generation.text,
                 allowed_citation_ids=[item.citation_id for item in evidence],
+                require_korean=True,
             )
-            self._reject_unselected_catalog_products(generation.text, supported_agent_result)
+            # 로컬 템플릿은 원문을 그대로 인용하므로 비교 문서에 비선정 제품이
+            # 언급될 수 있다. 이 경우 최종 본문은 아래에서 서버 선정 후보로 만든다.
+            # 실제 생성 모델에는 기존의 비선정 제품 추가 금지 검사를 유지한다.
+            if not isinstance(self.answer_generator, EvidenceTemplateGenerator):
+                self._reject_unselected_catalog_products(generation.text, supported_agent_result)
             self._require_selected_candidate_in_model_answer(
                 generation.text,
                 supported_agent_result,
@@ -341,7 +360,7 @@ class RecommendationRagService:
             request_id=request_id,
             agent_result=supported_agent_result,
             search_response=search_response,
-            answer=generation.text,
+            answer=None if isinstance(self.answer_generator, EvidenceTemplateGenerator) else generation.text,
             used_citation_ids=used_citation_ids,
         )
         return self._with_warnings(
