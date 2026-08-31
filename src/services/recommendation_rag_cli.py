@@ -17,6 +17,7 @@ from src.rag_to_llm import (
     AnswerGeneratorSettingsError,
     build_answer_generator,
 )
+from src.media import MediaManifestError, MediaResolver
 from src.recommendation import (
     CatalogManifestValidationError,
     ProductRecommender,
@@ -99,6 +100,10 @@ def _print_human_response(response) -> None:
         for citation in response.citations:
             print(f"[{citation.citation_id}] {citation.title} / {citation.section}")
             print(citation.source_url)
+    if response.media:
+        print("\n관련 미디어:")
+        for item in response.media:
+            print(f"- [{item.source_citation_id}] {item.title}: {item.url}")
     if response.warnings:
         print("\n실행 정보:")
         for warning in response.warnings:
@@ -121,12 +126,21 @@ def main() -> int:
             manifest_path=rag_settings.manifest_path,
         )
         answer_settings = AnswerGeneratorSettings.from_env(rag_settings.project_root)
+        media_resolver = (
+            MediaResolver.from_file(
+                rag_settings.media_manifest_path,
+                document_manifest_path=rag_settings.manifest_path,
+            )
+            if rag_settings.media_manifest_path is not None
+            else None
+        )
     except (
         ValueError,
         RagSettingsError,
         RecommendationSettingsError,
         CatalogManifestValidationError,
         AnswerGeneratorSettingsError,
+        MediaManifestError,
     ) as exc:
         print(f"추천 실행 설정 오류: {exc}", file=sys.stderr)
         return 2
@@ -152,6 +166,7 @@ def main() -> int:
                 retriever=retriever,
                 metadata_by_chunk_id=manifest_to_rag_result_metadata(manifest, indexed_at=indexed_at),
                 answer_generator=build_answer_generator(answer_settings),
+                media_resolver=media_resolver,
                 top_k=rag_settings.top_k,
             )
             response = service.answer(request_id=request_id, question=question, trace=args.trace)

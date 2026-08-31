@@ -14,19 +14,33 @@ from typing import Callable, Protocol, Sequence
 from src.contracts.retrieval_text import build_e5_passage
 
 try:  # Supports both `python -m` and direct script execution.
-    from .fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources, registry_reference
+    from .fetch import (
+        PIPELINE_ROOT,
+        RAW_ROOT as FETCH_RAW_ROOT,
+        REGISTRY_PATH,
+        SourceRecord,
+        included_sources,
+        registry_reference,
+    )
     from .parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 except ImportError:  # pragma: no cover - direct invocation path
-    from fetch import PIPELINE_ROOT, REGISTRY_PATH, SourceRecord, included_sources, registry_reference
+    from fetch import (
+        PIPELINE_ROOT,
+        RAW_ROOT as FETCH_RAW_ROOT,
+        REGISTRY_PATH,
+        SourceRecord,
+        included_sources,
+        registry_reference,
+    )
     from parse_asciidoc import ParsedBlock, ParsedSection, parse_asciidoc, render_block, section_to_dict
 
 
-RAW_ROOT = PIPELINE_ROOT / "data" / "raw"
+RAW_ROOT = FETCH_RAW_ROOT
 PROCESSED_ROOT = PIPELINE_ROOT / "data" / "processed"
 MANIFEST_PATH = PIPELINE_ROOT / "data" / "manifest.json"
 PRODUCT_MEDIA_REGISTRY_PATH = PIPELINE_ROOT / "data" / "product_media_registry.json"
-PARSER_VERSION = "asciidoc-semantic-3.0.0"
-PIPELINE_VERSION = "document-pipeline-3.0.0"
+PARSER_VERSION = "asciidoc-semantic-3.1.0"
+PIPELINE_VERSION = "document-pipeline-3.1.0"
 DEFAULT_TOKENIZER_NAME = "intfloat/multilingual-e5-base"
 DEFAULT_TARGET_TOKENS = 360
 DEFAULT_MAX_TOKENS = 460
@@ -38,6 +52,7 @@ BLOCK_TITLE_RESIDUE = re.compile(r"(?m)^\.[A-Za-z]")
 TAB_DELIMITER_RESIDUE = re.compile(r"(?m)^={6}$")
 STANDALONE_CONTINUATION = re.compile(r"(?m)^\+$")
 IMAGE_MACRO_RESIDUE = re.compile(r"(?m)^image::")
+VIDEO_MACRO_RESIDUE = re.compile(r"(?m)^video::")
 
 
 class Tokenizer(Protocol):
@@ -55,6 +70,29 @@ class ChunkUnit:
 class ChunkDraft:
     content: str
     quality_issues: tuple[str, ...] = ()
+
+
+def retrieval_block(block: ParsedBlock) -> ParsedBlock | None:
+    """Remove linked media while preserving searchable text around it."""
+
+    if block.kind in {"image", "video"}:
+        return None
+    if block.kind != "tab":
+        return block
+    children = tuple(
+        filtered
+        for child in block.blocks
+        if (filtered := retrieval_block(child)) is not None
+    )
+    if not children and not block.text.strip():
+        return None
+    return ParsedBlock(
+        kind="tab",
+        text=block.text,
+        label=block.label,
+        blocks=children,
+        issues=block.issues,
+    )
 
 
 def sha256(value: str | bytes) -> str:
@@ -113,6 +151,7 @@ def _text_quality_issues(text: str) -> tuple[str, ...]:
         (TAB_DELIMITER_RESIDUE, "unparsed_tab_delimiter"),
         (STANDALONE_CONTINUATION, "unparsed_continuation_marker"),
         (IMAGE_MACRO_RESIDUE, "unparsed_image_macro"),
+        (VIDEO_MACRO_RESIDUE, "unparsed_video_macro"),
     )
     return tuple(reason for pattern, reason in checks if pattern.search(text))
 
@@ -131,7 +170,7 @@ def block_quality_issues(block: ParsedBlock) -> tuple[str, ...]:
         texts.extend(cell for row in block.rows for cell in row)
         if block.caption:
             texts.append(block.caption)
-    elif block.kind == "image":
+    elif block.kind in {"image", "video"}:
         texts.extend(value for value in (block.alt_text, block.caption) if value)
     elif block.kind == "tab":
         if block.label:
@@ -299,7 +338,7 @@ def _overlap_unit(units: list[ChunkUnit], tokenizer: Tokenizer, overlap_tokens: 
     if not units:
         return None
     candidate = units[-1]
-    if candidate.block.kind in {"code", "table", "image"}:
+    if candidate.block.kind in {"code", "table", "image", "video"}:
         return None
     return candidate if token_count(tokenizer, candidate.text) <= overlap_tokens else None
 
@@ -325,7 +364,18 @@ def chunk_section_drafts(
         passage = build_e5_passage(title=title, section=section_name, content=content)
         return token_count(tokenizer, passage)
 
-    units = [unit for block in section.blocks for unit in split_block(block, count_content, max_tokens)]
+    # Media is linked by section in a separate media manifest. It is never an
+    # embedding unit and therefore cannot create or alter a citation chunk.
+    retrieval_blocks = [
+        filtered
+        for block in section.blocks
+        if (filtered := retrieval_block(block)) is not None
+    ]
+    units = [
+        unit
+        for block in retrieval_blocks
+        for unit in split_block(block, count_content, max_tokens)
+    ]
     chunks: list[ChunkDraft] = []
     current: list[ChunkUnit] = []
 
@@ -719,7 +769,6 @@ def build_manifest(
         overlap_tokens=overlap_tokens,
     )
     generated_at = datetime.now(UTC).isoformat()
-
     manifest: dict[str, object] = {
         "schema_version": "1.1.0",
         "generated_at": generated_at,
@@ -754,16 +803,24 @@ def main() -> None:
     parser.add_argument("--target-tokens", type=int, default=DEFAULT_TARGET_TOKENS)
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--overlap-tokens", type=int, default=DEFAULT_OVERLAP_TOKENS)
+    parser.add_argument("--source-registry", type=Path, default=REGISTRY_PATH)
+    parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
+    parser.add_argument("--processed-root", type=Path, default=PROCESSED_ROOT)
+    parser.add_argument("--manifest-path", type=Path, default=MANIFEST_PATH)
     args = parser.parse_args()
     manifest = build_manifest(
+        raw_root=args.raw_root,
+        processed_root=args.processed_root,
+        output_path=args.manifest_path,
         tokenizer_name=args.tokenizer_name,
         tokenizer_revision=args.tokenizer_revision,
         target_tokens=args.target_tokens,
         max_tokens=args.max_tokens,
         overlap_tokens=args.overlap_tokens,
+        registry_path=args.source_registry,
     )
     print(f"built {len(manifest['chunks'])} chunks")
-    print(f"manifest: {MANIFEST_PATH}")
+    print(f"manifest: {args.manifest_path}")
 
 
 if __name__ == "__main__":

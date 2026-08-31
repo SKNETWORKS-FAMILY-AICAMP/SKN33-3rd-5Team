@@ -5,13 +5,15 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
 
 from src.condition_extraction.schema import SurveyAnswer, SurveyResponse
 from src.condition_extraction.ui_input import RecommendationFormInput
-from src.contracts import ConditionPayload, SearchResponse
+from src.contracts import ConditionPayload, MediaItem, SearchResponse
 from src.recommendation.engine import ProductRecommender
 from src.recommendation.catalog_validation import (
     CatalogManifestValidationError,
+    catalog_coverage_summary,
     validate_catalog_manifest_alignment,
 )
 from src.recommendation.schema import ProductCatalog
@@ -146,6 +148,21 @@ def catalog() -> ProductCatalog:
     )
 
 
+def test_checked_in_v12_catalog_has_reviewed_field_evidence() -> None:
+    checked = ProductCatalog.from_received_file(
+        Path(__file__).resolve().parents[1] / "data" / "products" / "catalog.json"
+    )
+
+    assert checked.schema_version == "1.2.0"
+    assert checked.recommendation_policy is not None
+    assert checked.recommendation_policy.review_status == "approved"
+    assert len(checked.products) == 5
+    assert all(not product.evidence_by_field.recommendation_profile for product in checked.products)
+    zero = next(product for product in checked.products if product.product_id == "raspberry-pi-zero-2-w")
+    assert any("전원" in accessory for accessory in zero.required_accessories)
+    assert zero.conditional_accessories
+
+
 def conditions(**overrides) -> ConditionPayload:
     """추천 테스트에 사용할 기본 공통 조건에 필요한 값만 덮어쓴다."""
 
@@ -273,6 +290,14 @@ class RecommendationAgentTests(unittest.TestCase):
             [candidate.product_id for candidate in decision.candidates], ["fast-board"]
         )
 
+    def test_product_recommendation_excludes_unreviewed_use_case(self):
+        """사람이 승인하지 않은 용도의 제품은 점수만 낮춰 노출하지 않는다."""
+
+        decision = ProductRecommender(catalog()).recommend(conditions())
+        self.assertEqual(
+            [candidate.product_id for candidate in decision.candidates], ["compact-board"]
+        )
+
     def test_explicit_product_alias_is_supported(self):
         """사용자가 제품 별칭을 입력해도 올바른 제품을 찾는지 확인한다."""
 
@@ -376,6 +401,7 @@ class RecommendationAgentTests(unittest.TestCase):
         self.assertIn("[C1]", response.answer)
         self.assertIn("GPIO·IoT", response.answer)
         self.assertEqual(response.citations[0].document_id, "doc-compact")
+        self.assertEqual(response.media, [])
 
 
 class CatalogToRagTests(unittest.TestCase):
@@ -429,7 +455,9 @@ class CatalogToRagTests(unittest.TestCase):
             self.filters = filters
             return self.decision
 
-    def _service(self, retriever, *, generator=None, extractor=None) -> RecommendationRagService:
+    def _service(
+        self, retriever, *, generator=None, extractor=None, media_resolver=None
+    ) -> RecommendationRagService:
         return RecommendationRagService(
             recommendation_agent=RecommendationAgent(
                 extractor=extractor or StaticExtractor(conditions()),
@@ -438,6 +466,7 @@ class CatalogToRagTests(unittest.TestCase):
             retriever=retriever,
             metadata_by_chunk_id={"compact-001": self._metadata()},
             answer_generator=generator or EvidenceTemplateGenerator(),
+            media_resolver=media_resolver,
         )
 
     def test_catalog_manifest_alignment_requires_matching_official_sources(self):
@@ -451,11 +480,19 @@ class CatalogToRagTests(unittest.TestCase):
                     "collected_at": "2026-08-30",
                     "license": source.license,
                     "official_verified": True,
+                    "quality_status": "approved",
+                    "embedding_checksum": "sha256:embedding",
+                    "product_models": [
+                        "Compact Board" if source.document_id == "doc-compact" else "Fast Board"
+                    ],
                 }
                 for source in checked_catalog.sources
             ]
         }
         validate_catalog_manifest_alignment(checked_catalog, manifest)
+        coverage = catalog_coverage_summary(checked_catalog, manifest)
+        self.assertEqual(coverage["compact-board"]["evidence_documents"], 1)
+        self.assertEqual(coverage["fast-board"]["evidence_chunks"], 1)
 
         manifest["chunks"][0]["title"] = "Wrong title"
         with self.assertRaises(CatalogManifestValidationError):
@@ -474,9 +511,46 @@ class CatalogToRagTests(unittest.TestCase):
         self.assertEqual(response.status, "answered")
         self.assertEqual([product.product_id for product in response.products], ["compact-board"])
         self.assertIn("[C1]", response.answer)
-        self.assertEqual(retriever.filters.document_ids, ("doc-compact", "doc-fast"))
+        self.assertEqual(retriever.filters.document_ids, ("doc-compact",))
+        self.assertEqual(retriever.filters.product_models, ("Compact Board",))
+        self.assertTrue(retriever.filters.strict_product_match)
         self.assertIn("Compact Board", retriever.query)
         self.assertIn("trace.citation_validation=passed", response.warnings)
+
+    def test_recommendation_media_uses_only_answer_citations(self):
+        class SpyResolver:
+            def __init__(self) -> None:
+                self.citation_ids = []
+
+            def resolve(self, citations):
+                self.citation_ids = [citation.citation_id for citation in citations]
+                return [
+                    MediaItem(
+                        media_id="media-" + "b" * 20,
+                        media_type="image",
+                        title="Compact Board header",
+                        url="https://raw.githubusercontent.com/raspberrypi/documentation/"
+                        + "a" * 40
+                        + "/header.png",
+                        alt_text="GPIO header",
+                        display_mode="inline",
+                        license="CC-BY-SA-4.0",
+                        attribution="Raspberry Pi Ltd; CC-BY-SA-4.0",
+                        source_citation_id=citations[0].citation_id,
+                    )
+                ]
+
+        resolver = SpyResolver()
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever, media_resolver=resolver).answer(
+            request_id="catalog-rag-media",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+        )
+
+        self.assertEqual(resolver.citation_ids, ["C1"])
+        self.assertEqual(response.media[0].source_citation_id, "C1")
 
     def test_insufficient_catalog_evidence_skips_answer_generator(self):
         class SpyGenerator(EvidenceTemplateGenerator):

@@ -14,6 +14,7 @@ from src.lang import (
     is_evidence_abstention,
     validate_grounded_answer,
 )
+from src.media import MediaResolver
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
 
@@ -47,12 +48,14 @@ class RagQaService:
         *,
         retriever: QaRetriever,
         answer_generator: AnswerGenerator | None = None,
+        media_resolver: MediaResolver | None = None,
         top_k: int = 5,
     ) -> None:
         if not 1 <= top_k <= 20:
             raise ValueError("top_k must be between 1 and 20.")
         self.retriever = retriever
         self.answer_generator = answer_generator or EvidenceTemplateGenerator()
+        self.media_resolver = media_resolver
         self.top_k = top_k
 
     @staticmethod
@@ -76,7 +79,7 @@ class RagQaService:
         if status == "needs_clarification" and not questions:
             questions = [answer]
         return ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id=request_id,
             status=status,
             language="ko",
@@ -192,7 +195,12 @@ class RagQaService:
         evidence = self._prompt_evidence(results)
         try:
             messages = build_grounded_answer_messages(question, evidence)
-            generation = self.answer_generator.generate(messages, evidence)
+            validated_generation = generate_validated_grounded_answer(
+                generator=self.answer_generator,
+                messages=messages,
+                evidence=evidence,
+            )
+            generation = validated_generation.generation
             if is_evidence_abstention(generation.text):
                 return self._status_response(
                     request_id=request_id,
@@ -204,11 +212,7 @@ class RagQaService:
                         *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
                     ],
                 )
-            used_citation_ids = validate_grounded_answer(
-                generation.text,
-                allowed_citation_ids=[item.citation_id for item in evidence],
-                require_korean=True,
-            )
+            used_citation_ids = validated_generation.used_citation_ids
         except AnswerGenerationError as exc:
             return self._status_response(
                 request_id=request_id,
@@ -254,8 +258,9 @@ class RagQaService:
             for result in results
             if f"C{result.rank}" in used_citation_ids
         ]
+        media = self.media_resolver.resolve(citations) if self.media_resolver is not None else []
         return ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id=request_id,
             status="answered",
             language="ko",
@@ -263,7 +268,7 @@ class RagQaService:
             conditions=None,
             citations=citations,
             products=[],
-            media=[],
+            media=media,
             clarification_questions=[],
             warnings=[
                 f"retrieval_mode={retrieval_mode}",

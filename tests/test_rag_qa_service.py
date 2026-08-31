@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.contracts import MediaItem
 from src.lang import INSUFFICIENT_EVIDENCE_MARKER, PromptEvidence, validate_grounded_answer
 from src.rag import RagResult, RetrievalDecision
 from src.rag.retriever import DenseRetrievalError
@@ -55,6 +56,27 @@ class SpyGenerator(EvidenceTemplateGenerator):
         return super().generate(messages, evidence)
 
 
+class SpyMediaResolver:
+    def __init__(self) -> None:
+        self.chunk_ids: list[str] = []
+
+    def resolve(self, citations):
+        self.chunk_ids = [citation.chunk_id for citation in citations]
+        return [
+            MediaItem(
+                media_id="media-" + "a" * 20,
+                media_type="image",
+                title="SSH setup",
+                url="https://raw.githubusercontent.com/raspberrypi/documentation/" + "a" * 40 + "/setup.png",
+                alt_text="SSH setup screen",
+                display_mode="inline",
+                license="CC-BY-SA-4.0",
+                attribution="Raspberry Pi Ltd; CC-BY-SA-4.0",
+                source_citation_id=citations[0].citation_id,
+            )
+        ]
+
+
 def retrieved_decision() -> RetrievalDecision:
     """답변 가능한 단일 근거 검색 결과를 만든다."""
 
@@ -86,6 +108,22 @@ def test_retrieved_result_becomes_answered_chat_response():
     assert response.citations[0].citation_id == "C1"
     assert response.citations[0].document_id == "computers-remote-access-ssh"
     assert retriever.calls == 1
+
+
+def test_only_validated_final_citations_are_sent_to_media_resolver():
+    resolver = SpyMediaResolver()
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        media_resolver=resolver,
+    ).answer(
+        request_id="request-media",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+    )
+
+    assert resolver.chunk_ids == ["ssh-001"]
+    assert response.media[0].source_citation_id == "C1"
+    assert response.schema_version == "1.2.0"
 
 
 def test_template_generator_keeps_multiline_evidence_on_a_cited_line():

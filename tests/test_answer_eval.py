@@ -22,7 +22,7 @@ def record(*, case_id="ssh", expected="answered", actual="answered", answer=None
     text = answer or "SSH는 기본적으로 꺼져 있습니다. `sudo raspi-config`로 설정하세요. [C1]"
     content = "SSH is disabled by default. Use sudo raspi-config to configure SSH."
     response = ChatResponse.model_validate({
-        "schema_version": "1.1.0", "request_id": case_id, "status": actual,
+        "schema_version": "1.2.0", "request_id": case_id, "status": actual,
         "language": "ko", "answer": text if actual == "answered" else "답변을 보류합니다.",
         "conditions": None, "products": [], "media": [], "clarification_questions": [], "warnings": [],
         "citations": [{

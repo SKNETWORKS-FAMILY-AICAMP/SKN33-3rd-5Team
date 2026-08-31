@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://picare.local/schemas/media-manifest-1.0.0.json",
+  "title": "PiCare Citation-linked Media Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "document_manifest",
+    "document_manifest_checksum",
+    "source_registry",
+    "source_registry_checksum",
+    "source_commit",
+    "linker_version",
+    "statistics",
+    "items",
+    "links"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "document_manifest": {
+      "type": "string",
+      "pattern": "^document_pipeline/data/manifest(?:_v[0-9]+)?\\.json$"
+    },
+    "document_manifest_checksum": { "$ref": "#/$defs/checksum" },
+    "source_registry": {
+      "type": "string",
+      "pattern": "^document_pipeline/data/source_registry(?:_v[0-9]+)?\\.csv$"
+    },
+    "source_registry_checksum": { "$ref": "#/$defs/checksum" },
+    "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "linker_version": { "$ref": "#/$defs/nonEmptyString" },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["media_items", "media_occurrences", "linked_chunks", "image_items", "video_items"],
+      "properties": {
+        "media_items": { "type": "integer", "minimum": 0 },
+        "media_occurrences": { "type": "integer", "minimum": 0 },
+        "linked_chunks": { "type": "integer", "minimum": 0 },
+        "image_items": { "type": "integer", "minimum": 0 },
+        "video_items": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/mediaItem" }
+    },
+    "links": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/chunkLink" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "nullableString": {
+      "oneOf": [
+        { "$ref": "#/$defs/nonEmptyString" },
+        { "type": "null" }
+      ]
+    },
+    "checksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "section", "source_anchor"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/nonEmptyString" },
+        "section": { "$ref": "#/$defs/nonEmptyString" },
+        "source_anchor": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "mediaItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "media_id", "media_type", "title", "url", "alt_text", "caption",
+        "display_mode", "license", "attribution", "official_verified",
+        "source_commit", "occurrences"
+      ],
+      "properties": {
+        "media_id": { "type": "string", "pattern": "^media-[0-9a-f]{20}$" },
+        "media_type": { "enum": ["image", "video"] },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "alt_text": { "$ref": "#/$defs/nullableString" },
+        "caption": { "$ref": "#/$defs/nullableString" },
+        "display_mode": { "enum": ["inline", "external_embed"] },
+        "license": { "$ref": "#/$defs/nonEmptyString" },
+        "attribution": { "$ref": "#/$defs/nonEmptyString" },
+        "official_verified": { "const": true },
+        "source_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "occurrences": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/occurrence" }
+        }
+      }
+    },
+    "chunkLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chunk_id", "media_ids"],
+      "properties": {
+        "chunk_id": { "$ref": "#/$defs/nonEmptyString" },
+        "media_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^media-[0-9a-f]{20}$" }
+        }
+      }
+    }
+  }
+}

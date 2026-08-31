@@ -14,6 +14,7 @@ EXPLICIT_ANCHOR = re.compile(r"^\[\[(?P<anchor>[^\]]+)\]\]$")
 BLOCK_ATTRIBUTE = re.compile(r"^\[(?P<value>[^\]]+)\]$")
 LIST_ITEM = re.compile(r"^(?P<marker>\*+|\.+)\s+(?P<text>.+)$")
 IMAGE = re.compile(r"^image::(?P<target>[^\[]+)\[(?P<attributes>.*)\]$")
+VIDEO = re.compile(r"^video::(?P<target>[^\[]+)\[(?P<attributes>.*)\]$")
 ADMONITION_INLINE = re.compile(r"^(?P<kind>NOTE|TIP|IMPORTANT|WARNING|CAUTION):\s*(?P<text>.+)$")
 TABLE_DELIMITER = re.compile(r"^\|={3,}$")
 TABLE_CELL_DELIMITER = re.compile(r"(?:^|(?<=\s))(?P<style>[.\^<>]*a?)\|")
@@ -36,7 +37,7 @@ class ListItem:
 class ParsedBlock:
     """A semantic unit that must not be flattened before chunking."""
 
-    kind: Literal["paragraph", "list", "code", "admonition", "table", "image", "tab"]
+    kind: Literal["paragraph", "list", "code", "admonition", "table", "image", "video", "tab"]
     text: str = ""
     ordered: bool | None = None
     items: tuple[ListItem, ...] = ()
@@ -97,6 +98,18 @@ def _parse_image_attribute(attributes: str) -> str | None:
     return first or None
 
 
+def _parse_video_platform(attributes: str) -> str | None:
+    """Return the explicit AsciiDoc video backend without guessing a provider."""
+
+    first = attributes.split(",", 1)[0].strip().lower()
+    return first or None
+
+
+def _parse_named_attribute(attributes: str, name: str) -> str | None:
+    match = re.search(rf'(?:^|,)\s*{re.escape(name)}="(?P<value>[^"]+)"', attributes)
+    return _clean_inline(match.group("value")) if match else None
+
+
 def _read_delimited(lines: list[str], start: int, delimiter: str) -> tuple[list[str], int]:
     body: list[str] = []
     index = start + 1
@@ -137,6 +150,7 @@ def _read_table(
 ) -> tuple[ParsedBlock, int]:
     """Keep logical rows even when AsciiDoc writes one cell per physical line."""
     cells: list[str] = []
+    embedded_media: list[ParsedBlock] = []
     declared_width = _table_column_count(attribute)
     inferred_width: int | None = None
     last_cell_caption: str | None = None
@@ -157,6 +171,14 @@ def _read_table(
         if image and cells:
             alt = _parse_image_attribute(image.group("attributes"))
             cleaned_alt = _clean_inline(alt) if alt else None
+            embedded_media.append(
+                ParsedBlock(
+                    kind="image",
+                    target=image.group("target").strip(),
+                    alt_text=cleaned_alt,
+                    caption=last_cell_caption,
+                )
+            )
             if cleaned_alt and cleaned_alt != last_cell_caption and cleaned_alt not in cells[-1].splitlines():
                 _append_cell_text(cells, f"Image: {cleaned_alt}")
             index += 1
@@ -199,6 +221,7 @@ def _read_table(
             headers=headers,
             rows=tuple(rows[1:]),
             caption=caption,
+            blocks=tuple(embedded_media),
             issues=tuple(issues),
         ),
         index + 1,
@@ -369,6 +392,26 @@ def parse_asciidoc(text: str, *, fallback_title: str) -> list[ParsedSection]:
             pending_caption = None
             index += 1
             continue
+        video = VIDEO.match(raw)
+        if video:
+            flush_pending()
+            attributes = video.group("attributes")
+            current_blocks.append(
+                ParsedBlock(
+                    kind="video",
+                    target=video.group("target").strip(),
+                    alt_text=(
+                        _parse_named_attribute(attributes, "title")
+                        or _parse_named_attribute(attributes, "alt")
+                    ),
+                    caption=pending_caption,
+                    label=_parse_video_platform(attributes),
+                )
+            )
+            pending_attribute = None
+            pending_caption = None
+            index += 1
+            continue
         if stripped in CODE_DELIMITERS:
             flush_pending()
             body, index = _read_delimited(lines, index, stripped)
@@ -450,6 +493,9 @@ def render_block(block: ParsedBlock) -> str:
         if block.caption and block.caption != description:
             description = f"{block.caption}: {description}"
         return f"[IMAGE] {description}".strip()
+    if block.kind == "video":
+        description = block.alt_text or block.caption or block.target or ""
+        return f"[VIDEO] {description}".strip()
     if block.kind == "tab":
         body = "\n\n".join(render_block(child) for child in block.blocks)
         if not body and block.text:

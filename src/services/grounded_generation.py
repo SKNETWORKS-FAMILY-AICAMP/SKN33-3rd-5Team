@@ -9,6 +9,7 @@ from src.lang import (
     AnswerSafetyError,
     PromptEvidence,
     build_citation_repair_messages,
+    is_evidence_abstention,
     validate_grounded_answer,
 )
 from src.rag_to_llm import AnswerGenerator, GenerationResult
@@ -55,6 +56,7 @@ def generate_validated_grounded_answer(
     generator: AnswerGenerator,
     messages: Sequence[Mapping[str, str]],
     evidence: Sequence[PromptEvidence],
+    require_korean: bool = True,
 ) -> ValidatedGeneration:
     """Qwen 출력만 1회 형식 수정 후 다시 엄격하게 검증한다.
 
@@ -64,8 +66,14 @@ def generate_validated_grounded_answer(
 
     allowed_citation_ids = [item.citation_id for item in evidence]
     first = generator.generate(messages, evidence)
+    if is_evidence_abstention(first.text):
+        return ValidatedGeneration(first, set(), attempts=1, repair_attempted=False)
     try:
-        used = validate_grounded_answer(first.text, allowed_citation_ids=allowed_citation_ids)
+        used = validate_grounded_answer(
+            first.text,
+            allowed_citation_ids=allowed_citation_ids,
+            require_korean=require_korean,
+        )
     except AnswerSafetyError as first_error:
         if first.provider != "huggingface":
             raise
@@ -75,8 +83,14 @@ def generate_validated_grounded_answer(
             evidence=evidence,
         )
         repaired = generator.generate(repair_messages, evidence)
+        if is_evidence_abstention(repaired.text):
+            return ValidatedGeneration(repaired, set(), attempts=2, repair_attempted=True)
         try:
-            used = validate_grounded_answer(repaired.text, allowed_citation_ids=allowed_citation_ids)
+            used = validate_grounded_answer(
+                repaired.text,
+                allowed_citation_ids=allowed_citation_ids,
+                require_korean=require_korean,
+            )
         except AnswerSafetyError as final_error:
             raise CitationRepairError(first_error=first_error, final_error=final_error) from final_error
         return ValidatedGeneration(
