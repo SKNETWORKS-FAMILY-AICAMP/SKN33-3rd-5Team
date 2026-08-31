@@ -1,5 +1,9 @@
 # 파인튜닝 검증과 QA·제품추천 서비스 통합
 
+후속 검증: 새 A40에서 최신 `fix/dev`의 실제 GPU 재실행을 완료했다.
+[최종 A40 검증 결과](2026-08-31-final-a40-defca71.md)를 참고한다.
+아래 내용은 `feat/fine-tuning` 통합 당시의 기록을 보존한 것이다.
+
 검증일: 2026-08-31. 작업 브랜치: `feat/fine-tuning`.
 최신 `origin/main`의 `66044965a6d7ad8d6d5ba50f52bb4b95edb5b797`을
 fast-forward로 반영한 뒤 기존 미커밋 작업을 복원하고 실제 소스 경로에 통합했다.
