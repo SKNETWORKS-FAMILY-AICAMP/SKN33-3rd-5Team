@@ -98,20 +98,17 @@ def _print_human_response(response, presenter: CitationPresenter | None = None) 
             print(f"- {question}")
     if response.citations:
         print("\n출처:")
+        preferred_use_case = response.conditions.use_case if response.conditions else None
         for citation in response.citations:
-            if response.citations:
-                    print("\n출처:")
-                    for citation in response.citations:
-                        preferred_use_case = response.conditions.use_case if response.conditions else None
-                        if presenter is not None:
-                            lines = presenter.present(citation, preferred_use_case=preferred_use_case).cli_lines()
-                        else:
-                            lines = (
-                                f"[{citation.citation_id}] {citation.title}",
-                                f"섹션: {citation.section.rsplit(' > ', maxsplit=1)[-1]}",
-                                "태그: 없음",
-                            )
-                        print("\n".join(lines))
+            if presenter is not None:
+                lines = presenter.present(citation, preferred_use_case=preferred_use_case).cli_lines()
+            else:
+                lines = (
+                    f"[{citation.citation_id}] {citation.title}",
+                    f"섹션: {citation.section.rsplit(' > ', maxsplit=1)[-1]}",
+                    "태그: 없음",
+                )
+            print("\n".join(lines))
     if response.media:
         print("\n관련 미디어:")
         for item in response.media:
