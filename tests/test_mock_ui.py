@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from streamlit_app.mock_data import PRODUCTS, recommendation_conditions
+from src.contracts import ConditionPayload
 
 
 class MockUiDataTests(unittest.TestCase):
@@ -29,6 +30,8 @@ class MockUiDataTests(unittest.TestCase):
         self.assertTrue(conditions["camera_required"])
         self.assertFalse(conditions["gpio_required"])
         self.assertFalse(conditions["monitor_available"])
+        # 화면의 JSON을 실제 추천 계약에 전달해도 버전 충돌이 없어야 한다.
+        ConditionPayload.model_validate(conditions)
 
 if __name__ == "__main__":
     unittest.main()
