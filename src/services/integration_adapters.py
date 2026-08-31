@@ -110,8 +110,10 @@ def manifest_to_rag_result_metadata(
         "source_type",
         "document_checksum",
         "chunk_checksum",
+        "embedding_checksum",
         "parser_version",
         "official_verified",
+        "quality_status",
     }
     for chunk in chunks:
         if not isinstance(chunk, Mapping):
@@ -133,8 +135,10 @@ def manifest_to_rag_result_metadata(
                 indexed_at=indexed_at,
                 document_checksum=str(chunk["document_checksum"]),
                 chunk_checksum=str(chunk["chunk_checksum"]),
+                embedding_checksum=str(chunk["embedding_checksum"]),
                 parser_version=str(chunk["parser_version"]),
                 official_verified=chunk["official_verified"] is True,
+                quality_status=str(chunk["quality_status"]),
                 source_anchor=chunk.get("source_anchor") if isinstance(chunk.get("source_anchor"), str) else None,
                 published_at=_optional_date(chunk.get("published_at"), field_name="published_at", chunk_id=chunk_id),
                 updated_at=_optional_date(chunk.get("updated_at"), field_name="updated_at", chunk_id=chunk_id),

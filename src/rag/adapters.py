@@ -14,6 +14,7 @@ RAG_INPUT_FIELDS = {
     "content",
     "source_url",
     "source_anchor",
+    "collected_at",
     "document_version",
     "license",
     "product_models",
@@ -29,16 +30,14 @@ def manifest_chunk_to_document_chunk(value: dict[str, Any]) -> DocumentChunk:
     """Convert one full manifest chunk without weakening the manifest contract.
 
     ``retrieved_at`` exists only in the legacy RAG prototype. Its value is the
-    manifest's collection date; it is not the query execution time.
+    canonical manifest 1.1의 ``collected_at``이며 query 실행 시각이 아니다.
     """
     missing = RAG_INPUT_FIELDS - set(value)
     if missing:
         raise ValueError(f"manifest chunk is missing RAG adapter fields: {sorted(missing)}")
-    # Canonical manifests use ``collected_at``.  Keep old, already-created
-    # prototype manifests readable while the corpus is being migrated.
-    retrieved_at = value.get("collected_at") or value.get("retrieved_at")
+    retrieved_at = value.get("collected_at")
     if not retrieved_at:
-        raise ValueError("manifest chunk must contain collected_at or retrieved_at")
+        raise ValueError("manifest 1.1 chunk must contain collected_at")
     return DocumentChunk(
         chunk_id=value["chunk_id"],
         document_id=value["document_id"],
@@ -61,7 +60,12 @@ def manifest_chunk_to_document_chunk(value: dict[str, Any]) -> DocumentChunk:
 
 
 def manifest_to_document_chunks(payload: dict[str, Any]) -> list[DocumentChunk]:
-    """Convert the manifest's static chunks for existing RAG code paths."""
+    """Convert a canonical manifest 1.1 for existing RAG code paths."""
+
+    if payload.get("schema_version") != "1.1.0":
+        raise ValueError("RAG only supports canonical manifest schema_version 1.1.0")
+    if not isinstance(payload.get("processing"), dict):
+        raise ValueError("manifest 1.1 must contain processing metadata")
     chunks = payload.get("chunks")
     if not isinstance(chunks, list):
         raise ValueError("manifest must contain a chunks array")

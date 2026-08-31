@@ -1,3 +1,4 @@
+import hashlib
 import json
 import sys
 import types
@@ -16,6 +17,7 @@ from src.rag import (
     evaluate_rankings,
     rrf_fuse,
 )
+from src.contracts.retrieval_text import build_e5_passage
 from src.rag.chroma_metadata import chroma_where, chunk_to_chroma_metadata, tag_flag_key
 from src.rag import demo
 from src.rag.demo import DEMO_QUERIES, create_parser, prompt_for_query, select_query
@@ -34,6 +36,8 @@ def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> Docum
         license="CC BY-SA 4.0",
         use_cases=use_cases,
         official_verified=True,
+        quality_status="approved",
+        embedding_checksum="sha256:" + "e" * 64,
     )
 
 
@@ -52,6 +56,26 @@ def test_metadata_filter_is_applied_before_bm25_ranking() -> None:
     results = retriever.search("camera", RagFilters(use_cases=("camera",)))
     assert [result.chunk_id for result in results] == ["camera"]
     assert results[0].source_url.startswith("https://www.raspberrypi.com/")
+
+
+def test_unapproved_chunk_is_excluded_from_bm25_results() -> None:
+    approved = make_chunk("approved", "camera connector setup", ("camera",))
+    pending = DocumentChunk(
+        **{
+            **approved.__dict__,
+            "chunk_id": "pending",
+            "content": "unrelated pending-review installation note",
+            "quality_status": "needs_review",
+        }
+    )
+    unrelated = DocumentChunk(
+        **{**approved.__dict__, "chunk_id": "unrelated", "content": "boot storage network"}
+    )
+    retriever = HybridRetriever([approved, pending, unrelated])
+
+    results = retriever.search("camera connector", RagFilters())
+
+    assert [result.chunk_id for result in results] == ["approved"]
 
 
 def test_document_id_filter_limits_bm25_candidates_to_catalog_evidence() -> None:
@@ -276,14 +300,24 @@ def test_chroma_metadata_and_where_include_tag_filters() -> None:
         RagFilters(product_models=("Raspberry Pi 5",), use_cases=("camera",), os_versions=("Raspberry Pi OS",))
     )
     assert where is not None
-    assert where["$and"][0] == {"official_verified": True}
-    assert {tag_flag_key("product_models", "Raspberry Pi 5"): True} in where["$and"][1]["$or"]
-    assert {tag_flag_key("use_cases", "camera"): True} in where["$and"][2]["$or"]
+    conditions = where["$and"]
+    assert {"official_verified": True} in conditions
+    assert {"quality_status": "approved"} in conditions
+    tag_conditions = [condition["$or"] for condition in conditions if "$or" in condition]
+    assert any(
+        {tag_flag_key("product_models", "Raspberry Pi 5"): True} in options
+        for options in tag_conditions
+    )
+    assert any(
+        {tag_flag_key("use_cases", "camera"): True} in options
+        for options in tag_conditions
+    )
 
     document_where = chroma_where(RagFilters(document_ids=("doc-pi5", "doc-zero")))
     assert document_where == {
         "$and": [
             {"official_verified": True},
+            {"quality_status": "approved"},
             {"document_id": {"$in": ["doc-pi5", "doc-zero"]}},
         ]
     }
@@ -303,6 +337,10 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     manifest_path.write_text(
         json.dumps(
             {
+                "schema_version": "1.1.0",
+                "generated_at": "2026-08-31T00:00:00+00:00",
+                "source_registry": "document_pipeline/data/source_registry_v3.csv",
+                "processing": {},
                 "chunks": [
                     {
                         "chunk_id": "camera",
@@ -310,14 +348,23 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
                         "title": "Camera",
                         "section": "Setup",
                         "content": "camera setup",
-                        "source_url": "https://www.raspberrypi.com/documentation/",
-                        "retrieved_at": "2026-08-28",
+                            "source_url": "https://www.raspberrypi.com/documentation/",
+                            "source_anchor": None,
+                            "collected_at": "2026-08-28",
                         "document_version": None,
                         "license": "CC BY-SA 4.0",
                         "product_models": ["Raspberry Pi 5"],
                         "use_cases": ["camera"],
                         "os_versions": ["Raspberry Pi OS"],
-                        "official_verified": True,
+                            "official_verified": True,
+                            "quality_status": "approved",
+                            "embedding_checksum": "sha256:" + hashlib.sha256(
+                                build_e5_passage(
+                                    title="Camera",
+                                    section="Setup",
+                                    content="camera setup",
+                                ).encode("utf-8")
+                            ).hexdigest(),
                     }
                 ]
             }
@@ -331,6 +378,9 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
 
         def upsert(self, **kwargs: object) -> None:
             self.upserted = kwargs
+
+        def get(self) -> dict[str, list[str]]:
+            return {"ids": []}
 
     class FakeClient:
         def __init__(self) -> None:
@@ -352,7 +402,9 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
             assert name == "test-e5"
 
         def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
-            assert texts == ["passage: camera setup"]
+            assert texts == [
+                build_e5_passage(title="Camera", section="Setup", content="camera setup")
+            ]
             assert normalize_embeddings is True
             return [[0.1, 0.2]]
 
@@ -370,3 +422,8 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     metadata = client.collection.upserted["metadatas"][0]
     assert metadata[tag_flag_key("product_models", "Raspberry Pi 5")] is True
     assert (tmp_path / "chroma" / "picare-index.json").is_file()
+
+
+def test_manifest_adapter_rejects_legacy_manifest_schema() -> None:
+    with pytest.raises(ValueError, match="schema_version 1.1.0"):
+        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")
