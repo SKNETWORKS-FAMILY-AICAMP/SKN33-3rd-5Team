@@ -5,6 +5,39 @@ PiCare QLoRA는 원본 모델 전체 대신 **학습한 LoRA 어댑터**를 저�
 이는 Hugging Face의 [PEFT 저장 형식](https://huggingface.co/docs/peft/developer_guides/checkpoint)을 따른다.
 `picare-qwen3-4b-qlora`새 모델 저장소에 보관한다.
 
+## 학습 전에 검사
+
+전달받은 세 JSONL을 `data/finetuning/`에 둔 뒤 프로젝트 루트에서 실행한다.
+파일을 수정하거나 재분할하지 않는다.
+
+```bash
+# GPU·모델 없이 스키마, 입력 변환, split 누수, 평가용 제품 ID 검사
+python training/train_qlora.py --validate-only
+
+# 토크나이저만 로드해 train/dev의 정답이 잘리지 않는지도 검사
+python training/train_qlora.py --validate-only --check-token-lengths
+```
+
+두 번째 명령은 `transformers`와 Qwen 토크나이저가 필요하다. 캐시가 없으면
+공식 토크나이저를 다운로드하지만 모델 가중치는 로드하지 않는다.
+세 파일의 출력 건수가 전달 메모의 수량과 같은지 확인한다. 이번 전달 예정 수량은
+train/dev/holdout **300/40/20**이며, 실제 파일을 검사하기 전에는 수신·통과로 간주하지 않는다.
+
+기존 1,024토큰 설정은 스키마를 포함한 프롬프트만으로 한도를 넘겨 정답 전체가
+잘렸다. 기본값을 4,096으로 늘렸으며 실제 학습도 가중치를 로드하기 전에 train/dev의
+전체 토큰 길이와 정답 경계를 검사한다. 4,096을 넘는 파일은 자동으로 자르거나
+고치지 않고 레코드 ID와 길이를 출력하며 중단한다. Holdout은 길이 설정 선택이나
+학습 loss에 사용하지 않는다. 세 파일 모두 형식·누수·제품 ID 검사에는 사용한다.
+
+학습 완료 후 `run_manifest.json`에는 세 파일의 SHA-256, train/dev 토큰 통계,
+학습 loss와 최종 dev 평가 결과를 남긴다. Base–LoRA 품질 비교는 별도의
+`src.evaluation.extractor_eval`로 같은 고정 Holdout에서 수행한다.
+모델이 JSON을 생성하지 못한 표본도 정답 제품 ID가 있으면 추천 정확도의 분모에 포함한다.
+
+토큰 검사와 단위 테스트만으로 CUDA 학습 성공이나 LoRA 품질 향상을 판단하지 않는다.
+이번 로컬 점검 범위와 미완료 항목은
+[파인튜닝 사전 검사 기록](../docs/validation/2026-08-31-finetuning-preflight.md)을 참고한다.
+
 
 ## 학습 결과가 만들어지는 위치
 

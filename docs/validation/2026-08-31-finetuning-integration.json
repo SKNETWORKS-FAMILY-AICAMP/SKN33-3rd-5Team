@@ -1,0 +1,198 @@
+{
+  "date": "2026-08-31",
+  "branch": "feat/fine-tuning",
+  "base_main": "66044965a6d7ad8d6d5ba50f52bb4b95edb5b797",
+  "integration": "existing source paths; no external PR required",
+  "tests_main": {
+    "tests": 163,
+    "failures": 5,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 157
+  },
+  "tests_integrated": {
+    "tests": 201,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "passed": 200
+  },
+  "ui_local": {
+    "dependency_mode": "deterministic_fixtures_no_gpu",
+    "results": [
+      {
+        "case": "qa",
+        "status": "answered",
+        "media_count": 1,
+        "errors": [],
+        "exceptions": []
+      },
+      {
+        "case": "recommendation",
+        "status": "answered",
+        "media_count": 1,
+        "errors": [],
+        "exceptions": []
+      }
+    ]
+  },
+  "data_sha256": {
+    "train": "bc5cba2f41083c8d24e38fc52506882f7d496225c2e9e38b9502ee0eb6c4f376",
+    "dev": "fec3289091a1cf7a87423082b4ddfb368bc67b20dac0a912dcee525b5ba9457a",
+    "holdout": "da1a1b265e146c0eb1d7c5117bf89d1a8580bff4a7302c6396826d6a5744dd19"
+  },
+  "received_data_unchanged": true,
+  "existing_training": {
+    "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+    "resolved_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "dataset_sizes": {
+      "train": 300,
+      "dev": 40,
+      "holdout_not_used_for_training": 20
+    },
+    "token_validation": {
+      "train": {
+        "record_count": 300,
+        "max_total_tokens": 1612,
+        "min_completion_tokens": 86,
+        "max_completion_tokens": 104
+      },
+      "dev": {
+        "record_count": 40,
+        "max_total_tokens": 1601,
+        "min_completion_tokens": 86,
+        "max_completion_tokens": 113
+      }
+    },
+    "train_metrics": {
+      "train_runtime": 1120.3065,
+      "train_samples_per_second": 0.803,
+      "train_steps_per_second": 0.102,
+      "total_flos": 3.1479280354944e+16,
+      "train_loss": 0.03051841012692373
+    },
+    "eval_metrics": {
+      "eval_loss": 0.08269613236188889,
+      "eval_runtime": 12.3087,
+      "eval_samples_per_second": 3.25,
+      "eval_steps_per_second": 3.25
+    }
+  },
+  "existing_holdout": {
+    "baseline": {
+      "record_count": 20,
+      "json_schema_valid_rate": 1.0,
+      "exact_match_rate": 0.1,
+      "field_accuracy": {
+        "intent": 1.0,
+        "use_case": 0.65,
+        "product_models": 0.9,
+        "os_versions": 0.95,
+        "task": 0.6,
+        "performance_priority": 0.85,
+        "wireless_required": 0.85,
+        "camera_required": 1.0,
+        "gpio_required": 0.95,
+        "monitor_available": 0.85,
+        "remote_access_required": 0.85,
+        "user_level": 0.75,
+        "needs_clarification": 0.9
+      },
+      "field_macro_f1": {
+        "intent": 1.0,
+        "use_case": 0.6958333333333333,
+        "product_models": 0.8653846153846154,
+        "os_versions": 0.48717948717948717,
+        "task": 0.6704761904761904,
+        "performance_priority": 0.6919191919191919,
+        "wireless_required": 0.8795986622073579,
+        "camera_required": 1.0,
+        "gpio_required": 0.9416282642089094,
+        "monitor_available": 0.7512315270935961,
+        "remote_access_required": 0.829059829059829,
+        "user_level": 0.7081413210445469,
+        "needs_clarification": 0.7222222222222222
+      },
+      "overall_macro_f1": 0.7878980495484063,
+      "unprovided_condition_invention_rate": 0.16339869281045752,
+      "recommendation_top1_accuracy": null,
+      "recommendation_evaluated_count": 0
+    },
+    "lora": {
+      "record_count": 20,
+      "json_schema_valid_rate": 1.0,
+      "exact_match_rate": 0.45,
+      "field_accuracy": {
+        "intent": 0.95,
+        "use_case": 0.8,
+        "product_models": 1.0,
+        "os_versions": 1.0,
+        "task": 0.75,
+        "performance_priority": 1.0,
+        "wireless_required": 0.9,
+        "camera_required": 1.0,
+        "gpio_required": 1.0,
+        "monitor_available": 0.95,
+        "remote_access_required": 0.95,
+        "user_level": 0.95,
+        "needs_clarification": 0.95
+      },
+      "field_macro_f1": {
+        "intent": 0.9594202898550724,
+        "use_case": 0.8395833333333333,
+        "product_models": 1.0,
+        "os_versions": 1.0,
+        "task": 0.7666666666666667,
+        "performance_priority": 1.0,
+        "wireless_required": 0.8533333333333335,
+        "camera_required": 1.0,
+        "gpio_required": 1.0,
+        "monitor_available": 0.9400352733686067,
+        "remote_access_required": 0.9430199430199431,
+        "user_level": 0.6576576576576577,
+        "needs_clarification": 0.8198198198198199
+      },
+      "overall_macro_f1": 0.9061181782349563,
+      "unprovided_condition_invention_rate": 0.058823529411764705,
+      "recommendation_top1_accuracy": null,
+      "recommendation_evaluated_count": 0
+    }
+  },
+  "prior_gpu_evidence_only": {
+    "qa_expected_status_matches": "7/7",
+    "recommendation_completed": "4/4",
+    "streamlit_form_submissions": "2/2"
+  },
+  "current_integration_gpu_retested": false,
+  "current_gpu_limitation": "Current SSH endpoint unavailable; previous GPU results are not verification of this exact source version.",
+  "normalized_python_source_sha256": {
+    "src/condition_extraction/dataset.py": "9397ec14c0284466ea9d00cc2e8203be7f4e460cfbc23876b3429ebfc5cfa5b9",
+    "src/condition_extraction/parser.py": "89a7ece5b39a3de16cbda256c3dcf4df7a93e2e287e15f9a4edb68ebf109f485",
+    "src/evaluation/extractor_eval.py": "1e601ee84e8ba83b5d8f84a3b6f3f0d8317be5e1df4c458e5b4c39c328b524d3",
+    "src/lang/prompts.py": "d7789b55a7e1f66fdd8ffaf84841c0a1315f49604f997b0f3c5b6644c1b29e66",
+    "src/lang/safety.py": "c0560c8b7d8b47c783f79d9e9b5bb3b969a7f9ec5d982c4a163d61759e2baa3b",
+    "src/rag_to_llm/answer_generator.py": "1cca69ed0b27219e8bc321870047243b77963f2825e9bbf1cc327471eca40319",
+    "src/services/grounded_generation.py": "2c1876707b110a9281e0cd3c6c523acceb6bda92cc8acfff7b4a5f17b3385e81",
+    "src/services/rag_qa_cli.py": "34da7712ea7b939538807101069f9a27ca67a2de596e6221f677d0a4f4b109b8",
+    "src/services/rag_qa_service.py": "65993a8408eef57f9b9beb8bac66964fc2f6e617cc7be11af82ad6c28328ed7f",
+    "src/services/recommendation_rag_service.py": "f2648912432fc6524ff78e6a6bd1934b52023fae66c55a96e4ed8ffb9d654089",
+    "streamlit_app/app.py": "c2be511c977f3c2ee7d7fa1dbdf1fed0f50fdf282902d7d4af78191047dbd2dc",
+    "streamlit_app/runtime.py": "c5bf1f77a52c3a5e95add0e7ab159adfe3c0e00e119f025f7700c67bb7180f87",
+    "tests/test_huggingface_answer_generator.py": "a60830a9d6232fbc616e7d72de4bd58dde18e2a18b13156fab514c431673f275",
+    "tests/test_lang_safety.py": "9ef7cf5b0fd250826127a063978428f3e0ff180d24e70a279fef40469ab51402",
+    "tests/test_rag.py": "66bfd8a41f0ddecb8d965c159b1193fe51b078bb46aebc1b4ec12ce0bc27cadb",
+    "tests/test_rag_qa_service.py": "35b32c7ca3b587cf94b6862b32fab2957f748a0fc2ade0f91aba8fd1cb1ec00f",
+    "tests/test_recommendation_agent.py": "0b1ada88ae09a2877c411e3f8e095a2646addcc209c47a873eb74cb0e52b4ce7",
+    "training/train_qlora.py": "b3126d2ec6de2ba8948c7d2e47cc17364324ece8c6dc16b3cd322b07b4ab59c9",
+    "src/services/media_lookup.py": "38ce0ec85da5b21f24d87e63be456cccd5016c4868ebc509dee04688eed1c112",
+    "tests/test_finetuning_validation.py": "93fd390a4396d092e3510d7fc51ba65468a79c2160c93f2c85b1df6f5d79ed36",
+    "tests/test_grounded_generation.py": "d0dca227cd63c202a0ed43e810b70b826dc139d86f5a07c4926f86aded9bded7",
+    "tests/test_media_lookup.py": "e3b9810f885a01f83734e31946b2fb0f29042babcb3ef6b42fc23f1b5096bcaf",
+    "training/preflight.py": "9853c780161eb2c0cbf12ec6530e6b6aa142e85461ddce1691f092334757ee12"
+  },
+  "limitations": [
+    "Condition exact match is 45% on 20 holdout cases.",
+    "Recommendation expected_product_ids are empty.",
+    "QA and recommendation factual accuracy need evidence review."
+  ]
+}

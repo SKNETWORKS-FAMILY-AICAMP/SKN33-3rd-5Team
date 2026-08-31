@@ -123,27 +123,16 @@ python training/train_qlora.py \
 - train/dev/holdout 사이의 동일 ID 또는 동일 설문 응답
 
 이 검증은 GPU나 모델 가중치 없이 실행할 수 있으며 `pydantic`과 `PyYAML`이 필요하다.
-현재 `--validate-only`는 학습 입력의 `SurveyResponse` 변환까지 실행하지 않으므로, 아래 추가 점검도 실행한다.
-이 점검은 중복 `question_id`, 입력 세션 길이, 평가용 제품 ID 연결까지 확인한다.
-프로젝트 루트에서 Python으로 실행한다. 데이터 파일은 수정하지 않는다.
+`--validate-only`는 `SurveyResponse` 변환도 실행하여 중복 `question_id`, 100자를
+넘는 입력 세션 ID, 공백뿐인 질문·답변, 문자열로 적은 boolean도 거부한다.
+`expected_product_ids`가 있으면 설정의 `data.catalog_file`(기본
+`data/products/catalog.json`)에 존재하는 ID인지 학습 전에 확인한다.
 
-```python
-from pathlib import Path
-from src.condition_extraction.dataset import load_received_jsonl
-from src.recommendation.schema import ProductCatalog
+토크나이저를 준비한 환경에서는 아래 명령도 실행한다. GPU나 모델 가중치 없이
+train/dev의 정답 토큰 잘림을 확인하며, 실제 학습도 같은 검사를 자동 실행한다.
 
-paths = [Path("data/finetuning") / f"{name}.jsonl" for name in ("train", "dev", "holdout")]
-records = [record for path in paths for record in load_received_jsonl(path)]
-for record in records:
-    record.survey()
-if any(record.expected_product_ids for record in records):
-    catalog = ProductCatalog.from_received_file("data/products/catalog.json")
-    known = {product.product_id for product in catalog.products}
-    for record in records:
-        missing = set(record.expected_product_ids) - known
-        if missing:
-            raise ValueError(f"{record.id}: catalog에 없는 평가 제품 ID: {sorted(missing)}")
-print(f"추가 입력·제품 ID 검사 통과: {len(records)}건")
+```bash
+python training/train_qlora.py --validate-only --check-token-lengths
 ```
 
 형식 검사를 통과해도 정답 라벨이 옳다는 뜻은 아니다. 마지막으로 사람이 입력 문장과 `target`을 대조해야 한다.
