@@ -67,6 +67,19 @@ class RequestSafetyTests(unittest.TestCase):
 
 
 class GroundedPromptTests(unittest.TestCase):
+    def test_prompt_preserves_literal_commands_and_has_explicit_abstention_protocol(self):
+        from src.lang import GROUNDED_ANSWER_SYSTEM_PROMPT, INSUFFICIENT_EVIDENCE_MARKER
+        self.assertIn("대소문자·인자·공백", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("인용은 백틱 밖", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn(INSUFFICIENT_EVIDENCE_MARKER, GROUNDED_ANSWER_SYSTEM_PROMPT)
+
+    def test_abstention_marker_mixed_with_a_claim_is_rejected(self):
+        from src.lang import INSUFFICIENT_EVIDENCE_MARKER, is_evidence_abstention
+        answer = f"{INSUFFICIENT_EVIDENCE_MARKER} 설치하면 됩니다. [C1]"
+        self.assertFalse(is_evidence_abstention(answer))
+        with self.assertRaises(AnswerSafetyError):
+            validate_grounded_answer(answer, allowed_citation_ids=["C1"])
+
     def test_prompt_contains_only_citation_labelled_evidence(self) -> None:
         messages = build_grounded_answer_messages(
             "Raspberry Pi Imager로 OS를 설치하는 방법은?",

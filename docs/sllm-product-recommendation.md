@@ -120,6 +120,10 @@ python -m src.evaluation.extractor_eval \
 
 ## Agent를 Streamlit 서비스에 연결하는 코드
 
+학습 결과는 [모델 별도 저장 가이드](../training/README.md)에 따라 Hugging Face에
+비공개 백업할 수 있다. `train_qlora.py`의 `--hub-repo-id`로 학습 직후 백업하거나,
+`publish_adapter.py`로 이미 저장된 어댑터를 재학습 없이 업로드한다.
+
 자유 입력은 sLLM이 해석하고, 선택 위젯의 값은 프론프트에만 맡기지 않고 백엔드가 최종 조건에 직접 덮어쓴다. 따라서 화면 구현 담당자는 위젯과 카드를 그리고, sLLM 담당 코드는 값 변환·조건 필터·순위 계산을 맡는다.
 
 ```python

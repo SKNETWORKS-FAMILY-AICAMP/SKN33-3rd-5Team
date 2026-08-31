@@ -1,6 +1,6 @@
 # 받게 되는 파일: 제품 추천 카탈로그
 
-`data/products/catalog.json`은 문서·데이터 담당이 Raspberry Pi 공식 자료에서 수집·정규화하고 팀이 추천 메타데이터를 검수한 뒤 전달한다. `data/`는 저장소 정책상 Git에서 제외되므로 실제 파일은 팀 내부 저장소나 RunPod volume로 공유한다. 이 브랜치는 크롤러나 전처리 결과를 만들지 않고 파일을 읽고 검증한다.
+`data/products/catalog.json`은 문서·데이터 담당이 Raspberry Pi 공식 자료에서 수집·정규화하고 팀이 추천 메타데이터를 검수한 뒤 전달한다. 현재 파일은 저장소에 존재하며 `.gitignore`의 명시적 예외로 Git에서 관리한다. 새 파일을 별도로 만들기보다 기존 제품 ID와 근거 문서 ID를 유지하며 검수·수정한다. 학습 JSONL과 원문 corpus는 여전히 별도 공유 대상이다.
 
 ## 왜 `raspberry-pi.html` 한 페이지만으로 부족한가
 
@@ -23,6 +23,9 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
 실패한다. 카탈로그 문서의 `sources`도 현재 RAG manifest에 있는 공식 검증 문서와
 제목·URL·라이선스가 일치해야 한다.
 
+아래는 형식 설명용 예시이며 제품 사실·문서 ID·URL은 자리표시자다. 실제 전달 파일에는
+공식 근거로 검수한 값과 manifest에 존재하는 문서 metadata를 넣어야 한다.
+
 ```json
 {
   "schema_version": "1.1.0",
@@ -33,6 +36,20 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
       "document_id": "official-doc-001",
       "title": "Official source title",
       "source_url": "https://www.raspberrypi.com/documentation/...",
+      "retrieved_at": "2026-08-27",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "document_id": "official-doc-002",
+      "title": "Official camera source title",
+      "source_url": "https://www.raspberrypi.com/documentation/example-camera/",
+      "retrieved_at": "2026-08-27",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "document_id": "official-doc-003",
+      "title": "Official setup source title",
+      "source_url": "https://www.raspberrypi.com/documentation/example-setup/",
       "retrieved_at": "2026-08-27",
       "license": "CC BY-SA 4.0"
     }
@@ -108,5 +125,6 @@ MVP 범위에서는 다른 회사의 블로그나 쇼핑몰이 꼭 필요한 것
 주파수·냉각, 초기 하드웨어 설정 문서 3개를 더한 18개 공식 색인 문서다. 제품 페이지
 8개는 이미지·공식 URL 카드용 `reference_only`로 남기며 RAG 본문에는 색인하지 않는다.
 
-실제 `catalog.json`과 `manifest_v3.json`은 Git에 올리지 않는다. 같은 RunPod volume에
-배치한 뒤, catalog의 필드 근거 문서만 `document_ids` 검색 필터로 전달한다.
+`catalog.json`은 Git에서 관리하고, 생성된 `manifest_v3.json`은 Git 제외 대상으로 별도 공유한다.
+실행 환경에서는 둘을 같은 검수 버전으로 배치한 뒤, catalog의 필드 근거 문서만
+`document_ids` 검색 필터로 전달한다. 파일별 검증 방법은 [팀 데이터 인수인계](team-handoff.md)를 참고한다.

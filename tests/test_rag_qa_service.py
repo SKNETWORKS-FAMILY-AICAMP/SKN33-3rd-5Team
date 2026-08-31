@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.lang import PromptEvidence, validate_grounded_answer
+from src.lang import INSUFFICIENT_EVIDENCE_MARKER, PromptEvidence, validate_grounded_answer
 from src.rag import RagResult, RetrievalDecision
 from src.rag.retriever import DenseRetrievalError
 from src.rag_to_llm import AnswerGenerationError, EvidenceTemplateGenerator, GenerationResult, HuggingFaceAnswerGenerator
@@ -298,3 +298,29 @@ def test_explicit_model_failure_becomes_clear_error_response():
 
     assert response.status == "error"
     assert "RunPod CUDA GPU" in response.answer
+
+
+def test_model_abstention_with_retrieved_evidence_is_not_answered_or_error():
+    class AbstainingGenerator:
+        def generate(self, messages, evidence):
+            return GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
+
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=AbstainingGenerator(),
+    ).answer(request_id="model-abstention", question="SSH를 켜려면?", retrieval_mode="bm25", trace=True)
+    assert response.status == "insufficient_evidence"
+    assert response.citations == []
+    assert INSUFFICIENT_EVIDENCE_MARKER not in response.answer
+    assert "trace.generator_invoked=true" in response.warnings
+
+
+def test_english_answer_is_not_passed_as_korean_just_because_metadata_says_ko():
+    class EnglishGenerator:
+        def generate(self, messages, evidence):
+            return GenerationResult("Enable SSH in Raspberry Pi Imager. [C1]", "test", "fixture", 0)
+
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=EnglishGenerator(),
+    ).answer(request_id="english-answer", question="SSH를 켜려면?", retrieval_mode="bm25")
+    assert response.status == "error"
+    assert response.citations == []

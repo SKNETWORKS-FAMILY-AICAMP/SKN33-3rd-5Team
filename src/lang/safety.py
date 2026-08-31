@@ -62,6 +62,7 @@ _UNSUPPORTED_MODIFICATION_PATTERNS = (
 )
 
 _CITATION_PATTERN = re.compile(r"\[(C[1-9][0-9]*)\]")
+INSUFFICIENT_EVIDENCE_MARKER = "[INSUFFICIENT_EVIDENCE]"
 _CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+\s*$")
 _MARKDOWN_HEADING_PATTERN = re.compile(
     r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
@@ -181,6 +182,19 @@ def extract_citation_ids(answer: str) -> set[str]:
     return set(_CITATION_PATTERN.findall(answer))
 
 
+def is_evidence_abstention(answer: str) -> bool:
+    """Only the exact protocol marker requests a model-side abstention."""
+
+    return answer.strip() == INSUFFICIENT_EVIDENCE_MARKER
+
+
+def has_korean_prose(answer: str) -> bool:
+    """A minimal script check, not a judgement of Korean fluency or relevance."""
+
+    prose = re.sub(r"```[\s\S]*?```|`[^`]*`", "", answer)
+    return bool(re.search(r"[가-힣]", prose))
+
+
 def _grounded_content_blocks(answer: str) -> list[str]:
     """Group prose by paragraph or top-level Markdown list item.
 
@@ -249,6 +263,7 @@ def validate_grounded_answer(
     answer: str,
     *,
     allowed_citation_ids: Sequence[str],
+    require_korean: bool = False,
 ) -> set[str]:
     """Reject generated answers that invent citations, URLs, or uncited claims.
 
@@ -259,6 +274,10 @@ def validate_grounded_answer(
     normalized = answer.strip()
     if not normalized:
         raise AnswerSafetyError("답변 본문이 비어 있습니다.")
+    if INSUFFICIENT_EVIDENCE_MARKER in normalized:
+        raise AnswerSafetyError("근거 부족 표식은 다른 답변과 섞어 출력할 수 없습니다.")
+    if require_korean and not has_korean_prose(normalized):
+        raise AnswerSafetyError("답변에 한국어 설명이 없습니다.")
     if _URL_PATTERN.search(normalized):
         raise AnswerSafetyError(
             "LLM 답변에 URL이 포함되었습니다. URL은 검색 metadata로만 구성합니다."
@@ -288,10 +307,13 @@ def validate_grounded_answer(
 
 
 __all__ = [
+    "INSUFFICIENT_EVIDENCE_MARKER",
     "AnswerSafetyError",
     "SafetyDecision",
     "SafetyStatus",
     "evaluate_request",
     "extract_citation_ids",
+    "has_korean_prose",
+    "is_evidence_abstention",
     "validate_grounded_answer",
 ]

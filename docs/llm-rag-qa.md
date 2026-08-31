@@ -133,6 +133,12 @@ trace.citation_validation=passed
 2. SSH·OS 설치 같은 공식 문서 질문에 한국어 답변과 `[C1]` 인용이 생성되는지 확인한다.
 3. `--trace`의 모델명·생성 시간·인용 검증 결과를 공유한다.
 4. 모델 출력이 인용 검증에 실패한 경우, 출력 예시와 오류 원인을 RAG 담당자에게 공유한다.
+5. [LLM 답변 품질 평가](llm-answer-evaluation.md)에 따라 Faithfulness, Answer Relevancy,
+   Citation Precision, 근거 부족 보류 정확도, 한국어·명령어 원문 보존을 평가한다.
+   인용 형식 통과를 의미상 Citation Precision 통과로 보고하지 않는다.
+
+검색 결과가 있어도 모델이 `[INSUFFICIENT_EVIDENCE]` 한 줄만 반환하면 서비스가 정상 보류 상태로 변환한다.
+한국어 설명이 전혀 없는 QA·추천 생성 결과는 차단하며, 자연스러운 한국어와 의미 정확성은 별도 검수한다.
 
 로컬에서는 `ANSWER_GENERATOR=template`을 사용한다. 실제 Qwen 생성은 CUDA GPU가 있는
 RunPod Pod에서만 실행한다.

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from src.contracts.models import CONTRACT_VERSION
+
 
 PRODUCTS = [
     {
@@ -78,7 +80,7 @@ BOOT_RESPONSE = {
     "steps": ["전원 연결과 권장 전원 장치 확인", "Raspberry Pi Imager로 OS 이미지 다시 기록", "상태 LED 점멸 패턴 확인"],
     "warning": "문제가 계속되면 사용 중인 전원 장치와 LED 점멸 패턴을 알려주세요.",
     "conditions": {
-        "schema_version": "1.0.0",
+        "schema_version": CONTRACT_VERSION,
         "intent": "troubleshooting",
         "use_case": None,
         "product_models": ["Raspberry Pi 5"],
@@ -124,7 +126,7 @@ def recommendation_conditions(
         use_case, task = "education_coding", "desktop_programming"
 
     return {
-        "schema_version": "1.0.0",
+        "schema_version": CONTRACT_VERSION,
         "intent": "product_recommendation",
         "use_case": use_case,
         "product_models": None,

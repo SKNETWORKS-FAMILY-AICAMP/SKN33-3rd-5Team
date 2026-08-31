@@ -227,13 +227,15 @@ Licence: CC BY-SA 4.0 또는 문서에 표시된 라이선스
 Changes: 파싱·정규화·청킹·번역 여부
 ```
 
-### 공식 이미지 자산
+### 공식 미디어 자산
 
-제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개를 [`assets/media/`](assets/media/)에 수집했습니다. 제품 대표 이미지 5개와 사용 지원 이미지 14개이며, 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json)에서 관리합니다.
+제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개와 공식 사용법 영상 링크 4개를 [`assets/media/`](assets/media/)에서 관리합니다. 이미지의 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json), 영상의 공식 채널·게시일·임베드 URL·연결 문서는 [`video_manifest.json`](assets/media/video_manifest.json)에 기록합니다.
 
 - 원본은 Raspberry Pi 공식 documentation 저장소의 `documentation/` 하위 파일로 제한합니다.
 - 이미지 바이트는 수정하지 않고 서비스용 파일명만 적용했습니다.
 - 사용 지원 이미지는 검색된 citation의 문서·주제와 일치할 때만 챗봇에 표시합니다.
+- 영상은 다운로드하거나 재배포하지 않고 공식 YouTube player로만 임베드하며, 최신 공식 문서를 사실 근거로 우선합니다.
+- 문서 청크와 미디어의 자동 연결 및 제외 기준은 [`미디어–RAG 통합 파이프라인`](docs/media-rag-integration-pipeline.md)에 정리했습니다.
 - 제품·마케팅 페이지의 권리 조건이 불명확한 사진과 CC BY-ND 제품 PDF에서 잘라낸 이미지는 포함하지 않습니다.
 
 ## 인터페이스 계약
@@ -418,6 +420,11 @@ RAG 평가 질문 50개는 개발 중 사용하는 **Dev set 40개**와 마지�
 | 다국어 | 교차 언어 Hit@k, 한국어 답변 준수율 | 한국어 질문으로 영어 근거를 찾고 기술 용어를 보존해 한국어로 답하는가 |
 | 운영 | 응답 시간, 오류율 | Streamlit에서 안정적으로 사용할 수 있는가 |
 
+LLM 답변 평가의 실행·검수·채점은 [답변 품질 평가 가이드](docs/llm-answer-evaluation.md)의
+`python -m src.evaluation.answer_eval_cli`를 사용합니다. Faithfulness·관련성·의미상 인용 정확도는
+검수 기반으로 집계하며 미검수 값은 `null`로 남깁니다. 인용 ID 형식 통과와 실제 근거 지지는 별개입니다.
+보류 정확도·과도한 보류율·필수 명령어 원문 일치는 자동으로 계산하며, 실제 Qwen 실행과 template 점수를 구분합니다.
+
 ### sLLM 평가
 
 | 평가 대상 | 지표 | 확인 내용 |
@@ -536,6 +543,10 @@ python -m src.evaluation.extractor_eval --mode lora
 ```
 
 학습 데이터·모델 cache·checkpoint는 RunPod의 /workspace에 저장하고, 학습 후 adapter·설정·평가 결과를 외부에 백업합니다. API Key, Hugging Face token, 개인정보와 원문 내부 문서는 Git에 커밋하지 않습니다. .env.example에는 변수 이름만 제공합니다.
+
+어댑터를 Hugging Face 모델 저장소에 별도로 보관하는 명령과 다시 불러오는 방법은
+[모델 별도 저장 가이드](training/README.md)를 참고하세요. 기본은 비공개 백업이며,
+실제 학습 결과가 있어야 업로드할 수 있습니다.
 
 ## 역할 분담
 
