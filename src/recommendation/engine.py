@@ -131,6 +131,15 @@ class ProductRecommender:
             requested = {name.casefold() for name in conditions.product_models}
             if not requested.intersection(cls._accepted_product_names(product)):
                 failures.append("explicit product mismatch")
+        # 일반 추천에서는 카탈로그에서 사람이 승인한 용도 밖의 제품을 후보에
+        # 섞지 않는다. 비교 요청은 사용자가 지정한 제품의 장단점을 그대로
+        # 보여줘야 하므로 이 제한을 적용하지 않는다.
+        if (
+            conditions.intent == "product_recommendation"
+            and conditions.use_case is not None
+            and conditions.use_case not in product.recommendation_profile.recommended_use_cases
+        ):
+            failures.append("reviewed use case")
         if conditions.wireless_required is True and not caps.wireless:
             failures.append("wireless")
         if conditions.camera_required is True and caps.camera_connector_count == 0:
@@ -242,6 +251,7 @@ class ProductRecommender:
             matched_conditions=matched,
             tradeoffs=tradeoffs,
             required_accessories=product.required_accessories,
+            conditional_accessories=product.conditional_accessories,
             evidence_document_ids=product.document_ids,
             product_url=product.product_url,
             image_url=product.image_url,
