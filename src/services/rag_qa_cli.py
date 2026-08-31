@@ -25,6 +25,7 @@ from src.rag_to_llm import (
     AnswerGeneratorSettingsError,
     build_answer_generator,
 )
+from src.media import MediaManifestError, MediaResolver
 
 from .media_lookup import load_media_by_chunk_id
 from .rag_qa_service import RagQaService
@@ -188,7 +189,15 @@ def main() -> int:
     try:
         generator_settings = AnswerGeneratorSettings.from_env(settings.project_root)
         answer_generator = build_answer_generator(generator_settings)
-    except AnswerGeneratorSettingsError as exc:
+        media_resolver = (
+            MediaResolver.from_file(
+                settings.media_manifest_path,
+                document_manifest_path=settings.manifest_path,
+            )
+            if settings.media_manifest_path is not None
+            else None
+        )
+    except (AnswerGeneratorSettingsError, MediaManifestError) as exc:
         print(f"Answer generator settings error: {exc}", file=sys.stderr)
         return 2
 
@@ -208,6 +217,7 @@ def main() -> int:
         service = RagQaService(
             retriever=retriever,
             answer_generator=answer_generator,
+            media_resolver=media_resolver,
             top_k=settings.top_k,
             media_by_chunk_id=load_media_by_chunk_id(settings.project_root),
         )

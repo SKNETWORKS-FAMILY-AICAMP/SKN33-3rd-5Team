@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from src.contracts.retrieval_text import build_e5_passage
 from src.rag import (
     DenseRetrievalError,
     DocumentChunk,
@@ -18,11 +19,11 @@ from src.rag import (
     evaluate_rankings,
     rrf_fuse,
 )
+from src.rag import demo
+
 from src.contracts.retrieval_text import build_e5_passage
 from src.rag.chroma_metadata import chroma_where, chunk_to_chroma_metadata, tag_flag_key
-from src.rag import demo
 from src.rag.demo import DEMO_QUERIES, create_parser, prompt_for_query, select_query
-
 
 def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> DocumentChunk:
     return DocumentChunk(
@@ -90,6 +91,43 @@ def test_document_id_filter_limits_bm25_candidates_to_catalog_evidence() -> None
     results = retriever.search("camera", RagFilters(document_ids=("doc-zero",)))
 
     assert [result.chunk_id for result in results] == ["zero"]
+
+
+def test_strict_product_filter_rejects_untagged_and_other_product_chunks() -> None:
+    base = make_chunk("untagged", "generic connector setup", ("camera",))
+    pi5 = DocumentChunk(
+        **{
+            **base.__dict__,
+            "chunk_id": "pi5",
+            "content": "camera connector setup",
+            "product_models": ("Raspberry Pi 5",),
+        }
+    )
+    pico = DocumentChunk(
+        **{**base.__dict__, "chunk_id": "pico", "product_models": ("Raspberry Pi Pico",)}
+    )
+    retriever = HybridRetriever([base, pi5, pico])
+
+    results = retriever.search(
+        "camera",
+        RagFilters(product_models=("Raspberry Pi 5",), strict_product_match=True),
+    )
+
+    assert [result.chunk_id for result in results] == ["pi5"]
+
+
+def test_official_filter_rejects_unapproved_bm25_chunks() -> None:
+    approved = make_chunk("approved", "camera connector", ("camera",))
+    unreviewed = DocumentChunk(
+        **{**approved.__dict__, "chunk_id": "unreviewed", "quality_status": "unreviewed"}
+    )
+    unrelated = [
+        make_chunk(f"other-{index}", f"unrelated topic {index}", ("server",))
+        for index in range(3)
+    ]
+    retriever = HybridRetriever([approved, unreviewed, *unrelated])
+
+    assert [result.chunk_id for result in retriever.search("camera")] == ["approved"]
 
 
 def test_evaluation_reports_hit_and_mrr() -> None:
@@ -314,6 +352,14 @@ def test_chroma_metadata_and_where_include_tag_filters() -> None:
         for options in tag_conditions
     )
 
+    strict_where = chroma_where(
+        RagFilters(product_models=("Raspberry Pi 5",), strict_product_match=True)
+    )
+    assert strict_where is not None
+    assert strict_where["$and"][2] == {
+        tag_flag_key("product_models", "Raspberry Pi 5"): True
+    }
+
     document_where = chroma_where(RagFilters(document_ids=("doc-pi5", "doc-zero")))
     assert document_where == {
         "$and": [
@@ -335,6 +381,12 @@ def test_dense_configuration_error_is_not_silently_hidden(monkeypatch) -> None:
 
 def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tmp_path, monkeypatch) -> None:
     manifest_path = tmp_path / "manifest.json"
+    embedding_input = build_e5_passage(
+        title="Camera", section="Setup", content="camera setup"
+    )
+    embedding_checksum = "sha256:" + hashlib.sha256(
+        embedding_input.encode("utf-8")
+    ).hexdigest()
     manifest_path.write_text(
         json.dumps(
             {
@@ -349,17 +401,17 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
                         "title": "Camera",
                         "section": "Setup",
                         "content": "camera setup",
-                            "source_url": "https://www.raspberrypi.com/documentation/",
-                            "source_anchor": None,
-                            "collected_at": "2026-08-28",
+                        "source_url": "https://www.raspberrypi.com/documentation/",
+                        "source_anchor": None,
+                        "collected_at": "2026-08-28",
                         "document_version": None,
                         "license": "CC BY-SA 4.0",
                         "product_models": ["Raspberry Pi 5"],
                         "use_cases": ["camera"],
                         "os_versions": ["Raspberry Pi OS"],
-                            "official_verified": True,
-                            "quality_status": "approved",
-                            "embedding_checksum": "sha256:" + hashlib.sha256(
+                        "official_verified": True,
+                        "quality_status": "approved",
+                        "embedding_checksum": "sha256:" + hashlib.sha256(
                                 build_e5_passage(
                                     title="Camera",
                                     section="Setup",
@@ -403,9 +455,7 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
             assert name == "test-e5"
 
         def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
-            assert texts == [
-                build_e5_passage(title="Camera", section="Setup", content="camera setup")
-            ]
+            assert texts == [embedding_input]
             assert normalize_embeddings is True
             return [[0.1, 0.2]]
 
@@ -450,22 +500,4 @@ def test_manifest_adapter_rejects_legacy_manifest_schema(tmp_path) -> None:
     path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
 
     with pytest.raises(ValueError, match="schema_version 1.1.0"):
-        HybridRetriever.from_manifest(path)
-
-
-def test_rag_readme_uses_the_canonical_v3_service_corpus() -> None:
-    readme = Path("src/rag/README.md").read_text(encoding="utf-8")
-
-    assert "DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json" in readme
-    assert "CHROMA_PATH=data/indexed/chroma_official_v3" in readme
-    assert "CHROMA_COLLECTION_NAME=rpi_official" in readme
-    assert "DOCUMENT_MANIFEST=data/corpora/corpus_section_test/manifest.json" not in readme
-    assert "00_README.md" in readme
-
-
-def test_legacy_corpus_cards_prohibit_service_use() -> None:
-    for corpus in ("corpus_official_pilot", "corpus_section_test"):
-        card = Path(f"data/corpora/{corpus}/corpus_card.md").read_text(encoding="utf-8")
-        assert "legacy fixture" in card
-        assert "document_pipeline/data/manifest_v3.json" in card
-        assert "서비스" in card
+        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")

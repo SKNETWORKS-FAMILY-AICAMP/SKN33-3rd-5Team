@@ -23,6 +23,7 @@ class RagSettings:
     e5_model_name: str
     top_k: int
     dense_max_distance: float
+    media_manifest_path: Path | None
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "RagSettings":
@@ -39,6 +40,13 @@ class RagSettings:
 
         def resolve_path(name: str) -> Path:
             path = Path(required(name)).expanduser()
+            return path if path.is_absolute() else (root / path).resolve()
+
+        def optional_path(name: str) -> Path | None:
+            value = os.getenv(name, "").strip()
+            if not value:
+                return None
+            path = Path(value).expanduser()
             return path if path.is_absolute() else (root / path).resolve()
 
         top_k_raw = required("TOP_K")
@@ -65,10 +73,16 @@ class RagSettings:
             e5_model_name=required("E5_MODEL_NAME"),
             top_k=top_k,
             dense_max_distance=dense_max_distance,
+            media_manifest_path=optional_path("MEDIA_MANIFEST"),
         )
         if not settings.manifest_path.is_file():
             raise RagSettingsError(
                 f"DOCUMENT_MANIFEST does not exist: {settings.manifest_path}. "
                 "Create the corpus manifest or update .env."
+            )
+        if settings.media_manifest_path is not None and not settings.media_manifest_path.is_file():
+            raise RagSettingsError(
+                f"MEDIA_MANIFEST does not exist: {settings.media_manifest_path}. "
+                "Run the media linker or remove MEDIA_MANIFEST to disable guide media."
             )
         return settings

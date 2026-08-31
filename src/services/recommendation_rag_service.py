@@ -16,6 +16,7 @@ from src.lang import (
     evaluate_request,
     is_evidence_abstention,
 )
+from src.media import MediaResolver
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
 
@@ -50,6 +51,7 @@ class RecommendationRagService:
         retriever: RecommendationRetriever,
         metadata_by_chunk_id: Mapping[str, RagResultMetadata],
         answer_generator: AnswerGenerator | None = None,
+        media_resolver: MediaResolver | None = None,
         top_k: int = 8,
     ) -> None:
         if not 1 <= top_k <= 20:
@@ -58,6 +60,7 @@ class RecommendationRagService:
         self.retriever = retriever
         self.metadata_by_chunk_id = metadata_by_chunk_id
         self.answer_generator = answer_generator or EvidenceTemplateGenerator()
+        self.media_resolver = media_resolver
         self.top_k = top_k
 
     @staticmethod
@@ -80,7 +83,7 @@ class RecommendationRagService:
         if status == "needs_clarification" and not questions:
             questions = [answer]
         return ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id=request_id,
             status=status,
             language="ko",
@@ -128,10 +131,18 @@ class RecommendationRagService:
         return "\n".join(lines)
 
     def _reject_unselected_catalog_products(
-        self, answer: str, agent_result: RecommendationAgentResult
+        self,
+        answer: str,
+        agent_result: RecommendationAgentResult,
+        *,
+        provider: str,
     ) -> None:
         """모델이 catalog 안의 비선정 제품을 새 추천으로 추가하지 못하게 막는다."""
 
+        # 로컬 template은 모델 추천문이 아니라 검색 청크 원문을 인용별로
+        # 표시한다. 비교 문서에 다른 제품명이 단순 등장해도 변조가 아니다.
+        if provider == "template":
+            return
         selected = {candidate.name for candidate in agent_result.decision.candidates}
         for product in self.recommendation_agent.recommender.catalog.products:
             if product.name not in selected and product.name in answer:
@@ -284,9 +295,14 @@ class RecommendationRagService:
                 }
             )
         )
+        candidate_product_names = tuple(
+            candidate.name for candidate in decision.candidates
+        )
         filters = replace(
             condition_payload_to_rag_filters(decision.conditions),
             document_ids=candidate_document_ids,
+            product_models=candidate_product_names,
+            strict_product_match=True,
         )
         retrieval_query = " ".join([question, *(candidate.name for candidate in decision.candidates)])
         try:
@@ -387,6 +403,13 @@ class RecommendationRagService:
             # 실제 생성 모델에는 기존의 비선정 제품 추가 금지 검사를 유지한다.
             if not isinstance(self.answer_generator, EvidenceTemplateGenerator):
                 self._reject_unselected_catalog_products(generation.text, supported_agent_result)
+            
+            self._reject_unselected_catalog_products(
+                            generation.text,
+                            supported_agent_result,
+                            provider=generation.provider,
+                        )
+            
             self._require_selected_candidate_in_model_answer(
                 generation.text,
                 supported_agent_result,
@@ -444,6 +467,15 @@ class RecommendationRagService:
             answer=None if isinstance(self.answer_generator, EvidenceTemplateGenerator) else generation.text,
             used_citation_ids=used_citation_ids,
         )
+        if self.media_resolver is not None:
+            final_answer_citations = [
+                citation
+                for citation in response.citations
+                if citation.citation_id in used_citation_ids
+            ]
+            response = response.model_copy(
+                update={"media": self.media_resolver.resolve(final_answer_citations)}
+            )
         return self._with_warnings(
             response,
             [

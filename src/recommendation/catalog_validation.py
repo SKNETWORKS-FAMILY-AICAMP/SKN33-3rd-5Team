@@ -93,6 +93,31 @@ def validate_catalog_manifest_alignment(
                 f"{product.product_id}의 field evidence가 catalog sources에 없습니다: {sorted(missing)}"
             )
 
+        for field_name in type(product.evidence_by_field).model_fields:
+            evidence_document_ids = getattr(product.evidence_by_field, field_name)
+            for document_id in evidence_document_ids:
+                tagged_chunks = [
+                    chunk
+                    for chunk in manifest["chunks"]
+                    if chunk.get("document_id") == document_id
+                    and product.name in (chunk.get("product_models") or [])
+                ]
+                if not tagged_chunks:
+                    raise CatalogManifestValidationError(
+                        f"{product.product_id}.{field_name} 근거 문서에 제품 태그 청크가 "
+                        f"없습니다: {document_id}"
+                    )
+                for chunk in tagged_chunks:
+                    if chunk.get("quality_status") != "approved":
+                        raise CatalogManifestValidationError(
+                            f"카탈로그 근거 청크가 승인 상태가 아닙니다: {chunk.get('chunk_id')}"
+                        )
+                    if not chunk.get("embedding_checksum"):
+                        raise CatalogManifestValidationError(
+                            f"카탈로그 근거 청크의 embedding_checksum이 없습니다: "
+                            f"{chunk.get('chunk_id')}"
+                        )
+
 
 def load_and_validate_catalog(
     *, catalog_path: str | Path, manifest_path: str | Path
@@ -105,8 +130,39 @@ def load_and_validate_catalog(
     return catalog, manifest
 
 
+def catalog_coverage_summary(
+    catalog: ProductCatalog, manifest: dict[str, Any]
+) -> dict[str, dict[str, int]]:
+    """배포 검토용으로 제품별 근거 문서·필드·승인 청크 수를 집계한다."""
+
+    summary: dict[str, dict[str, int]] = {}
+    for product in catalog.products:
+        evidence_fields = sum(
+            bool(getattr(product.evidence_by_field, field_name))
+            for field_name in type(product.evidence_by_field).model_fields
+        )
+        tagged_chunks = [
+            chunk
+            for chunk in manifest["chunks"]
+            if product.name in (chunk.get("product_models") or [])
+        ]
+        evidence_chunks = [
+            chunk
+            for chunk in tagged_chunks
+            if chunk.get("document_id") in product.document_ids
+        ]
+        summary[product.product_id] = {
+            "evidence_fields": evidence_fields,
+            "evidence_documents": len(product.document_ids),
+            "tagged_chunks": len(tagged_chunks),
+            "evidence_chunks": len(evidence_chunks),
+        }
+    return summary
+
+
 __all__ = [
     "CatalogManifestValidationError",
+    "catalog_coverage_summary",
     "load_and_validate_catalog",
     "load_manifest",
     "manifest_documents",

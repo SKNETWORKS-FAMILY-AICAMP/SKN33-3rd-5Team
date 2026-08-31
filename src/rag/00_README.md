@@ -54,17 +54,25 @@ python3 -m document_pipeline.ingestion.run_pipeline \
   --source-registry document_pipeline/data/source_registry_v3.csv \
   --raw-root document_pipeline/data/raw_v3 \
   --processed-root document_pipeline/data/processed_v3 \
-  --manifest-path document_pipeline/data/manifest_v3.json
+  --manifest-path document_pipeline/data/manifest_v3.json \
+  --media-manifest-path document_pipeline/data/media_manifest_v3.json
+
+# catalog의 모든 필드 근거와 제품 태그를 manifest와 교차 검증한다.
+python3 -m src.recommendation.validate_catalog \
+  --catalog data/products/catalog.json \
+  --manifest document_pipeline/data/manifest_v3.json
 
 # .env의 DOCUMENT_MANIFEST/CHROMA_PATH를 v3 경로로 설정한 후 실행한다.
 python3 -m src.services.rag_qa_cli --action index --reset
 ```
 
-`raw_v3`, `processed_v3`, `manifest_v3.json`, `chroma_official_v3` 및 실제
-`data/products/catalog.json`은 재생성·내부 공유 데이터이므로 Git에 커밋하지 않는다.
-Manifest는 **1.1.0만** 지원한다. 현재 고정 commit 기준 v3 manifest는 18개 문서·270개
-승인 청크이며, corpus 또는 처리 설정이 바뀌면 manifest를 재생성하고 `--reset`으로 Chroma를
-다시 색인한다.
+`raw_v3`, `processed_v3`, `manifest_v3.json`, `chroma_official_v3`는 재생성 가능한
+데이터이므로 Git에 커밋하지 않는다. 반면 `data/products/catalog.json`은 팀이 검수한
+실행용 사실 데이터라 Git에서 공동 검토한다. 현재 검증 기준 v3 manifest는 18개 문서·
+승인 청크 270개이며, 최대 E5 입력 길이는 458 tokens다. 자세한 수치는
+[`Document Card`](../../docs/document-cards/raspberry-pi-official-v3.md)를 따른다.
+Manifest는 **1.1.0만** 지원하며, corpus 또는 처리 설정이 바뀌면 media manifest도
+재생성하고 `--reset`으로 Chroma를 다시 색인한다.
 
 ## Retriever 단위 점검: 실행 위치와 명령어
 
@@ -169,6 +177,7 @@ manifest 재생성 후 `--reset` 색인을 수행한다.
 
 ```env
 DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json
+MEDIA_MANIFEST=document_pipeline/data/media_manifest_v3.json
 CHROMA_PATH=data/indexed/chroma_official_v3
 CHROMA_COLLECTION_NAME=rpi_official
 E5_MODEL_NAME=intfloat/multilingual-e5-base

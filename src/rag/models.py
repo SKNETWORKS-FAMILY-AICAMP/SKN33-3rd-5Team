@@ -26,6 +26,9 @@ class RagFilters:
     document_ids: tuple[str, ...] = ()
     source_types: tuple[str, ...] = ()
     official_only: bool = True
+    # 제품 추천은 여러 제품이 섞인 하드웨어 문서에서 선택 제품 태그가 있는
+    # 청크만 허용한다. 일반 QA는 태그 없는 공통 문서도 검색할 수 있다.
+    strict_product_match: bool = False
 
 
 @dataclass(frozen=True)

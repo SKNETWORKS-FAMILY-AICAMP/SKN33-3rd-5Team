@@ -87,6 +87,16 @@ class HybridRetriever:
         """요청 조건이 없거나 청크에 tag가 없으면 제외하지 않고 통과시킨다."""
         return not requested or not actual or bool(set(requested).intersection(actual))
 
+    @staticmethod
+    def _matches_product(chunk: DocumentChunk, filters: RagFilters) -> bool:
+        """추천에서는 선택 제품 태그를 필수로, 일반 QA에서는 범용 청크를 허용한다."""
+
+        if not filters.product_models:
+            return True
+        if chunk.product_models:
+            return bool(set(filters.product_models).intersection(chunk.product_models))
+        return not filters.strict_product_match
+
     def _allowed(self, chunk: DocumentChunk, filters: RagFilters) -> bool:
         """검색 점수를 계산하기 전에 공식 여부와 metadata 조건을 검사한다."""
         return (
@@ -96,7 +106,7 @@ class HybridRetriever:
             # manifest에서 직접 만들기 때문이다.
             and chunk.quality_status == "approved"
             and self._matches(filters.document_ids, (chunk.document_id,))
-            and self._matches(filters.product_models, chunk.product_models)
+            and self._matches_product(chunk, filters)
             and self._matches(filters.use_cases, chunk.use_cases)
             and self._matches(filters.os_versions, chunk.os_versions)
             and self._matches(filters.source_types, (chunk.source_type,))

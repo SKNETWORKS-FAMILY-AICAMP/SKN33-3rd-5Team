@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 import streamlit as st
 
 from src.condition_extraction.ui_input import RecommendationFormInput
-from src.contracts import ChatResponse
+from src.contracts import ChatResponse, MediaItem
 from src.presentation import CitationPresenter, load_citation_presenter
 from src.rag import RagSettings
 from streamlit_app.runtime import (
@@ -106,7 +106,7 @@ def render_hero(title: str, highlighted: str | None, subtitle: str) -> None:
     st.markdown(
         f"""
         <div class="hero">
-          <div class="mock-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.1.0</div>
+          <div class="mock-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.2.0</div>
           <h1>{safe_title}</h1>
           <p>{html.escape(subtitle)}</p>
         </div>
@@ -265,10 +265,7 @@ def render_recommendation_page() -> None:
                 product_card(product)
 
     section_title("추천 근거")
-    render_sources(
-        response.citations,
-        preferred_use_case=response.conditions.use_case if response.conditions else None,
-    )
+    render_sources(response.citations)
     st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
@@ -285,20 +282,21 @@ def answer_label_class(status: str) -> str:
     return "blocked" if status in blocked else ""
 
 
-def render_media(media) -> None:
-    """Render the official images/videos linked to the citations actually used."""
+def render_citation_media(media_items: list[MediaItem]) -> None:
+    """Render only guide media already resolved from final citations by the server."""
 
-    if not media:
+    if not media_items:
         return
-    st.markdown("**관련 공식 이미지·영상**")
-    columns = st.columns(min(len(media), 3), gap="small")
-    for column, item in zip(columns, media[:3], strict=False):
-        with column:
-            if item.media_type == "video":
-                st.video(str(item.url))
-            else:
-                st.image(str(item.url))
-            st.caption(f"{html.escape(item.title)} · [{html.escape(item.source_citation_id)}]")
+    section_title("인용 근거와 연결된 이미지·영상")
+    for item in media_items:
+        if item.media_type == "image":
+            st.image(str(item.url), caption=item.alt_text or item.title, use_container_width=True)
+        else:
+            st.video(str(item.url))
+        st.caption(
+            f"{item.title} · {item.source_citation_id} · "
+            f"{item.attribution} · {item.license}"
+        )
 
 
 def render_answer(response: ChatResponse) -> None:
@@ -363,6 +361,7 @@ def render_qa_page() -> None:
         with right:
             section_title(f"공식 문서 출처 {len(response.citations)}건")
             render_sources(response.citations)
+            render_citation_media(response.media)
     elif not RUNTIME_READINESS.ready:
         st.warning(RUNTIME_READINESS.message)
 

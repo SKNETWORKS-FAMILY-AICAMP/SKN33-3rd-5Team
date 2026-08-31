@@ -44,11 +44,15 @@ def _or_conditions(conditions: list[dict[str, Any]]) -> dict[str, Any]:
     return {"$or": conditions}
 
 
-def _tag_filter(group: str, values: tuple[str, ...]) -> dict[str, Any] | None:
+def _tag_filter(
+    group: str, values: tuple[str, ...], *, include_untagged: bool = True
+) -> dict[str, Any] | None:
     """tag가 없는 일반 문서도 통과시키는 Chroma 조건을 만든다."""
     if not values:
         return None
-    conditions = [{f"filter_all_{group}": True}]
+    conditions = []
+    if include_untagged:
+        conditions.append({f"filter_all_{group}": True})
     conditions.extend({tag_flag_key(group, value): True} for value in values)
     return _or_conditions(conditions)
 
@@ -78,7 +82,13 @@ def chroma_where(filters: RagFilters) -> dict[str, Any] | None:
         ("use_cases", filters.use_cases),
         ("os_versions", filters.os_versions),
     ):
-        condition = _tag_filter(group, values)
+        condition = _tag_filter(
+            group,
+            values,
+            include_untagged=not (
+                group == "product_models" and filters.strict_product_match
+            ),
+        )
         if condition is not None:
             conditions.append(condition)
 

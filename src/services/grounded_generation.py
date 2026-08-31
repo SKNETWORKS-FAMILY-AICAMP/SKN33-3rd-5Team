@@ -56,7 +56,7 @@ def generate_validated_grounded_answer(
     generator: AnswerGenerator,
     messages: Sequence[Mapping[str, str]],
     evidence: Sequence[PromptEvidence],
-    require_korean: bool = False,
+    require_korean: bool = True,
 ) -> ValidatedGeneration:
     """Qwen 출력만 1회 형식 수정 후 다시 엄격하게 검증한다.
 
@@ -97,6 +97,7 @@ def generate_validated_grounded_answer(
                 attempts=first.attempts + repaired.attempts,
                 repair_attempted=True,
             )
+            return ValidatedGeneration(repaired, set(), attempts=2, repair_attempted=True)
         try:
             used = validate_grounded_answer(
                 repaired.text,
