@@ -39,7 +39,21 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="받은 파일의 스키마와 split 누수만 확인하고 학습하지 않습니다.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--hub-repo-id",
+        help="학습·로컬 저장 완료 후 백업할 Hub 저장소. 예: t91004/picare-qwen3-4b-qlora",
+    )
+    parser.add_argument(
+        "--hub-public",
+        action="store_true",
+        help="Hub 백업 시 공개 저장소 생성·업로드 허용. 기본은 비공개입니다.",
+    )
+    args = parser.parse_args()
+    if args.hub_public and not args.hub_repo_id:
+        parser.error("--hub-public에는 --hub-repo-id가 필요합니다.")
+    if args.validate_only and args.hub_repo_id:
+        parser.error("--validate-only는 --hub-repo-id와 함께 사용할 수 없습니다.")
+    return args
 
 
 def load_config(path: str | Path) -> dict[str, Any]:
@@ -165,6 +179,9 @@ def train(config: dict[str, Any]) -> None:
         save_strategy="steps",
         save_steps=train_values["save_steps"],
         save_total_limit=train_values["save_total_limit"],
+        save_safetensors=True,
+        # Hub 백업은 최종 어댑터·토크나이저·manifest 저장이 끝난 뒤에만 수행한다.
+        push_to_hub=False,
         gradient_checkpointing=True,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=compute_dtype is torch.bfloat16,
@@ -227,6 +244,15 @@ def main() -> None:
         )
         return
     train(config)
+    if args.hub_repo_id:
+        from training.publish_adapter import publish_adapter
+
+        print("로컬 저장 완료. Hub 업로드가 실패해도 재학습 없이 별도로 재시도할 수 있습니다.")
+        publish_adapter(
+            config["training"]["output_dir"],
+            args.hub_repo_id,
+            private=not args.hub_public,
+        )
 
 
 if __name__ == "__main__":
