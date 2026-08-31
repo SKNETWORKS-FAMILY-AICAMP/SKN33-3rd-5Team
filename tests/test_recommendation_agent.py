@@ -9,9 +9,39 @@ from src.condition_extraction.schema import SurveyAnswer, SurveyResponse
 from src.condition_extraction.ui_input import RecommendationFormInput
 from src.contracts import ConditionPayload, SearchResponse
 from src.recommendation.engine import ProductRecommender
+from src.recommendation.catalog_validation import (
+    CatalogManifestValidationError,
+    validate_catalog_manifest_alignment,
+)
 from src.recommendation.schema import ProductCatalog
+from src.rag import RagFilters, RagResult, RetrievalDecision
+from src.rag_to_llm import EvidenceTemplateGenerator, GenerationResult
 from src.services.recommendation_agent import RecommendationAgent
+from src.services.recommendation_rag_service import RecommendationRagService
 from src.services.recommendation_response import build_recommendation_chat_response
+from src.services.integration_adapters import RagResultMetadata
+
+
+def evidence(document_id: str) -> dict[str, list[str]]:
+    """테스트 제품의 모든 사실이 한 공식 문서에 근거한다고 표현한다."""
+
+    fields = (
+        "identity",
+        "wireless",
+        "ethernet",
+        "gpio_header",
+        "camera_connector_count",
+        "display_output_count",
+        "built_in_keyboard",
+        "cpu",
+        "memory",
+        "dimensions",
+        "recommendation_profile",
+    )
+    return {field: [document_id] for field in fields} | {
+        "required_accessories": [],
+        "caveats": [],
+    }
 
 
 def catalog() -> ProductCatalog:
@@ -19,7 +49,7 @@ def catalog() -> ProductCatalog:
 
     return ProductCatalog.model_validate(
         {
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
             "catalog_version": "test-v1",
             "generated_at": datetime.fromisoformat("2026-08-27T12:00:00+09:00"),
             "sources": [
@@ -68,6 +98,7 @@ def catalog() -> ProductCatalog:
                     },
                     "required_accessories": [],
                     "caveats": [],
+                    "evidence_by_field": evidence("doc-compact"),
                     "document_ids": ["doc-compact"],
                     "product_url": "https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/",
                     "image_url": "https://www.raspberrypi.com/example/compact.png",
@@ -101,6 +132,10 @@ def catalog() -> ProductCatalog:
                     },
                     "required_accessories": ["power supply"],
                     "caveats": ["cooling may be required"],
+                    "evidence_by_field": evidence("doc-fast") | {
+                        "required_accessories": ["doc-fast"],
+                        "caveats": ["doc-fast"],
+                    },
                     "document_ids": ["doc-fast"],
                     "product_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
                     "image_url": None,
@@ -340,6 +375,184 @@ class RecommendationAgentTests(unittest.TestCase):
         self.assertIn("[C1]", response.answer)
         self.assertIn("GPIO·IoT", response.answer)
         self.assertEqual(response.citations[0].document_id, "doc-compact")
+
+
+class CatalogToRagTests(unittest.TestCase):
+    """실제 추천 후보가 catalog 근거 문서만 검색·인용하는지 확인한다."""
+
+    @staticmethod
+    def _metadata() -> RagResultMetadata:
+        return RagResultMetadata(
+            chunk_index=0,
+            publisher="Raspberry Pi Ltd",
+            language="en",
+            source_type="documentation",
+            indexed_at=datetime.fromisoformat("2026-08-30T12:00:00+00:00"),
+            document_checksum="sha256:document",
+            chunk_checksum="sha256:chunk",
+            parser_version="test",
+            official_verified=True,
+            product_models=("Compact Board",),
+            use_cases=("gpio_iot",),
+            tasks=("sensor_monitoring",),
+            categories=("hardware",),
+        )
+
+    @staticmethod
+    def _result() -> RagResult:
+        return RagResult(
+            rank=1,
+            content="Compact Board has wireless connectivity and a GPIO header for sensor monitoring.",
+            chunk_id="compact-001",
+            document_id="doc-compact",
+            title="Official compact hardware source",
+            section="Hardware",
+            source_url="https://www.raspberrypi.com/documentation/computers/raspberry-pi.html",
+            license="CC BY-SA 4.0",
+            retrieved_at="2026-08-30",
+            document_version="commit-test",
+        )
+
+    class StaticRetriever:
+        def __init__(self, decision: RetrievalDecision) -> None:
+            self.decision = decision
+            self.calls = 0
+            self.query = ""
+            self.filters: RagFilters | None = None
+
+        def search_with_decision(self, query, filters=None, top_k=5):
+            self.calls += 1
+            self.query = query
+            self.filters = filters
+            return self.decision
+
+    def _service(self, retriever, *, generator=None, extractor=None) -> RecommendationRagService:
+        return RecommendationRagService(
+            recommendation_agent=RecommendationAgent(
+                extractor=extractor or StaticExtractor(conditions()),
+                recommender=ProductRecommender(catalog()),
+            ),
+            retriever=retriever,
+            metadata_by_chunk_id={"compact-001": self._metadata()},
+            answer_generator=generator or EvidenceTemplateGenerator(),
+        )
+
+    def test_catalog_manifest_alignment_requires_matching_official_sources(self):
+        checked_catalog = catalog()
+        manifest = {
+            "chunks": [
+                {
+                    "document_id": source.document_id,
+                    "title": source.title,
+                    "source_url": str(source.source_url),
+                    "collected_at": "2026-08-30",
+                    "license": source.license,
+                    "official_verified": True,
+                }
+                for source in checked_catalog.sources
+            ]
+        }
+        validate_catalog_manifest_alignment(checked_catalog, manifest)
+
+        manifest["chunks"][0]["title"] = "Wrong title"
+        with self.assertRaises(CatalogManifestValidationError):
+            validate_catalog_manifest_alignment(checked_catalog, manifest)
+
+    def test_recommendation_uses_candidate_document_ids_for_hybrid_rag(self):
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever).answer(
+            request_id="catalog-rag-1",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+            trace=True,
+        )
+
+        self.assertEqual(response.status, "answered")
+        self.assertEqual([product.product_id for product in response.products], ["compact-board"])
+        self.assertIn("[C1]", response.answer)
+        self.assertEqual(retriever.filters.document_ids, ("doc-compact", "doc-fast"))
+        self.assertIn("Compact Board", retriever.query)
+        self.assertIn("trace.citation_validation=passed", response.warnings)
+
+    def test_insufficient_catalog_evidence_skips_answer_generator(self):
+        class SpyGenerator(EvidenceTemplateGenerator):
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def generate(self, messages, evidence):
+                self.calls += 1
+                return super().generate(messages, evidence)
+
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="insufficient_evidence", results=(), reason="no_qualified_evidence")
+        )
+        generator = SpyGenerator()
+        response = self._service(retriever, generator=generator).answer(
+            request_id="catalog-rag-2",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+        )
+
+        self.assertEqual(response.status, "insufficient_evidence")
+        self.assertEqual(generator.calls, 0)
+
+    def test_clarification_skips_retrieval_and_generation(self):
+        unclear = conditions(
+            use_case=None,
+            product_models=None,
+            needs_clarification=True,
+            clarification_questions=["사용 목적을 알려 주세요."],
+        )
+        retriever = self.StaticRetriever(RetrievalDecision(status="retrieved", results=(self._result(),)))
+        response = self._service(retriever, extractor=StaticExtractor(unclear)).answer(
+            request_id="catalog-rag-3",
+            question="라즈베리파이 추천해줘",
+        )
+
+        self.assertEqual(response.status, "needs_clarification")
+        self.assertEqual(retriever.calls, 0)
+
+    def test_model_cannot_add_an_unselected_catalog_product(self):
+        class UnselectedProductGenerator:
+            def generate(self, messages, evidence):
+                return GenerationResult(
+                    text="Fast Board를 추천합니다. [C1]",
+                    provider="test",
+                    model_id="test-model",
+                    elapsed_ms=0,
+                )
+
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever, generator=UnselectedProductGenerator()).answer(
+            request_id="catalog-rag-4",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+        )
+
+        self.assertEqual(response.status, "error")
+        self.assertEqual(response.products, [])
+
+    def test_actual_generator_must_name_a_selected_candidate(self):
+        class MissingCandidateGenerator:
+            def generate(self, messages, evidence):
+                return GenerationResult(
+                    text="공식 근거를 확인했습니다. [C1]",
+                    provider="huggingface",
+                    model_id="test-model",
+                    elapsed_ms=0,
+                )
+
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever, generator=MissingCandidateGenerator()).answer(
+            request_id="catalog-rag-5",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+        )
+
+        self.assertEqual(response.status, "error")
+        self.assertEqual(response.products, [])
 
 
 if __name__ == "__main__":

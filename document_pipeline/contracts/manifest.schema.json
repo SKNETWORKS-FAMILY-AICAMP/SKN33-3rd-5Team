@@ -22,7 +22,7 @@
     },
     "source_registry": {
       "type": "string",
-      "const": "document_pipeline/data/source_registry.csv"
+      "pattern": "^document_pipeline/data/source_registry(?:_v[0-9]+)?\\.csv$"
     },
     "processing": {
       "$ref": "#/$defs/processing"

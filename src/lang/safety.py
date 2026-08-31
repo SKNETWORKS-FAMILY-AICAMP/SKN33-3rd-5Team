@@ -46,6 +46,14 @@ _COMMERCE_PATTERNS = (
     re.compile(r"(?:쇼핑몰|판매처|구매처).{0,20}(?:추천|순위|비교)", re.IGNORECASE),
 )
 
+# 현재 로컬 공식 corpus에는 A/S·보증·리콜 공지가 포함되지 않는다. 이 질문은
+# Dense 검색이 의미적으로 가까운 일반 문서를 반환하더라도 근거 부족으로 보류한다.
+_SUPPORT_RECALL_PATTERNS = (
+    re.compile(r"(?:리콜|recall)", re.IGNORECASE),
+    re.compile(r"(?:a\s*/?\s*s)(?=\s|[가-힣]|$)|after[-\s]?sales|애프터\s*서비스", re.IGNORECASE),
+    re.compile(r"(?:서비스\s*센터|수리\s*(?:접수|신청)|보증\s*(?:기간|수리)|warranty)", re.IGNORECASE),
+)
+
 _UNSUPPORTED_MODIFICATION_PATTERNS = (
     re.compile(r"오버\s*클럭", re.IGNORECASE),
     re.compile(r"비공식.{0,12}(?:개조|펌웨어|드라이버|설정)", re.IGNORECASE),
@@ -54,6 +62,13 @@ _UNSUPPORTED_MODIFICATION_PATTERNS = (
 )
 
 _CITATION_PATTERN = re.compile(r"\[(C[1-9][0-9]*)\]")
+_CITATION_SUFFIX_PATTERN = re.compile(r"(?:\s*\[C[1-9][0-9]*\])+\s*$")
+_MARKDOWN_HEADING_PATTERN = re.compile(
+    r"^(?:#{1,6}\s+\S.*|\*\*\s*\S.*?\s*\*\*|__\s*\S.*?\s*__)$"
+)
+_LIST_ITEM_PATTERN = re.compile(
+    r"^(?P<indent>\s*)(?P<marker>[-+*]|[1-9][0-9]*[.)])\s+\S"
+)
 _URL_PATTERN = re.compile(
     r"(?i)(?:https?://|www\.|(?:raspberrypi|github)\.com/)[^\s)>\]]+"
 )
@@ -126,6 +141,15 @@ def evaluate_request(
                 "지원 범위에 포함되지 않습니다."
             ),
         )
+    if _matches_any(normalized, _SUPPORT_RECALL_PATTERNS):
+        return SafetyDecision(
+            status="insufficient_evidence",
+            reason_code="support_recall_corpus_unavailable",
+            message=(
+                "현재 로컬 공식 corpus에는 A/S·보증·리콜 공지가 포함되지 않아 "
+                "확인 가능한 근거가 없습니다. 추측하지 않고 답변을 보류합니다."
+            ),
+        )
     if _matches_any(normalized, _UNSUPPORTED_MODIFICATION_PATTERNS):
         return SafetyDecision(
             status="out_of_scope",
@@ -157,6 +181,70 @@ def extract_citation_ids(answer: str) -> set[str]:
     return set(_CITATION_PATTERN.findall(answer))
 
 
+def _grounded_content_blocks(answer: str) -> list[str]:
+    """Group prose by paragraph or top-level Markdown list item.
+
+    Markdown headings are structural labels, not factual content. Wrapped lines
+    and child items remain part of their parent paragraph/list item, including
+    across blank lines, so one citation at the end can ground the complete block.
+    """
+
+    blocks: list[str] = []
+    current_lines: list[str] = []
+    current_list_indent: int | None = None
+    current_list_kind: Literal["ordered", "unordered"] | None = None
+    pending_blank = False
+
+    def flush_current() -> None:
+        nonlocal current_lines, current_list_indent, current_list_kind, pending_blank
+        if current_lines:
+            blocks.append("\n".join(current_lines))
+        current_lines = []
+        current_list_indent = None
+        current_list_kind = None
+        pending_blank = False
+
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if current_list_indent is None:
+                flush_current()
+            else:
+                pending_blank = True
+            continue
+        if _MARKDOWN_HEADING_PATTERN.fullmatch(stripped):
+            flush_current()
+            continue
+
+        expanded = line.expandtabs(4)
+        list_item = _LIST_ITEM_PATTERN.match(expanded)
+        if list_item:
+            indent = len(list_item.group("indent"))
+            marker = list_item.group("marker")
+            list_kind: Literal["ordered", "unordered"] = (
+                "ordered" if marker[0].isdigit() else "unordered"
+            )
+            is_child = current_list_indent is not None and (
+                indent > current_list_indent
+                or (current_list_kind == "ordered" and list_kind == "unordered")
+            )
+            if current_lines and not is_child:
+                flush_current()
+            if not current_lines:
+                current_list_indent = indent
+                current_list_kind = list_kind
+        elif pending_blank and current_list_indent is not None:
+            continuation_indent = len(expanded) - len(expanded.lstrip())
+            if continuation_indent <= current_list_indent:
+                flush_current()
+
+        current_lines.append(stripped)
+        pending_blank = False
+
+    flush_current()
+    return blocks
+
+
 def validate_grounded_answer(
     answer: str,
     *,
@@ -186,16 +274,15 @@ def validate_grounded_answer(
             f"검색 결과에 없는 인용 ID가 포함되었습니다: {', '.join(sorted(unknown))}"
         )
 
-    uncited_lines = []
-    for line in normalized.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        if not _CITATION_PATTERN.search(stripped):
-            uncited_lines.append(stripped)
-    if uncited_lines:
+    uncited_blocks = [
+        block
+        for block in _grounded_content_blocks(normalized)
+        if not _CITATION_SUFFIX_PATTERN.search(block)
+    ]
+    if uncited_blocks:
         raise AnswerSafetyError(
-            "인용 ID가 없는 답변 문단이 있습니다: " + " | ".join(uncited_lines)
+            "마지막에 인용 ID가 없는 답변 문단 또는 목록 항목이 있습니다: "
+            + " | ".join(block.replace("\n", " ") for block in uncited_blocks)
         )
     return referenced
 

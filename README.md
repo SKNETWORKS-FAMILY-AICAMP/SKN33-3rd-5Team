@@ -59,9 +59,9 @@
 
 #### 트랙 B. sLLM QLoRA 파인튜닝
 
-- Base model: [Qwen/Qwen3-1.7B](https://huggingface.co/Qwen/Qwen3-1.7B)
+- Base model: [Qwen/Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507)
 - Task: 사용자 질문에서 제품·OS·작업·성능·연결 조건을 고정 JSON으로 추출
-- Baseline: Qwen3-1.7B + Few-shot prompt
+- Baseline: Qwen3-4B-Instruct-2507 + Few-shot prompt
 - Experiment: 동일 모델 + [PEFT 4-bit QLoRA](https://huggingface.co/docs/peft/developer_guides/quantization) adapter
 - Dataset: 팀이 작성·검수한 질문–조건 JSON 학습 데이터 300~500건
 - Environment: [RunPod Pod](https://docs.runpod.io/pods/overview) 24GB급 단일 GPU와 재현 가능한 학습 설정
@@ -113,6 +113,23 @@ flowchart LR
 
     Q3 -. 실패 시 .-> Q9[Few-shot fallback 또는 확인 질문]
 ```
+
+### 제품 추천 통합 흐름
+
+제품 추천은 일반 QA와 달리 모델이 제품 후보를 자유 생성하지 않는다. `schema_version`
+`1.1.0`의 catalog에는 보드별 사양·추천 기준과 **필드별 공식 `document_id` 근거**가
+들어 있으며, 코드가 먼저 후보를 확정한다.
+
+```text
+자유 입력 → sLLM LoRA 조건 JSON → catalog 하드 필터·점수화
+→ 후보 document_id로 BM25·Chroma 제한 → Hybrid RAG → Qwen 답변·인용 검증
+→ 서버 조립 제품 카드·공식 URL·이미지·출처
+```
+
+근거를 검색하지 못한 후보는 카드와 Qwen 프롬프트에서 제외하며, 남은 후보가 없으면
+`insufficient_evidence`로 보류한다. 로컬 template 확인 또는 RunPod 실제 Qwen 실행의
+구체적 명령은 [`src/rag/00_README.md`](src/rag/00_README.md)와
+[`runpod/README.md`](runpod/README.md)를 따른다.
 
 ## 공식 문서 출처
 
@@ -182,7 +199,7 @@ flowchart LR
 
 | 항목 | 현재 계획 |
 |---|---|
-| Base model | Qwen/Qwen3-1.7B |
+| Base model | Qwen/Qwen3-4B-Instruct-2507 |
 | Base licence | Apache 2.0 |
 | 학습 방법 | 4-bit QLoRA 기반 SFT |
 | 학습 환경 | RunPod 24GB급 단일 GPU |
@@ -268,6 +285,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
     "product_models": ["Raspberry Pi 5"],
     "use_cases": ["education_coding"],
     "os_versions": [],
+    "document_ids": [],
     "source_types": ["documentation"],
     "official_only": true
   },
@@ -415,8 +433,8 @@ RAG 평가 질문 50개는 개발 중 사용하는 **Dev set 40개**와 마지�
 
 | 실험 | 모델 | Adapter | JSON 준수율 | Macro F1 | Exact Match | 추천 정확도 | 응답 시간 |
 |---|---|---|---:|---:|---:|---:|---:|
-| Baseline | Qwen3-1.7B + Few-shot | 없음 |  |  |  |  |  |
-| QLoRA | Qwen3-1.7B + 동일 prompt | 적용 |  |  |  |  |  |
+| Baseline | Qwen3-4B-Instruct-2507 + Few-shot | 없음 |  |  |  |  |  |
+| QLoRA | Qwen3-4B-Instruct-2507 + 동일 prompt | 적용 |  |  |  |  |  |
 | Final | 채택한 조건 추출기 + RAG |  |  |  |  |  |  |
 
 sLLM Train·Dev·Holdout과 RAG Dev·Holdout의 목적을 구분하고, 학습 데이터 또는 의미가 같은 변형 질문이 최종 평가셋에 들어가지 않도록 누수를 검사합니다.
@@ -471,6 +489,24 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 > [!NOTE]
 > 현재 Streamlit 화면은 sLLM·RAG 연동 전 UI 검증을 위한 mock 버전입니다. 제품 추천, 조건 JSON, 한국어 QA 답변, 답변 보류, 공식 문서 출처 화면을 미리 확인할 수 있습니다.
 
+### 현재 RAG QA 실행 기준
+
+공식 문서 검색·답변 생성기·인용 검증을 함께 실행하는 팀 공통 명령은 아래다.
+`src.rag.demo`는 Retriever 결과만 보는 단위 점검 도구이므로 발표·시연·통합 확인에는
+사용하지 않는다.
+
+```bash
+python3 -m src.services.rag_qa_cli
+```
+
+인자 없이 실행하면 질문을 입력받아 최종 Hybrid QA를 실행한다. BM25 단독 검색과 Chroma
+색인 생성은 성능 비교·운영용 명시 옵션으로만 사용한다. Hybrid QA를 바로 실행할 때는 다음
+명령을 사용한다.
+
+```bash
+python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
+```
+
 예정된 챗봇 실행 흐름은 다음과 같습니다.
 
 ```bash
@@ -494,7 +530,7 @@ LORA_ADAPTER_PATH=<LOCAL_OR_REMOTE_ADAPTER_PATH>
 RunPod 학습은 별도 스크립트와 설정 파일로 재현합니다.
 
 ```bash
-python training/train_qlora.py --config training/configs/qwen3_1_7b_qlora.yaml
+python training/train_qlora.py --config training/configs/qwen3_4b_qlora.yaml
 python -m src.evaluation.extractor_eval --mode baseline
 python -m src.evaluation.extractor_eval --mode lora
 ```
@@ -508,7 +544,7 @@ python -m src.evaluation.extractor_eval --mode lora
 | 안정민 | PM·아키텍처·통합 | 일정·범위 관리, 인터페이스 정의, 최종 통합, 발표 |
 | 김혜리 | 문서·데이터 | 공식 문서 수집, 라이선스 검토, 정제·청킹, Document Card |
 | 최지흠 | RAG·검색 | multilingual-e5-base, Vector DB, Retriever, 검색 평가 |
-| 이양원 | sLLM·파인튜닝 | JSON Schema, 학습 데이터, Qwen3-1.7B QLoRA, 모델 평가 |
+| 이양원 | sLLM·파인튜닝 | JSON Schema, 학습 데이터, Qwen3-4B-Instruct-2507 QLoRA, 모델 평가 |
 | 김나은 | 챗봇·Streamlit | LangChain 생성 체인, 안전 정책, 출처 UI, 통합 테스트 |
 
 ### 공통 업무

@@ -1,6 +1,7 @@
 """Validate the manifest contract and source registry without third-party packages."""
 from __future__ import annotations
 
+import argparse
 import ast
 import csv
 import json
@@ -96,8 +97,8 @@ def validate_manifest_schema() -> None:
         )
 
 
-def validate_source_registry() -> tuple[int, int, int]:
-    with REGISTRY_PATH.open(encoding="utf-8-sig", newline="") as file:
+def validate_source_registry(registry_path: Path = REGISTRY_PATH) -> tuple[int, int, int]:
+    with registry_path.open(encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
         columns = set(reader.fieldnames or [])
         if columns != REQUIRED_REGISTRY_COLUMNS:
@@ -148,13 +149,13 @@ def validate_source_registry() -> tuple[int, int, int]:
     return len(rows), included, reference_only
 
 
-def validate_product_media_registry() -> int:
+def validate_product_media_registry(registry_path: Path = REGISTRY_PATH) -> int:
     schema = json.loads(MEDIA_SCHEMA_PATH.read_text(encoding="utf-8"))
     required_top_level = {"schema_version", "reviewed_at", "display_scope", "items"}
     if set(schema["required"]) != required_top_level:
         raise ValueError("product media schema top-level fields differ")
 
-    with REGISTRY_PATH.open(encoding="utf-8-sig", newline="") as file:
+    with registry_path.open(encoding="utf-8-sig", newline="") as file:
         source_ids = {row["source_id"] for row in csv.DictReader(file)}
 
     payload = json.loads(MEDIA_REGISTRY_PATH.read_text(encoding="utf-8"))
@@ -204,9 +205,13 @@ def validate_product_media_registry() -> int:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Validate a document pipeline source registry.")
+    parser.add_argument("--source-registry", type=Path, default=REGISTRY_PATH)
+    args = parser.parse_args()
+
     validate_manifest_schema()
-    total, included, reference_only = validate_source_registry()
-    media_count = validate_product_media_registry()
+    total, included, reference_only = validate_source_registry(args.source_registry)
+    media_count = validate_product_media_registry(args.source_registry)
     print("foundation validation passed")
     print(f"registry records: {total}")
     print(f"include: {included}")

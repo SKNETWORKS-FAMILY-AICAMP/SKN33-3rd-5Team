@@ -1,0 +1,6 @@
+# RunPod CUDA PyTorch 이미지에서 RAG QA와 Qwen3-4B Base Instruct를 실행하기 위한 패키지다.
+# torch는 CUDA 이미지에 포함된 호환 빌드를 사용하므로 여기서 재설치하지 않는다.
+transformers>=4.51,<6
+accelerate>=1.6,<2
+bitsandbytes>=0.46,<1
+peft>=0.15,<1

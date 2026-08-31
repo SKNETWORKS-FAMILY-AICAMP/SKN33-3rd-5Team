@@ -11,6 +11,7 @@ from src.services.integration_adapters import (
     IntegrationAdapterError,
     RagResultMetadata,
     condition_payload_to_rag_filters,
+    manifest_to_rag_result_metadata,
     rag_results_to_search_response,
 )
 
@@ -111,6 +112,40 @@ class IntegrationAdapterTests(unittest.TestCase):
         self.assertEqual(result.collected_at.isoformat(), "2026-08-27")
         self.assertEqual(result.publisher, "Raspberry Pi Ltd")
         self.assertEqual(response.applied_filters.product_models, ["Raspberry Pi 5"])
+        self.assertEqual(response.applied_filters.document_ids, [])
+
+    def test_manifest_metadata_adapter_preserves_canonical_chunk_metadata(self) -> None:
+        mapped = manifest_to_rag_result_metadata(
+            {
+                "chunks": [
+                    {
+                        "chunk_id": "camera-001",
+                        "chunk_index": 0,
+                        "publisher": "Raspberry Pi Ltd",
+                        "language": "en",
+                        "source_type": "documentation",
+                        "document_checksum": "sha256:document",
+                        "chunk_checksum": "sha256:chunk",
+                        "parser_version": "asciidoc-semantic-2.0.0",
+                        "official_verified": True,
+                        "source_anchor": "camera",
+                        "published_at": None,
+                        "updated_at": None,
+                        "product_models": ["Raspberry Pi 5"],
+                        "use_cases": ["camera_monitoring"],
+                        "tasks": ["camera_setup"],
+                        "categories": ["camera"],
+                        "os_versions": ["Raspberry Pi OS"],
+                        "image_url": None,
+                        "video_url": None,
+                    }
+                ]
+            },
+            indexed_at=datetime.fromisoformat("2026-08-30T12:00:00+00:00"),
+        )
+
+        self.assertEqual(mapped["camera-001"].source_anchor, "camera")
+        self.assertEqual(mapped["camera-001"].tasks, ("camera_setup",))
 
     def test_missing_metadata_is_not_silently_invented(self) -> None:
         with self.assertRaisesRegex(IntegrationAdapterError, "metadata가 없습니다"):

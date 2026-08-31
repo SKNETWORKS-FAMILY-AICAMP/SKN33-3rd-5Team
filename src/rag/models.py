@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,9 @@ class RagFilters:
     product_models: tuple[str, ...] = ()
     use_cases: tuple[str, ...] = ()
     os_versions: tuple[str, ...] = ()
+    # 제품 추천은 catalog가 검증한 근거 문서 안에서만 답해야 한다. 빈 튜플은
+    # 기존 QA처럼 문서 ID로 검색 범위를 제한하지 않는다는 뜻이다.
+    document_ids: tuple[str, ...] = ()
     source_types: tuple[str, ...] = ()
     official_only: bool = True
 
@@ -97,3 +100,17 @@ class RagResult:
             document_version=chunk.document_version,
             source_anchor=chunk.source_anchor,
         )
+
+
+@dataclass(frozen=True)
+class RetrievalDecision:
+    """검색 결과와 근거 충분 여부를 함께 표현한다.
+
+    ``search()``의 기존 ``list[RagResult]`` 계약은 유지한다. 챗봇처럼 근거
+    부족을 구분해야 하는 호출부는 ``search_with_decision()``의 이 객체를
+    사용한다.
+    """
+
+    status: Literal["retrieved", "insufficient_evidence"]
+    results: tuple[RagResult, ...]
+    reason: str | None = None

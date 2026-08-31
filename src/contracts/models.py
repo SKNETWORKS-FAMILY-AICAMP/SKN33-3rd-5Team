@@ -113,6 +113,9 @@ class SearchFilters(StrictContract):
     product_models: list[NonEmptyText]
     use_cases: list[NonEmptyText]
     os_versions: list[NonEmptyText]
+    # catalog 추천 경로에서 후보 근거 문서로만 검색 범위를 제한할 때 사용한다.
+    # 기본값은 기존 검색 계약과의 호환을 위한 제한 없음이다.
+    document_ids: list[NonEmptyText] = Field(default_factory=list)
     source_types: list[SourceType]
     official_only: bool
 

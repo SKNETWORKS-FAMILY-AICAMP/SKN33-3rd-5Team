@@ -15,7 +15,7 @@ GROUNDED_ANSWER_SYSTEM_PROMPT = """당신은 Raspberry Pi 공식 문서 기반 �
 반드시 지킬 규칙:
 1. <official_evidence> 안에 제공된 검색 문서에서 직접 확인되는 내용만 답하세요.
 2. 모델의 사전 지식, 추측, 일반 웹 정보로 빈 부분을 채우지 마세요.
-3. 각 사실 문장 또는 점검 단계의 마지막에 이를 뒷받침하는 인용 ID를 [C1] 형식으로 붙이세요.
+3. 각 사실 문단 또는 번호·불릿 목록 항목 전체의 마지막에 이를 뒷받침하는 인용 ID를 [C1] 형식으로 붙이세요.
 4. 제공되지 않은 인용 ID를 만들지 마세요.
 5. URL, 문서 제목, section, publisher, license 같은 출처 metadata를 생성하거나 나열하지 마세요. 출처 카드는 서버가 검색 metadata로 구성합니다.
 6. 근거가 부족하거나 문서끼리 상충하면 단정하지 말고 답변을 보류하며 필요한 추가 정보를 짧게 요청하세요.
@@ -26,8 +26,18 @@ GROUNDED_ANSWER_SYSTEM_PROMPT = """당신은 Raspberry Pi 공식 문서 기반 �
 
 출력 형식:
 - 답변 본문만 출력합니다.
-- 각 내용 문단과 번호 목록 항목에는 하나 이상의 허용된 인용 ID가 있어야 합니다.
+- 각 내용 문단과 각 번호·불릿 목록 항목의 마지막에는 하나 이상의 허용된 인용 ID가 있어야 합니다.
+- 같은 문단이나 목록 항목 안에서 줄이 바뀐 경우(빈 줄과 하위 설명 포함) 중간 줄마다 인용 ID를 반복하지 마세요.
+- 단순 제목에는 인용 ID를 생략해도 됩니다. 제목은 '# 제목' 또는 '**제목**' 형식으로만 작성하고, 제목에 사실 설명이나 지시를 넣지 마세요.
 - 별도의 '출처' 목록, URL, JSON, 코드 펜스는 출력하지 않습니다.
+"""
+
+RECOMMENDATION_ANSWER_SYSTEM_PROMPT = GROUNDED_ANSWER_SYSTEM_PROMPT + """
+
+제품 추천 추가 규칙:
+11. <selected_candidates>는 서버가 catalog 조건으로 확정한 후보입니다. 후보에 없는 제품·메모리 변형·구성품을 새로 추천하거나 비교하지 마세요.
+12. 후보 이름, 장점, 제한사항을 설명할 때도 <official_evidence>에서 확인되는 내용만 사용하고 각 내용에 인용을 붙이세요.
+13. 제품 URL, 이미지 URL, 가격, 재고, 판매처를 답변 본문에 넣지 마세요. 제품 카드는 서버가 별도로 표시합니다.
 """
 
 
@@ -109,9 +119,52 @@ def build_grounded_answer_messages(
     ]
 
 
+def build_recommendation_answer_messages(
+    question: str,
+    *,
+    selected_candidates: str,
+    evidence: Sequence[PromptEvidence],
+) -> list[dict[str, str]]:
+    """서버가 확정한 catalog 후보와 공식 근거로 추천 설명 프롬프트를 만든다."""
+
+    items = tuple(evidence)
+    decision = evaluate_request(question, evidence_count=len(items))
+    if not decision.allowed:
+        raise PromptBuildError(decision)
+    if not selected_candidates.strip():
+        raise ValueError("추천 답변에는 서버가 선택한 제품 후보가 필요합니다.")
+    citation_ids = [item.citation_id for item in items]
+    if len(citation_ids) != len(set(citation_ids)):
+        raise ValueError("검색 근거에 중복된 인용 ID가 있습니다.")
+
+    user_prompt = f"""<user_question>
+{escape(question.strip())}
+</user_question>
+
+<selected_candidates>
+{escape(selected_candidates.strip())}
+</selected_candidates>
+
+<allowed_citation_ids>
+{', '.join(citation_ids)}
+</allowed_citation_ids>
+
+<official_evidence>
+{_render_evidence(items)}
+</official_evidence>
+
+위 후보와 근거만 사용해 한국어 제품 추천 설명을 작성하세요."""
+    return [
+        {"role": "system", "content": RECOMMENDATION_ANSWER_SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
 __all__ = [
     "GROUNDED_ANSWER_SYSTEM_PROMPT",
+    "RECOMMENDATION_ANSWER_SYSTEM_PROMPT",
     "PromptBuildError",
     "PromptEvidence",
     "build_grounded_answer_messages",
+    "build_recommendation_answer_messages",
 ]

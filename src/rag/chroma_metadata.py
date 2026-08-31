@@ -68,6 +68,11 @@ def chroma_where(filters: RagFilters) -> dict[str, Any] | None:
             conditions.append({"source_type": filters.source_types[0]})
         else:
             conditions.append({"source_type": {"$in": list(filters.source_types)}})
+    if filters.document_ids:
+        if len(filters.document_ids) == 1:
+            conditions.append({"document_id": filters.document_ids[0]})
+        else:
+            conditions.append({"document_id": {"$in": list(filters.document_ids)}})
     for group, values in (
         ("product_models", filters.product_models),
         ("use_cases", filters.use_cases),
