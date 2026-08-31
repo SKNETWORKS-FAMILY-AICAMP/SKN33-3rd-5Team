@@ -218,6 +218,70 @@ def test_invalid_generated_citation_is_not_exposed():
     assert "C9" not in response.answer
 
 
+def test_huggingface_generation_retries_once_with_citation_repair():
+    class RepairingGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, messages, evidence):
+            self.calls += 1
+            text = "SSH 설정을 확인하세요." if self.calls == 1 else "Raspberry Pi Imager에서 SSH를 활성화하세요. [C1]"
+            return GenerationResult(
+                text=text,
+                provider="huggingface",
+                model_id="Qwen/test",
+                elapsed_ms=0.0,
+            )
+
+    generator = RepairingGenerator()
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        answer_generator=generator,
+    ).answer(
+        request_id="request-citation-repair",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+        trace=True,
+    )
+
+    assert response.status == "answered"
+    assert generator.calls == 2
+    assert "trace.generation_attempts=2" in response.warnings
+    assert "trace.citation_repair=applied" in response.warnings
+
+
+def test_huggingface_citation_repair_failure_keeps_generated_text_hidden():
+    class StillInvalidGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, messages, evidence):
+            self.calls += 1
+            return GenerationResult(
+                text="이 문장은 인용을 포함하지 않습니다.",
+                provider="huggingface",
+                model_id="Qwen/test",
+                elapsed_ms=0.0,
+            )
+
+    generator = StillInvalidGenerator()
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        answer_generator=generator,
+    ).answer(
+        request_id="request-citation-repair-failed",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+        trace=True,
+    )
+
+    assert response.status == "error"
+    assert generator.calls == 2
+    assert "인용을 포함하지" not in response.answer
+    assert "trace.citation_repair=failed" in response.warnings
+    assert "trace.citation_failure=missing_citation" in response.warnings
+
+
 def test_explicit_model_failure_becomes_clear_error_response():
     class FailingGenerator:
         def generate(self, messages, evidence):

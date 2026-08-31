@@ -390,8 +390,10 @@ class CatalogToRagTests(unittest.TestCase):
             indexed_at=datetime.fromisoformat("2026-08-30T12:00:00+00:00"),
             document_checksum="sha256:document",
             chunk_checksum="sha256:chunk",
+            embedding_checksum="sha256:embedding",
             parser_version="test",
             official_verified=True,
+            quality_status="approved",
             product_models=("Compact Board",),
             use_cases=("gpio_iot",),
             tasks=("sensor_monitoring",),
@@ -553,6 +555,40 @@ class CatalogToRagTests(unittest.TestCase):
 
         self.assertEqual(response.status, "error")
         self.assertEqual(response.products, [])
+
+    def test_huggingface_recommendation_retries_once_for_citation_format(self):
+        class RepairingGenerator:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def generate(self, messages, evidence):
+                self.calls += 1
+                text = (
+                    "Compact Board는 센서 모니터링에 적합합니다."
+                    if self.calls == 1
+                    else "Compact Board는 센서 모니터링에 사용할 수 있습니다. [C1]"
+                )
+                return GenerationResult(
+                    text=text,
+                    provider="huggingface",
+                    model_id="Qwen/test",
+                    elapsed_ms=0,
+                )
+
+        generator = RepairingGenerator()
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever, generator=generator).answer(
+            request_id="catalog-rag-repair",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+            trace=True,
+        )
+
+        self.assertEqual(response.status, "answered")
+        self.assertEqual(generator.calls, 2)
+        self.assertIn("trace.generation_attempts=2", response.warnings)
+        self.assertIn("trace.citation_repair=applied", response.warnings)
 
 
 if __name__ == "__main__":
