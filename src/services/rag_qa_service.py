@@ -11,8 +11,6 @@ from src.lang import (
     PromptEvidence,
     build_grounded_answer_messages,
     evaluate_request,
-    is_evidence_abstention,
-    validate_grounded_answer,
 )
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
@@ -192,8 +190,13 @@ class RagQaService:
         evidence = self._prompt_evidence(results)
         try:
             messages = build_grounded_answer_messages(question, evidence)
-            generation = self.answer_generator.generate(messages, evidence)
-            if is_evidence_abstention(generation.text):
+            validated_generation = generate_validated_grounded_answer(
+                generator=self.answer_generator,
+                messages=messages,
+                evidence=evidence,
+            )
+            generation = validated_generation.generation
+            if validated_generation.abstained:
                 return self._status_response(
                     request_id=request_id,
                     status="insufficient_evidence",
@@ -201,14 +204,20 @@ class RagQaService:
                     warnings=[
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                        *(
+                            [
+                                "trace.generator_invoked=true",
+                                f"trace.model_id={generation.model_id}",
+                                "trace.generation_attempts=1",
+                                "trace.citation_repair=not_needed",
+                                "trace.citation_validation=skipped_abstention",
+                            ]
+                            if trace
+                            else []
+                        ),
                     ],
                 )
-            used_citation_ids = validate_grounded_answer(
-                generation.text,
-                allowed_citation_ids=[item.citation_id for item in evidence],
-                require_korean=True,
-            )
+            used_citation_ids = validated_generation.used_citation_ids
         except AnswerGenerationError as exc:
             return self._status_response(
                 request_id=request_id,

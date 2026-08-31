@@ -13,8 +13,6 @@ from src.lang import (
     PromptEvidence,
     build_recommendation_answer_messages,
     evaluate_request,
-    is_evidence_abstention,
-    validate_grounded_answer,
 )
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
@@ -303,8 +301,13 @@ class RecommendationRagService:
                 selected_candidates=self._candidate_context(supported_agent_result),
                 evidence=evidence,
             )
-            generation = self.answer_generator.generate(messages, evidence)
-            if is_evidence_abstention(generation.text):
+            validated_generation = generate_validated_grounded_answer(
+                generator=self.answer_generator,
+                messages=messages,
+                evidence=evidence,
+            )
+            generation = validated_generation.generation
+            if validated_generation.abstained:
                 return self._response(
                     request_id=request_id,
                     status="insufficient_evidence",
@@ -314,14 +317,20 @@ class RecommendationRagService:
                         *agent_result.warnings,
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                        *(
+                            [
+                                "trace.generator_invoked=true",
+                                f"trace.model_id={generation.model_id}",
+                                "trace.generation_attempts=1",
+                                "trace.citation_repair=not_needed",
+                                "trace.citation_validation=skipped_abstention",
+                            ]
+                            if trace
+                            else []
+                        ),
                     ],
                 )
-            used_citation_ids = validate_grounded_answer(
-                generation.text,
-                allowed_citation_ids=[item.citation_id for item in evidence],
-                require_korean=True,
-            )
+            used_citation_ids = validated_generation.used_citation_ids
             # 로컬 템플릿은 원문을 그대로 인용하므로 비교 문서에 비선정 제품이
             # 언급될 수 있다. 이 경우 최종 본문은 아래에서 서버 선정 후보로 만든다.
             # 실제 생성 모델에는 기존의 비선정 제품 추가 금지 검사를 유지한다.

@@ -573,20 +573,64 @@ class CatalogToRagTests(unittest.TestCase):
         self.assertEqual(response.status, "error")
         self.assertEqual(response.products, [])
 
+    def test_huggingface_recommendation_retries_once_with_citation_repair(self):
+        class RepairingGenerator:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def generate(self, messages, evidence):
+                self.calls += 1
+                text = (
+                    "Compact Board를 추천합니다."
+                    if self.calls == 1
+                    else "Compact Board는 센서 모니터링에 적합합니다. [C1]"
+                )
+                return GenerationResult(
+                    text=text,
+                    provider="huggingface",
+                    model_id="Qwen/test",
+                    elapsed_ms=0,
+                )
+
+        generator = RepairingGenerator()
+        retriever = self.StaticRetriever(
+            RetrievalDecision(status="retrieved", results=(self._result(),))
+        )
+        response = self._service(retriever, generator=generator).answer(
+            request_id="catalog-citation-repair",
+            question="센서 모니터링에 쓸 작은 보드를 추천해줘",
+            trace=True,
+        )
+
+        self.assertEqual(response.status, "answered")
+        self.assertEqual(generator.calls, 2)
+        self.assertEqual([product.product_id for product in response.products], ["compact-board"])
+        self.assertIn("Compact Board", response.answer)
+        self.assertIn("[C1]", response.answer)
+        self.assertIn("trace.generation_attempts=2", response.warnings)
+        self.assertIn("trace.citation_repair=applied", response.warnings)
+
     def test_model_abstention_removes_product_cards_even_when_candidates_exist(self):
         from src.lang import INSUFFICIENT_EVIDENCE_MARKER
 
         class AbstainingGenerator:
+            def __init__(self) -> None:
+                self.calls = 0
+
             def generate(self, messages, evidence):
+                self.calls += 1
                 return GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
 
         retriever = self.StaticRetriever(RetrievalDecision(status="retrieved", results=(self._result(),)))
-        response = self._service(retriever, generator=AbstainingGenerator()).answer(
-            request_id="recommendation-abstention", question="작은 센서용 보드를 추천해줘",
+        generator = AbstainingGenerator()
+        response = self._service(retriever, generator=generator).answer(
+            request_id="recommendation-abstention", question="작은 센서용 보드를 추천해줘", trace=True,
         )
         self.assertEqual(response.status, "insufficient_evidence")
+        self.assertEqual(generator.calls, 1)
         self.assertEqual(response.products, [])
         self.assertEqual(response.citations, [])
+        self.assertIn("trace.citation_validation=skipped_abstention", response.warnings)
 
     def test_evaluation_capture_preserves_template_recommendation_behavior(self):
         from src.evaluation.answer_capture import recording_generator

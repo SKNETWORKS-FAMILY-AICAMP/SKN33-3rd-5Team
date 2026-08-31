@@ -302,16 +302,23 @@ def test_explicit_model_failure_becomes_clear_error_response():
 
 def test_model_abstention_with_retrieved_evidence_is_not_answered_or_error():
     class AbstainingGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
         def generate(self, messages, evidence):
+            self.calls += 1
             return GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
 
+    generator = AbstainingGenerator()
     response = RagQaService(
-        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=AbstainingGenerator(),
+        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=generator,
     ).answer(request_id="model-abstention", question="SSH를 켜려면?", retrieval_mode="bm25", trace=True)
     assert response.status == "insufficient_evidence"
+    assert generator.calls == 1
     assert response.citations == []
     assert INSUFFICIENT_EVIDENCE_MARKER not in response.answer
     assert "trace.generator_invoked=true" in response.warnings
+    assert "trace.citation_validation=skipped_abstention" in response.warnings
 
 
 def test_english_answer_is_not_passed_as_korean_just_because_metadata_says_ko():
