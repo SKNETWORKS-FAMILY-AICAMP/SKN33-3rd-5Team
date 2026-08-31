@@ -188,3 +188,6 @@ document_pipeline/data/manifest_v*.json
 # ══════════════════════════════════════════════════════════════
 SKN_3rd_5Team_REPORT/
 SKN_3rd_5Team_REPORT_*.zip
+
+
+*.ses

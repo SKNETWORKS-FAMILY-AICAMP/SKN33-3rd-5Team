@@ -32,6 +32,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Collect approved documents and build the PiCare manifest.")
     parser.add_argument("--commit", help="Optional 40-character Raspberry Pi documentation commit SHA")
     parser.add_argument("--tokenizer-name", default=DEFAULT_TOKENIZER_NAME)
+    parser.add_argument("--tokenizer-revision")
     parser.add_argument("--target-tokens", type=int, default=DEFAULT_TARGET_TOKENS)
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--overlap-tokens", type=int, default=DEFAULT_OVERLAP_TOKENS)
@@ -52,6 +53,7 @@ def main() -> None:
         output_path=args.manifest_path,
         registry_path=args.source_registry,
         tokenizer_name=args.tokenizer_name,
+        tokenizer_revision=args.tokenizer_revision,
         target_tokens=args.target_tokens,
         max_tokens=args.max_tokens,
         overlap_tokens=args.overlap_tokens,

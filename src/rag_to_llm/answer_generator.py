@@ -145,7 +145,7 @@ class HuggingFaceAnswerGenerator:
         model_kwargs: dict[str, object] = {
             "revision": self.model_revision,
             "device_map": "auto",
-            "torch_dtype": torch.bfloat16,
+            "dtype": torch.bfloat16,
         }
         if self.load_in_4bit:
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -209,6 +209,7 @@ class HuggingFaceAnswerGenerator:
         encoded = self._tokenizer.apply_chat_template(
             list(messages),
             add_generation_prompt=True,
+            enable_thinking=False,
             tokenize=True,
             return_dict=True,
             return_tensors="pt",

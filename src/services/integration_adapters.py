@@ -33,8 +33,10 @@ class RagResultMetadata:
     indexed_at: datetime
     document_checksum: str
     chunk_checksum: str
+    embedding_checksum: str
     parser_version: str
     official_verified: bool
+    quality_status: str
     source_anchor: str | None = None
     published_at: date | None = None
     updated_at: date | None = None
@@ -108,8 +110,10 @@ def manifest_to_rag_result_metadata(
         "source_type",
         "document_checksum",
         "chunk_checksum",
+        "embedding_checksum",
         "parser_version",
         "official_verified",
+        "quality_status",
     }
     for chunk in chunks:
         if not isinstance(chunk, Mapping):
@@ -131,8 +135,10 @@ def manifest_to_rag_result_metadata(
                 indexed_at=indexed_at,
                 document_checksum=str(chunk["document_checksum"]),
                 chunk_checksum=str(chunk["chunk_checksum"]),
+                embedding_checksum=str(chunk["embedding_checksum"]),
                 parser_version=str(chunk["parser_version"]),
                 official_verified=chunk["official_verified"] is True,
+                quality_status=str(chunk["quality_status"]),
                 source_anchor=chunk.get("source_anchor") if isinstance(chunk.get("source_anchor"), str) else None,
                 published_at=_optional_date(chunk.get("published_at"), field_name="published_at", chunk_id=chunk_id),
                 updated_at=_optional_date(chunk.get("updated_at"), field_name="updated_at", chunk_id=chunk_id),
@@ -188,6 +194,10 @@ def rag_results_to_search_response(
             raise IntegrationAdapterError(
                 f"공식 검증되지 않은 검색 결과는 변환할 수 없습니다: {result.chunk_id}"
             )
+        if metadata.quality_status != "approved":
+            raise IntegrationAdapterError(
+                f"품질 승인되지 않은 검색 결과는 변환할 수 없습니다: {result.chunk_id}"
+            )
 
         converted_results.append(
             {
@@ -217,8 +227,10 @@ def rag_results_to_search_response(
                 "os_versions": list(metadata.os_versions),
                 "document_checksum": metadata.document_checksum,
                 "chunk_checksum": metadata.chunk_checksum,
+                "embedding_checksum": metadata.embedding_checksum,
                 "parser_version": metadata.parser_version,
                 "official_verified": True,
+                "quality_status": "approved",
                 "image_url": metadata.image_url,
                 "video_url": metadata.video_url,
             }
@@ -226,7 +238,7 @@ def rag_results_to_search_response(
 
     return SearchResponse.model_validate(
         {
-                "schema_version": "1.1.0",
+            "schema_version": "1.1.0",
             "query_id": query_id,
             "query_language": query_language,
             "retrieval_method": retrieval_method,

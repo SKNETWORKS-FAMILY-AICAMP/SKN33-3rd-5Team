@@ -11,6 +11,7 @@ from .prompts import (
     RECOMMENDATION_ANSWER_SYSTEM_PROMPT,
     PromptBuildError,
     PromptEvidence,
+    build_citation_repair_messages,
     build_grounded_answer_messages,
     build_recommendation_answer_messages,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "RECOMMENDATION_ANSWER_SYSTEM_PROMPT",
     "PromptBuildError",
     "PromptEvidence",
+    "build_citation_repair_messages",
     "SafetyDecision",
     "build_grounded_answer_messages",
     "build_recommendation_answer_messages",
