@@ -424,6 +424,8 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     assert (tmp_path / "chroma" / "picare-index.json").is_file()
 
 
-def test_manifest_adapter_rejects_legacy_manifest_schema() -> None:
+def test_manifest_adapter_rejects_legacy_manifest_schema(tmp_path) -> None:
+    legacy_manifest = tmp_path / "legacy-manifest.json"
+    legacy_manifest.write_text('{"schema_version": "1.0.0", "documents": []}', encoding="utf-8")
     with pytest.raises(ValueError, match="schema_version 1.1.0"):
-        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")
+        HybridRetriever.from_manifest(legacy_manifest)
