@@ -11,7 +11,8 @@ LLM 담당자와 RAG 담당자가 연결하는 기준이다.
   → 공식 문서 근거 청크
   → Qwen 답변 생성
   → [C1] 인용 검증 (실패 시 형식 수정 1회)
-  → ChatResponse + 출처 카드
+  → Media Resolver(chunk_id ↔ media_id)
+  → ChatResponse + 출처 카드 + 관련 이미지·영상
 ```
 
 RAG 검색, 근거 부족 보류, 인용 검증, CLI는 구현되어 있다. 현재 로컬 기본값은 실제
@@ -25,6 +26,7 @@ Instruct를 직접 실행하도록 준비되어 있다.
 | `src/rag` | RAG 담당 | 공식 문서 Hybrid 검색, Chroma, BM25, RRF, 근거 부족 보류 |
 | `src/rag_to_llm` | RAG·LLM 연결 | 검색 근거를 생성 모델에 전달하고 실행 정보를 반환 |
 | `src/services/rag_qa_service.py` | 통합 계층 | 검색 → 생성 → 인용 검증·형식 수정 1회 → `ChatResponse` 조합 |
+| `src/media/resolver.py` | 미디어 계층 | 최종 citation의 `chunk_id`에 연결된 공식 미디어만 조합 |
 | 조건 JSON QLoRA | LLM 담당 | 제품 추천용 사용자 조건 추출 |
 | Qwen Base Instruct | LLM 담당 | 공식 근거 기반 한국어 QA 답변 생성 |
 

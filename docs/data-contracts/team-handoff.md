@@ -12,7 +12,8 @@
 | 같은 담당 → 이양원 | `data/finetuning/dev.jsonl` | 프롬프트·학습 설정 선택 및 개발 중 오류 분석용. 현재 없음. |
 | 같은 담당 → 이양원 | `data/finetuning/holdout.jsonl` | 고정된 최종 Base–LoRA 비교용. 학습·튜닝에 사용하지 않음. 현재 없음. |
 | 김혜리 수집·정리, 팀 추천 기준 검수 → 이양원·최지흠 | `data/products/catalog.json` | 조건에 맞는 실제 제품 후보와 근거 ID. 현재 5개 제품 파일이 Git에 있으므로 이를 검수·보완하며 새 ID를 임의로 만들지 않음. |
-| 김혜리 → 최지흠·이양원 | `document_pipeline/data/manifest_v3.json` | 정제·청킹된 공식 원문과 출처. 현재 정식 생성본 없음. 로컬 smoke용 임시 manifest로 대체하지 않음. |
+| 김혜리 → 최지흠·이양원 | `document_pipeline/data/manifest_v3.json` | 정제·청킹된 공식 원문과 출처. 현재 고정 commit의 공식 문서 18개에서 생성한 승인 청크 270개를 로컬 생성·검증함. 생성물이므로 Git에는 넣지 않으며 같은 입력으로 재생성함. |
+| 김혜리 → 최지흠·김나은 | `document_pipeline/data/media_manifest_v3.json` | 이미지·영상 자체를 청킹하지 않고 `chunk_id ↔ media_id`를 연결한 생성물. 현재 이미지 70개·영상 1개, 총 71개 미디어를 로컬 생성·검증함. |
 | 김혜리 → 최지흠·통합 담당 | 사용한 `source_registry_v3.csv`, 원문 수집 대장·commit, 라이선스 검토 기록 | manifest가 어느 공식 원문과 검수 기준에서 만들어졌는지 재현·확인하기 위해 필요. registry와 검토 문서는 기존 파일을 활용. |
 | 최지흠 → 실행 환경·통합 담당 | `data/indexed/chroma_official_v3/` 전체 또는 같은 manifest로 재생성하는 절차 | 실제 Hybrid 검색에 필요. 문서 담당자가 수작업으로 만드는 파일이 아니라 RAG 색인 코드의 산출물. |
 | 팀 공동 작성·교차 검수 → 최지흠·김나은·통합 담당 | QA 평가 질문과 정답 근거 목록 | 검색·답변·인용·보류가 맞는지 확인. 아래 평가 자료 규칙 참고. 조건 JSONL과 별개. |
@@ -55,7 +56,7 @@ python training/train_qlora.py --config training/configs/qwen3_4b_qlora.yaml --v
 
 ## 2. 제품 카탈로그: 기존 파일을 검수·보완
 
-파일은 `data/products/catalog.json`, 현재 계약 버전은 **`1.1.0`**이다.
+파일은 `data/products/catalog.json`, 현재 계약 버전은 **`1.2.0`**이다.
 [제품 카탈로그 계약](product-catalog.md)과 [ProductCatalog 모델](../../src/recommendation/schema.py)이 기준이다.
 
 | 구분 | 넣어야 할 내용 |
@@ -93,8 +94,8 @@ python -c "from src.recommendation.schema import ProductCatalog; c=ProductCatalo
 
 ## 3. 공식 문서 manifest와 재현 자료
 
-최종 위치는 `document_pipeline/data/manifest_v3.json`, 현재 manifest 계약 버전은 **`1.0.0`**이다.
-파일명 `v3`는 corpus 묶음 버전이다. 조건 JSON·catalog 버전 `1.1.0`과 혼동해 바꾸지 않는다.
+최종 위치는 `document_pipeline/data/manifest_v3.json`, 현재 manifest 계약 버전은 **`1.1.0`**이다.
+파일명 `v3`는 corpus 묶음 버전이다. 조건 JSON `1.1.0`·catalog 버전 `1.2.0`과 혼동해 바꾸지 않는다.
 전체 형식은 [manifest 계약](../../document_pipeline/contracts/manifest-contract.md)과
 [manifest.schema.json](../../document_pipeline/contracts/manifest.schema.json)을 따른다.
 이 디렉터리의 예전 `rag-corpus.md`에 있는 최소 청크 형식은 신규 전달용이 아니다.
@@ -106,8 +107,9 @@ python -c "from src.recommendation.schema import ProductCatalog; c=ProductCatalo
 | 각 청크의 본문·출처 | `title`, `publisher`, `section`, `content`, `source_url`, `source_anchor`, `language`, `source_type` |
 | 날짜·버전 | `published_at`, `updated_at`, `collected_at`, `document_version` |
 | 권리·검수 | `license`, `official_verified` |
-| 검색 분류 | `product_models`, `use_cases`, `tasks`, `categories`, `os_versions` |
+| 검색 분류 | `product_models`, `use_cases`, `tasks`, `categories`, `os_versions`, `quality_status=approved` |
 | 무결성·파서 | `document_checksum`, `chunk_checksum`, `parser_version` |
+| 임베딩 입력 | `retrieval_text`, `embedding_checksum` |
 | 미디어 | `image_url`, `video_url` |
 
 모든 필드를 포함하되, `published_at`, `updated_at`, `source_anchor`, `document_version`,
@@ -128,7 +130,7 @@ python -c "from src.recommendation.schema import ProductCatalog; c=ProductCatalo
 
 ```bash
 python document_pipeline/ingestion/validate_foundation.py --source-registry document_pipeline/data/source_registry_v3.csv
-python document_pipeline/ingestion/run_pipeline.py --source-registry document_pipeline/data/source_registry_v3.csv --raw-root document_pipeline/data/raw_v3 --processed-root document_pipeline/data/processed_v3 --manifest-path document_pipeline/data/manifest_v3.json
+python -m document_pipeline.ingestion.run_pipeline --source-registry document_pipeline/data/source_registry_v3.csv --raw-root document_pipeline/data/raw_v3 --processed-root document_pipeline/data/processed_v3 --manifest-path document_pipeline/data/manifest_v3.json --media-manifest-path document_pipeline/data/media_manifest_v3.json
 ```
 
 전달된 manifest의 스키마·본문 checksum·catalog 연결을 아래 Python 코드로 검사한다.
@@ -166,6 +168,7 @@ print(f"manifest/catalog OK: {len(manifest['chunks'])} chunks, {len(catalog.prod
 ```dotenv
 DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json
 PRODUCT_CATALOG=data/products/catalog.json
+MEDIA_MANIFEST=document_pipeline/data/media_manifest_v3.json
 CHROMA_PATH=data/indexed/chroma_official_v3
 CHROMA_COLLECTION_NAME=rpi_official
 E5_MODEL_NAME=intfloat/multilingual-e5-base

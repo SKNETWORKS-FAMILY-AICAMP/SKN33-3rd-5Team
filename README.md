@@ -45,7 +45,7 @@
 
 #### 트랙 A. 공식 문서 RAG 챗봇
 
-- 공식 온라인 문서 30~50개 수집·정제·청킹·색인
+- 공식 온라인 문서 18개 수집·정제·청킹·색인(제품 페이지 8개는 참고 URL로만 관리)
 - [intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) 기반 다국어 Dense Retrieval과 Top-k 검색
 - LangChain을 활용한 Retriever–LLM 연결
 - 제품 선택, 설치·설정 및 기본 문제 해결 Q&A
@@ -117,7 +117,7 @@ flowchart LR
 ### 제품 추천 통합 흐름
 
 제품 추천은 일반 QA와 달리 모델이 제품 후보를 자유 생성하지 않는다. `schema_version`
-`1.1.0`의 catalog에는 보드별 사양·추천 기준과 **필드별 공식 `document_id` 근거**가
+`1.2.0`의 catalog에는 보드별 사양·추천 기준과 **필드별 공식 `document_id` 근거**가
 들어 있으며, 코드가 먼저 후보를 확정한다.
 
 ```text
@@ -135,7 +135,7 @@ flowchart LR
 
 핵심 corpus는 라이선스와 변경 이력을 확인하기 쉬운 **Raspberry Pi 공식 온라인 문서**를 우선 사용합니다. 아래 링크는 최초 수집 후보이며 실제 색인 여부·수집일·checksum은 Document Card와 manifest에서 관리합니다.
 
-실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry.csv`](document_pipeline/data/source_registry.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
+실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
 
 ### 핵심 온라인 문서
 
@@ -165,20 +165,12 @@ flowchart LR
 - [Raspberry Pi 400](https://www.raspberrypi.com/products/raspberry-pi-400/)
 - [Raspberry Pi Zero 2 W](https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/)
 
-## Document Card 초안
+## Document Card
 
-| 항목 | 현재 계획 |
-|---|---|
-| 문서 집합 | Raspberry Pi 컴퓨터·OS·설정·원격 접속·카메라 관련 공식 온라인 문서 30~50개 |
-| 출처 | raspberrypi.com/documentation, 공식 문서 GitHub 저장소 및 검증된 공식 제품 페이지 |
-| 최초 확인일 | 2026-08-27 |
-| 권리와 보안 | 공개 문서만 사용하며 개인정보·API Key·내부 문서는 수집하지 않음 |
-| 버전 | 수집일, 원문 URL, Git commit 또는 갱신 시점, checksum 기록 |
-| 구조 | 제목·섹션·목록·코드 블록·표·이미지 설명·원문 anchor 보존 |
-| 처리 방법 | HTML/AsciiDoc 파싱, 반복 UI 제거, 섹션 기반 청킹, 중복 제거 |
-| 제외 기준 | 빈 문서, 파싱 실패, 출처 불명, 중복·구버전, 권리 불명, 핵심 범위 밖 문서 |
-| 추적 정보 | document_id, chunk_id, 원문 URL, 버전, 수집일, checksum, parser version |
-| 확인 결과 | 수집 후 파일 수·파싱 성공률·빈 페이지·청크 길이 분포·표본 대조 결과로 갱신 예정 |
+수집·파싱·중복 제거·청크 길이·제품별 근거량과 실제 E5/Chroma 연결 검증 결과는
+[`Raspberry Pi 공식 문서 v3 Document Card`](docs/document-cards/raspberry-pi-official-v3.md)에
+기록했습니다. 현재 기준은 공식 문서 18개, 승인 청크 270개이며 `needs_review` 2개는
+manifest와 색인에서 제외됩니다.
 
 ## Dataset Card 초안
 
@@ -229,13 +221,18 @@ Changes: 파싱·정규화·청킹·번역 여부
 
 ### 공식 미디어 자산
 
-제품 추천 카드와 설치·설정·문제 해결 답변에 사용할 공식 문서 이미지 19개와 공식 사용법 영상 링크 4개를 [`assets/media/`](assets/media/)에서 관리합니다. 이미지의 원본 커밋·URL·라이선스·크기·SHA-256·한국어 대체 텍스트는 [`manifest.json`](assets/media/manifest.json), 영상의 공식 채널·게시일·임베드 URL·연결 문서는 [`video_manifest.json`](assets/media/video_manifest.json)에 기록합니다.
+검수용 [`assets/media/`](assets/media/)에는 제품·가이드 이미지 19개와 공식 영상 링크
+4개의 수동 registry가 있습니다. 운영 RAG는 여기에 더해 공식 AsciiDoc에서 이미지·영상
+URL을 자동 수집한 생성형 `media_manifest_v3.json`을 사용하고, 문서·섹션 기준으로
+`chunk_id ↔ media_id`를 연결합니다. 현재 고정 원문에서는 이미지 70개와 영상 1개가
+자동 검증됐습니다.
 
 - 원본은 Raspberry Pi 공식 documentation 저장소의 `documentation/` 하위 파일로 제한합니다.
-- 이미지 바이트는 수정하지 않고 서비스용 파일명만 적용했습니다.
-- 사용 지원 이미지는 검색된 citation의 문서·주제와 일치할 때만 챗봇에 표시합니다.
-- 영상은 다운로드하거나 재배포하지 않고 공식 YouTube player로만 임베드하며, 최신 공식 문서를 사실 근거로 우선합니다.
+- 이미지·영상은 별도 검색 청크나 임베딩으로 만들지 않습니다.
+- 답변 생성과 인용 검증이 끝난 뒤 실제 citation의 `chunk_id`에 연결된 미디어만 표시합니다.
+- 영상은 다운로드하거나 재배포하지 않고 공식 문서가 명시한 YouTube URL만 임베드합니다.
 - 문서 청크와 미디어의 자동 연결 및 제외 기준은 [`미디어–RAG 통합 파이프라인`](docs/media-rag-integration-pipeline.md)에 정리했습니다.
+- 제품 카드 이미지 5개는 가이드 미디어와 분리해 `data/products/catalog.json`에서 표시합니다.
 - 제품·마케팅 페이지의 권리 조건이 불명확한 사진과 CC BY-ND 제품 PDF에서 잘라낸 이미지는 포함하지 않습니다.
 
 ## 인터페이스 계약
@@ -320,7 +317,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
       "document_checksum": "sha256:document...",
       "chunk_checksum": "sha256:chunk...",
       "embedding_checksum": "sha256:embedding...",
-      "parser_version": "asciidoc-semantic-3.0.0",
+      "parser_version": "asciidoc-semantic-3.1.0",
       "official_verified": true,
       "quality_status": "approved",
       "image_url": null,
@@ -338,7 +335,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 
 ```json
 {
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "request_id": "request-0001",
   "status": "answered",
   "language": "ko",
@@ -363,7 +360,19 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
     }
   ],
   "products": [],
-  "media": [],
+  "media": [
+    {
+      "media_id": "media-0123456789abcdefabcd",
+      "media_type": "image",
+      "title": "Raspberry Pi Imager setup",
+      "url": "https://raw.githubusercontent.com/raspberrypi/documentation/<commit>/documentation/asciidoc/computers/getting-started/images/imager/example.png",
+      "alt_text": "Raspberry Pi Imager setup screen",
+      "display_mode": "inline",
+      "license": "CC-BY-SA-4.0",
+      "attribution": "Raspberry Pi Ltd; CC-BY-SA-4.0",
+      "source_citation_id": "C1"
+    }
+  ],
   "clarification_questions": [],
   "warnings": []
 }
@@ -380,7 +389,7 @@ RAG는 내부 검색 점수 대신 순위와 검증된 원문 metadata를 챗봇
 | `safety_blocked` | 비밀정보·위험 요청 등 안전 정책으로 차단함 |
 | `error` | 시스템 오류로 정상 처리하지 못함 |
 
-`answered`는 최소 한 개의 인라인 인용과 출처 카드가 있어야 합니다. 제품 추천 카드의 `product_id`는 카탈로그에서 정한 고정 제품 코드이고, 카드와 공식 이미지·영상은 자신을 뒷받침하는 이번 검색의 `citation_id`를 반드시 참조합니다. 전체 형식은 [`chat-response.schema.json`](docs/schemas/chat-response.schema.json)을 기준으로 합니다.
+`answered`는 최소 한 개의 인라인 인용과 출처 카드가 있어야 합니다. 제품 추천 카드의 `product_id`는 카탈로그에서 정한 고정 제품 코드입니다. 제품 이미지는 제품 카드의 `image_url`을 사용하고, 가이드 이미지·영상은 서버가 실제 인용의 `chunk_id`로 해석한 뒤 자신을 뒷받침하는 `citation_id`를 반드시 참조합니다. 전체 형식은 [`chat-response.schema.json`](docs/schemas/chat-response.schema.json)을 기준으로 합니다.
 
 JSON Schema는 아래 명령으로 표준 모델에서 다시 생성합니다.
 

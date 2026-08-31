@@ -62,6 +62,16 @@ Chroma에 색인한다.
 | `source_type` | 현재는 `documentation`, 제품 페이지는 `product_page`, 지원 공지는 `support_notice` 또는 `recall_notice`를 사용한다. |
 | `official_verified` | 공식 Raspberry Pi 원문과 URL·라이선스·정제 내용을 검수한 경우에만 `true`다. |
 
+## 이미지·영상 연결
+
+이미지와 영상은 별도 청크로 만들거나 임베딩하지 않는다. 파서가 공식 AsciiDoc의
+미디어 매크로를 구조적으로 보존한 뒤 Media Linker가 문서·섹션이 같은 승인 청크에
+`media_id`를 연결해 `document_pipeline/data/media_manifest_vN.json`을 생성한다.
+런타임 Media Resolver는 LLM 인용 검증 후 최종 citation에 남은 `chunk_id`만 조회한다.
+제품 카드 이미지는 이 경로가 아니라 `data/products/catalog.json`의 `image_url`을 쓴다.
+세부 계약은 [`media-manifest-contract.md`](../../document_pipeline/contracts/media-manifest-contract.md)를
+기준으로 한다.
+
 ## 청킹 기준
 
 - 기본 크기는 영어 기준 약 250~700 단어를 목표로 하되, 설치 절차·표 한 행처럼

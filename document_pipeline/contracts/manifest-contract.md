@@ -19,7 +19,7 @@
 | 권리와 출처 | 문서·데이터 | `license`, `official_verified`, `quality_status` |
 | 검색 filter | 문서·데이터 | `product_models`, `use_cases`, `tasks`, `categories`, `os_versions` |
 | 무결성 | 문서·데이터 | `document_checksum`, `chunk_checksum`, `embedding_checksum`, `parser_version` |
-| 미디어 연결 | 문서·데이터 | `image_url`, `video_url` |
+| 미디어 호환 필드 | 문서·데이터 | `image_url`, `video_url`(항상 `null`, 별도 media manifest 사용) |
 | 색인 시각 | RAG | `indexed_at` |
 | 검색 결과 순위 | RAG | `rank` |
 | 응답별 인용 번호 | RAG/통합 | `citation_id` |
@@ -32,9 +32,9 @@
 4. `official_verified=true`, `quality_status=approved`이고 source registry에서 `collection_decision=include`인 자료만 manifest에 포함한다. 파싱 검수 대상은 `processed/qa_report.json`에만 기록한다.
 5. `rank`, `citation_id`, `indexed_at`은 런타임 필드이므로 manifest에 넣지 않는다.
 6. 기존 RAG 프로토타입의 `retrieved_at`은 신규 manifest에서 사용하지 않는다. `src/rag/adapters.py`가 `collected_at`과 `source_anchor`를 보존해 변환하며, manifest 계약 자체는 줄이지 않는다.
-7. corpus의 `image_url`, `video_url`은 명확한 재사용 권리가 확인된 공식 URL만 사용하며, 파일 자체는 corpus에 복제하지 않는다.
-8. `license_url`, 검토 상태와 attribution 문구는 `source_registry.csv`와 Document Card에서 관리한다. RAG manifest에는 canonical 계약의 `license`만 전달한다.
-9. 제품 페이지 사진은 corpus manifest에 넣지 않는다. 교육용 제품 카드의 원격 표시는 `data/product_media_registry.json`에서 별도로 통제한다.
+7. 이미지·영상은 검색 문장이 아니므로 청크나 임베딩에 포함하지 않는다. 기존 `image_url`, `video_url`은 하위 호환을 위해 `null`로 유지하고, 생성된 `media_manifest_vN.json`의 `chunk_id ↔ media_id` 링크를 사용한다.
+8. 가이드 미디어의 URL·license·attribution·원문 commit은 `media-manifest.schema.json`으로 관리한다. 실제 답변에서 검증을 통과해 남은 citation의 `chunk_id`만 Media Resolver에 전달한다.
+9. 제품 페이지 사진은 corpus/media manifest에 넣지 않는다. 제품 카드의 원격 표시는 `data/products/catalog.json`의 검수된 `image_url`로 별도 통제한다.
 
 ## 현재 RAG 테스트 형식과의 연결
 
@@ -47,7 +47,7 @@ RAG 담당자의 테스트 chunk는 검색 품질을 빠르게 확인하기 위�
 | 없음 | `chunk_index`, `publisher`, `source_anchor`, `language` | 문서 파이프라인이 채움 |
 | 없음 | `published_at`, `updated_at`, `tasks`, `categories` | 원문과 source registry에서 채움. 값이 없으면 `null` 또는 빈 배열 |
 | 없음 | `document_checksum`, `chunk_checksum`, `embedding_checksum`, `parser_version` | 문서 파이프라인이 생성하여 원문·인용문·실제 임베딩 입력의 변경을 각각 추적 |
-| 없음 | `image_url`, `video_url` | 명확한 재사용 권리가 있는 경우에만 채움 |
+| 없음 | `image_url`, `video_url` | 항상 `null`; 미디어 URL은 별도 media manifest에서 조회 |
 | 없음 | `indexed_at`, `rank`, `citation_id` | RAG/통합 계층이 검색·응답 시 생성 |
 
 따라서 테스트 예시의 `source_url`처럼 사람이 바로 열 수 있는 공식 문서 링크는 유지한다. 다만 최종 manifest에는 `source_anchor`를 분리해 넣어, 인용 UI가 같은 문서의 정확한 절을 표시할 수 있게 한다. AsciiDoc 원문에 `[[explicit-anchor]]`가 있으면 그 값을 그대로 사용하고, 없으면 임의로 추정하지 않아 `null`로 둔다.
