@@ -59,7 +59,14 @@ def load_received_jsonl(path: str | Path) -> list[FinetuningRecord]:
             if not raw_line.strip():
                 continue
             try:
-                record = FinetuningRecord.model_validate_json(raw_line)
+                # 문자열 "true" 등을 bool로 묵시 변환하지 않는다.
+                record = FinetuningRecord.model_validate_json(raw_line, strict=True)
+                record.survey()
+                if not record.id.strip() or any(
+                    not item.question.strip() or not item.answer.strip()
+                    for item in record.answers
+                ):
+                    raise ValueError("id, question, answer는 공백만 있을 수 없습니다.")
             except Exception as exc:
                 raise ValueError(f"{resolved}:{line_number} 스키마 오류: {exc}") from exc
             if record.id in seen_ids:
@@ -70,6 +77,18 @@ def load_received_jsonl(path: str | Path) -> list[FinetuningRecord]:
     if not records:
         raise ValueError(f"비어 있는 데이터셋입니다: {resolved}")
     return records
+
+
+def validate_expected_product_ids(
+    records: Iterable[FinetuningRecord], known_product_ids: Iterable[str]
+) -> None:
+    """평가용 정답 제품 ID가 전달된 catalog 안에 있는지 확인한다."""
+
+    known = set(known_product_ids)
+    for record in records:
+        missing = set(record.expected_product_ids) - known
+        if missing:
+            raise ValueError(f"{record.id}: catalog에 없는 평가 제품 ID: {sorted(missing)}")
 
 
 def assert_no_split_leakage(**splits: Iterable[FinetuningRecord]) -> None:
