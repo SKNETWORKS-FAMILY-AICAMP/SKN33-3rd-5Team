@@ -17,6 +17,7 @@ from src.rag_to_llm import (
     AnswerGeneratorSettingsError,
     build_answer_generator,
 )
+from src.presentation import CitationPresenter, load_citation_presenter
 from src.recommendation import (
     CatalogManifestValidationError,
     ProductRecommender,
@@ -81,7 +82,7 @@ def _loading_indicator(message: str, *, stream: TextIO) -> Iterator[None]:
         stream.flush()
 
 
-def _print_human_response(response) -> None:
+def _print_human_response(response, presenter: CitationPresenter | None = None) -> None:
     print(f"[{response.status}]")
     print(response.answer)
     if response.products:
@@ -97,8 +98,16 @@ def _print_human_response(response) -> None:
     if response.citations:
         print("\n출처:")
         for citation in response.citations:
-            print(f"[{citation.citation_id}] {citation.title} / {citation.section}")
-            print(citation.source_url)
+            preferred_use_case = response.conditions.use_case if response.conditions else None
+            if presenter is not None:
+                lines = presenter.present(citation, preferred_use_case=preferred_use_case).cli_lines()
+            else:
+                lines = (
+                    f"[{citation.citation_id}] {citation.title}",
+                    f"섹션: {citation.section.rsplit(' > ', maxsplit=1)[-1]}",
+                    "태그: 없음",
+                )
+            print("\n".join(lines))
     if response.warnings:
         print("\n실행 정보:")
         for warning in response.warnings:
@@ -162,7 +171,11 @@ def main() -> int:
     if args.json:
         print(response.model_dump_json(indent=2))
     else:
-        _print_human_response(response)
+        try:
+            presenter = load_citation_presenter(rag_settings.manifest_path)
+        except (OSError, ValueError):
+            presenter = None
+        _print_human_response(response, presenter)
     return 1 if response.status == "error" else 0
 
 

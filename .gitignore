@@ -54,6 +54,10 @@ data/train/*
 !data/products/catalog.json
 !data/products/README.md
 
+# 사용자용 표시 라벨은 원문 corpus가 아닌 코드가 관리하는 UI 사전이다.
+!data/presentation/
+!data/presentation/citation_labels_ko.json
+
 # 문서·표 형식 자료 (매니페스트·규칙표·골든셋만 예외)
 *.pdf
 # ⚠️ **산출물 PDF 는 예외다.** README 맨 위가 이 파일들을 링크하는데

@@ -15,6 +15,8 @@ import streamlit as st
 
 from src.condition_extraction.ui_input import RecommendationFormInput
 from src.contracts import ChatResponse
+from src.presentation import CitationPresenter, load_citation_presenter
+from src.rag import RagSettings
 from streamlit_app.runtime import (
     build_qa_service,
     build_recommendation_service,
@@ -33,6 +35,16 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 
 
 RUNTIME_READINESS = check_runtime_readiness(ROOT)
+
+
+@st.cache_resource(show_spinner=False)
+def citation_presenter() -> CitationPresenter | None:
+    """출처 표시 사전이 없어도 QA 자체는 계속 동작하게 한다."""
+
+    try:
+        return load_citation_presenter(RagSettings.from_env(ROOT).manifest_path)
+    except Exception:
+        return None
 
 
 @st.cache_resource(show_spinner=False)
@@ -119,18 +131,26 @@ def _value(item, name: str, default=""):
     return getattr(item, name, item.get(name, default) if isinstance(item, dict) else default)
 
 
-def render_sources(sources) -> None:
+def render_sources(sources, *, preferred_use_case: str | None = None) -> None:
     """Render citation metadata without asking an LLM to generate it."""
 
     if not sources:
         st.info("표시할 공식 검색 근거가 없습니다. 출처를 추측하지 않습니다.")
         return
+    presenter = citation_presenter()
     for source in sources:
         citation = _value(source, "citation_id")
-        citation_text = f"{html.escape(citation)} · " if citation else ""
-        title = str(_value(source, "title"))
-        section = str(_value(source, "section"))
-        license_name = str(_value(source, "license"))
+        if presenter is not None:
+            display = presenter.present(source, preferred_use_case=preferred_use_case)
+            citation_text = f"{html.escape(display.citation_id)} · "
+            title = display.document_label
+            section = display.section_label
+            tags = " · ".join(display.tags) if display.tags else "없음"
+        else:
+            citation_text = f"{html.escape(citation)} · " if citation else ""
+            title = str(_value(source, "title"))
+            section = str(_value(source, "section")).rsplit(" > ", maxsplit=1)[-1]
+            tags = "없음"
         url = str(_value(source, "source_url", _value(source, "url")))
         st.markdown(
             f"""
@@ -138,7 +158,8 @@ def render_sources(sources) -> None:
               <div class="source-icon">📄</div>
               <div>
                 <div class="source-title">{citation_text}{html.escape(title)}</div>
-                <div class="source-meta">Section: {html.escape(section)} &nbsp; · &nbsp; {html.escape(license_name)}</div>
+                <div class="source-meta">섹션: {html.escape(section)}</div>
+                <div class="source-meta">태그: {html.escape(tags)}</div>
               </div>
               <a class="source-link" href="{html.escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" aria-label="공식 문서 열기">↗</a>
             </div>
@@ -244,7 +265,10 @@ def render_recommendation_page() -> None:
                 product_card(product)
 
     section_title("추천 근거")
-    render_sources(response.citations)
+    render_sources(
+        response.citations,
+        preferred_use_case=response.conditions.use_case if response.conditions else None,
+    )
     st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
