@@ -261,6 +261,22 @@ def answer_label_class(status: str) -> str:
     return "blocked" if status in blocked else ""
 
 
+def render_media(media) -> None:
+    """Render the official images/videos linked to the citations actually used."""
+
+    if not media:
+        return
+    st.markdown("**관련 공식 이미지·영상**")
+    columns = st.columns(min(len(media), 3), gap="small")
+    for column, item in zip(columns, media[:3], strict=False):
+        with column:
+            if item.media_type == "video":
+                st.video(str(item.url))
+            else:
+                st.image(str(item.url))
+            st.caption(f"{html.escape(item.title)} · [{html.escape(item.source_citation_id)}]")
+
+
 def render_answer(response: ChatResponse) -> None:
     """Render the canonical answer without reinterpreting service output."""
 
@@ -278,6 +294,7 @@ def render_answer(response: ChatResponse) -> None:
         unsafe_allow_html=True,
     )
     st.markdown(response.answer)
+    render_media(response.media)
     for question in response.clarification_questions:
         st.info(question)
     if response.warnings:
