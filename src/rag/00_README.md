@@ -177,6 +177,19 @@ TOP_K=5
 DENSE_MAX_DISTANCE=0.48
 ```
 
+LLM까지 로컬에서 실행할 때는 공통 `INFERENCE_DEVICE`로 PyTorch 장치를 고른다.
+`auto`는 CUDA → Apple Silicon MPS → CPU 순으로 선택하며, `cuda`, `mps`, `cpu`를
+명시할 수도 있다. 4-bit BitsAndBytes는 CUDA 전용이므로 MPS·CPU에서는 자동 해제된다.
+따라서 Mac에서는 아래처럼 설정하면 된다. Qwen3-4B 전체 모델을 MPS/CPU에 올리는 것은
+가능하지만 CUDA 4-bit Pod보다 메모리를 더 쓰고 느릴 수 있다.
+
+```env
+INFERENCE_DEVICE=mps
+ANSWER_GENERATOR=huggingface
+ANSWER_LOAD_IN_4BIT=false
+CONDITION_LOAD_IN_4BIT=false
+```
+
 색인은 명시적으로 실행한다. `--reset`은 기존 컬렉션을 삭제한 뒤 manifest 전체를
 다시 색인하며, 옵션 없이 실행하면 같은 `chunk_id`만 upsert한다.
 

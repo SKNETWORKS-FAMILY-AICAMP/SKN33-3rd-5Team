@@ -15,6 +15,7 @@ def test_answer_generator_settings_defaults_to_template(tmp_path, monkeypatch) -
         "ANSWER_MODEL_REVISION",
         "ANSWER_LOAD_IN_4BIT",
         "ANSWER_MAX_NEW_TOKENS",
+        "INFERENCE_DEVICE",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -22,6 +23,7 @@ def test_answer_generator_settings_defaults_to_template(tmp_path, monkeypatch) -
 
     assert settings.provider == "template"
     assert settings.max_new_tokens == 512
+    assert settings.device == "auto"
 
 
 def test_huggingface_settings_build_generator_without_loading_model(tmp_path, monkeypatch) -> None:
@@ -30,12 +32,14 @@ def test_huggingface_settings_build_generator_without_loading_model(tmp_path, mo
     monkeypatch.setenv("ANSWER_MODEL_REVISION", "revision-test")
     monkeypatch.setenv("ANSWER_LOAD_IN_4BIT", "true")
     monkeypatch.setenv("ANSWER_MAX_NEW_TOKENS", "32")
+    monkeypatch.setenv("INFERENCE_DEVICE", "mps")
 
     settings = AnswerGeneratorSettings.from_env(tmp_path)
     generator = build_answer_generator(settings)
 
     assert isinstance(generator, HuggingFaceAnswerGenerator)
     assert generator.model_id == "Qwen/test"
+    assert generator.device == "mps"
     assert generator.is_loaded is False
 
 
@@ -43,4 +47,11 @@ def test_answer_generator_settings_reject_invalid_provider(tmp_path, monkeypatch
     monkeypatch.setenv("ANSWER_GENERATOR", "runpod")
 
     with pytest.raises(AnswerGeneratorSettingsError, match="ANSWER_GENERATOR"):
+        AnswerGeneratorSettings.from_env(tmp_path)
+
+
+def test_answer_generator_settings_rejects_invalid_inference_device(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INFERENCE_DEVICE", "metal")
+
+    with pytest.raises(AnswerGeneratorSettingsError, match="INFERENCE_DEVICE"):
         AnswerGeneratorSettings.from_env(tmp_path)

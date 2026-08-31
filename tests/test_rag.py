@@ -2,6 +2,7 @@ import hashlib
 import json
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -424,6 +425,47 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     assert (tmp_path / "chroma" / "picare-index.json").is_file()
 
 
-def test_manifest_adapter_rejects_legacy_manifest_schema() -> None:
+def test_manifest_adapter_rejects_legacy_manifest_schema(tmp_path) -> None:
+    legacy_manifest = {
+        "chunks": [
+            {
+                "chunk_id": "legacy-camera-001",
+                "document_id": "legacy-camera",
+                "title": "Legacy camera fixture",
+                "section": "Setup",
+                "content": "Legacy fixture content.",
+                "source_url": "https://example.test/legacy-camera",
+                "retrieved_at": "2026-08-28",
+                "document_version": None,
+                "license": "CC BY-SA 4.0",
+                "product_models": [],
+                "use_cases": ["camera"],
+                "os_versions": ["Raspberry Pi OS"],
+                "source_type": "documentation",
+                "official_verified": True,
+            }
+        ]
+    }
+    path = tmp_path / "legacy-manifest.json"
+    path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
+
     with pytest.raises(ValueError, match="schema_version 1.1.0"):
-        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")
+        HybridRetriever.from_manifest(path)
+
+
+def test_rag_readme_uses_the_canonical_v3_service_corpus() -> None:
+    readme = Path("src/rag/README.md").read_text(encoding="utf-8")
+
+    assert "DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json" in readme
+    assert "CHROMA_PATH=data/indexed/chroma_official_v3" in readme
+    assert "CHROMA_COLLECTION_NAME=rpi_official" in readme
+    assert "DOCUMENT_MANIFEST=data/corpora/corpus_section_test/manifest.json" not in readme
+    assert "00_README.md" in readme
+
+
+def test_legacy_corpus_cards_prohibit_service_use() -> None:
+    for corpus in ("corpus_official_pilot", "corpus_section_test"):
+        card = Path(f"data/corpora/{corpus}/corpus_card.md").read_text(encoding="utf-8")
+        assert "legacy fixture" in card
+        assert "document_pipeline/data/manifest_v3.json" in card
+        assert "서비스" in card

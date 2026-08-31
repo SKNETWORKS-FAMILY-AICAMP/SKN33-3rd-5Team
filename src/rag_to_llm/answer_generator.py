@@ -9,6 +9,7 @@ from time import perf_counter
 from typing import Mapping, Protocol, Sequence
 
 from src.lang.prompts import PromptEvidence
+from src.model_runtime import InferenceDeviceError, resolve_inference_runtime
 
 
 class AnswerGenerationError(RuntimeError):
@@ -101,6 +102,7 @@ class HuggingFaceAnswerGenerator:
         model_revision: str = "main",
         load_in_4bit: bool = True,
         max_new_tokens: int = 512,
+        device: str = "auto",
     ) -> None:
         if not model_id.strip():
             raise ValueError("model_id must not be empty.")
@@ -112,6 +114,8 @@ class HuggingFaceAnswerGenerator:
         self.model_revision = model_revision
         self.load_in_4bit = load_in_4bit
         self.max_new_tokens = max_new_tokens
+        self.device = device
+        self.resolved_device: str | None = None
         self._model = None
         self._tokenizer = None
         self._torch = None
@@ -123,31 +127,37 @@ class HuggingFaceAnswerGenerator:
         return self._model is not None and self._tokenizer is not None and self._torch is not None
 
     def _load_model(self) -> None:
-        """최초 생성 요청에서만 CUDA·Transformers 의존성과 Base 모델을 준비한다."""
+        """최초 생성 요청에서만 선택된 PyTorch 백엔드와 Base 모델을 준비한다."""
 
         if self.is_loaded:
             return
         try:
             import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise AnswerGenerationError(
-                "Qwen QA 추론 패키지가 없습니다. RunPod Pod에서 "
-                "`pip install -r requirements.txt -r runpod/requirements.txt`를 실행하세요."
+                "Qwen QA 추론 패키지가 없습니다. requirements와 선택한 모델 백엔드의 "
+                "의존성을 설치하세요."
             ) from exc
 
-        if not torch.cuda.is_available():
-            raise AnswerGenerationError(
-                "Hugging Face 답변 생성기는 CUDA GPU가 있는 RunPod Pod에서만 실행합니다. "
-                "로컬에서는 ANSWER_GENERATOR=template을 사용하세요."
+        try:
+            runtime = resolve_inference_runtime(
+                torch,
+                requested_device=self.device,
+                load_in_4bit=self.load_in_4bit,
             )
+        except InferenceDeviceError as exc:
+            raise AnswerGenerationError(str(exc)) from exc
 
         model_kwargs: dict[str, object] = {
             "revision": self.model_revision,
-            "device_map": "auto",
-            "dtype": torch.bfloat16,
+            "dtype": runtime.dtype,
         }
-        if self.load_in_4bit:
+        if runtime.device == "cuda":
+            model_kwargs["device_map"] = "auto"
+        if runtime.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
@@ -162,16 +172,19 @@ class HuggingFaceAnswerGenerator:
             if tokenizer.pad_token_id is None:
                 tokenizer.pad_token = tokenizer.eos_token
             model = AutoModelForCausalLM.from_pretrained(self.model_id, **model_kwargs)
+            if runtime.device != "cuda":
+                model.to(runtime.device)
             model.eval()
         except Exception as exc:
             raise AnswerGenerationError(
                 f"Qwen 모델을 로드하지 못했습니다: {self.model_id}@{self.model_revision}. "
-                "RunPod GPU, Hugging Face 접근 권한, HF_HOME cache를 확인하세요."
+                "선택한 장치, Hugging Face 접근 권한, HF_HOME cache를 확인하세요."
             ) from exc
 
         self._torch = torch
         self._tokenizer = tokenizer
         self._model = model
+        self.resolved_device = runtime.device
 
     @staticmethod
     def _prompt_length(input_ids: object) -> int:

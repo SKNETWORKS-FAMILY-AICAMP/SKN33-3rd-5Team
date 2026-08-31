@@ -9,6 +9,8 @@ from typing import Literal
 
 from dotenv import load_dotenv
 
+from src.model_runtime import InferenceDeviceError, normalize_inference_device
+
 
 DEFAULT_ANSWER_MODEL_ID = "Qwen/Qwen3-4B-Instruct-2507"
 DEFAULT_ANSWER_MODEL_REVISION = "main"
@@ -27,6 +29,7 @@ class AnswerGeneratorSettings:
     model_revision: str
     load_in_4bit: bool
     max_new_tokens: int
+    device: str
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "AnswerGeneratorSettings":
@@ -66,12 +69,18 @@ class AnswerGeneratorSettings:
                 "ANSWER_MAX_NEW_TOKENS must be an integer between 1 and 512."
             )
 
+        try:
+            device = normalize_inference_device(os.getenv("INFERENCE_DEVICE", "auto"))
+        except InferenceDeviceError as exc:
+            raise AnswerGeneratorSettingsError(str(exc)) from exc
+
         return cls(
             provider=provider,
             model_id=non_empty("ANSWER_MODEL_ID", DEFAULT_ANSWER_MODEL_ID),
             model_revision=non_empty("ANSWER_MODEL_REVISION", DEFAULT_ANSWER_MODEL_REVISION),
             load_in_4bit=bool_values[load_in_4bit_raw],
             max_new_tokens=max_new_tokens,
+            device=device,
         )
 
 

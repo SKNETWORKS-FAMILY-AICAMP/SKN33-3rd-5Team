@@ -10,6 +10,13 @@ data/*
 !data/README.md
 !data/manifests/
 !data/manifests/**
+# Corpus 카드에는 원문 본문을 넣지 않고 fixture의 용도와 사용 금지를 기록한다.
+# 팀원이 legacy corpus를 서비스 입력으로 오인하지 않도록 이 문서만 추적한다.
+!data/corpora/
+data/corpora/*
+!data/corpora/*/
+data/corpora/*/*
+!data/corpora/*/corpus_card.md
 
 # 하위 디렉터리 자체는 남긴다 — data/* 가 디렉터리를 배제하면
 # git 이 그 안으로 내려가지 않아 .gitkeep 이 통째로 무시된다.
