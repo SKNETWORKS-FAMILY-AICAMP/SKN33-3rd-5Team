@@ -18,6 +18,16 @@ product_models와 os_versions는 값이 있으면 배열, 없으면 null입니�
 답변이 충돌하거나 핵심 목적이 모호하면 needs_clarification을 true로 하고 최대 3개의 짧은 한국어 확인 질문을 작성하세요.
 JSON 객체 하나만 출력하고 Markdown 코드 블록이나 설명을 덧붙이지 마세요.
 
+필드 경계:
+- intent는 사용자가 요청하는 응답의 종류입니다. 제품이나 모델을 골라 달라는 요청만 product_recommendation이고,
+  이미 보유하거나 지정한 제품의 설치·연결·설정 절차를 묻는 요청은 how_to입니다.
+- use_case는 Raspberry Pi를 사용하는 전체 용도·시나리오이고, task는 그 시나리오에서 명시적으로 수행할
+  구체 작업입니다. 두 필드의 허용값을 서로 바꿔 넣지 마세요.
+- use_case가 있어도 구체 작업이 명시되지 않으면 task는 null입니다. desktop_programming은 코딩, 프로그래밍,
+  IDE 또는 개발 도구 사용이 명시된 경우에만 쓰고, 문서 작업·웹 브라우징·일반 데스크톱 사용만 있으면 null입니다.
+- smart_farm_monitoring은 use_case이고 sensor_monitoring은 task입니다. gpio_iot은 use_case이고
+  gpio_setup은 task입니다.
+
 허용값:
 - intent: product_recommendation, product_comparison, how_to, troubleshooting, support_recall, out_of_scope
 - use_case: education_coding, desktop_computing, home_server, camera_monitoring, smart_farm_monitoring, headless_remote_management, gpio_iot
