@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Literal
 
@@ -114,6 +115,13 @@ class AnswerReview(StrictContract):
     overall_reason: str = ""
 
 
+FACT_ERROR_TYPES = (
+    "claim_contradicts_cited_evidence",
+    "unsupported_operational_inference",
+)
+UNCLASSIFIED_FACT_ERROR = "unclassified_unsupported_claim"
+
+
 def answer_units(record: AnswerEvalRecord) -> list[str]:
     if record.response.status != "answered":
         return []
@@ -142,12 +150,65 @@ def citation_pairs(record: AnswerEvalRecord) -> set[tuple[int, str]]:
 
 def prepare_review(record: AnswerEvalRecord) -> AnswerReview:
     """Create an explicitly unscored draft, never a fabricated judge result."""
+
+    units = answer_units(record)
     return AnswerReview(
         case_id=record.case.id,
         record_sha256=record.digest(),
-        claims=[ClaimReview(unit_index=index, text=unit) for index, unit in enumerate(answer_units(record))],
+        claims=[ClaimReview(unit_index=index, text=unit) for index, unit in enumerate(units)],
         citation_links=[CitationReview(unit_index=index, citation_id=cite) for index, cite in sorted(citation_pairs(record))],
     )
+
+
+def _marked_fact_error_type(reason: str) -> str | None:
+    """기존 reason 필드의 선택적 유형 표식을 읽고 계약 필드는 추가하지 않는다."""
+
+    stripped = reason.strip()
+    return next(
+        (error_type for error_type in FACT_ERROR_TYPES if stripped.startswith(f"[{error_type}]")),
+        None,
+    )
+
+
+def fact_error_findings(
+    record: AnswerEvalRecord, review: AnswerReview
+) -> list[dict]:
+    """완료 검수의 미지지 주장과 실제 인용 원문을 유형별 전달 행으로 만든다."""
+
+    if not review.complete:
+        return []
+    units = answer_units(record)
+    evidence_by_id = {item.citation_id: item for item in record.evidence}
+    findings = []
+    for claim in review.claims:
+        if claim.verdict != "unsupported":
+            continue
+        citation_ids = sorted(
+            set(claim.evidence_ids) | set(extract_citation_ids(units[claim.unit_index]))
+        )
+        error_type = _marked_fact_error_type(claim.reason) or UNCLASSIFIED_FACT_ERROR
+        findings.append(
+            {
+                "case_id": record.case.id,
+                "route": record.case.route,
+                "question": record.case.question,
+                "reference_points": record.case.reference_points,
+                "type": error_type,
+                "unit_index": claim.unit_index,
+                "claim": claim.text,
+                "citation_ids": citation_ids,
+                "evidence": [
+                    {
+                        "citation_id": citation_id,
+                        "content": evidence_by_id[citation_id].content,
+                    }
+                    for citation_id in citation_ids
+                    if citation_id in evidence_by_id
+                ],
+                "reason": claim.reason,
+            }
+        )
+    return findings
 
 
 def validate_review(record: AnswerEvalRecord, review: AnswerReview) -> None:
@@ -180,6 +241,8 @@ def validate_review(record: AnswerEvalRecord, review: AnswerReview) -> None:
             raise ValueError("주장 검수에 실제 제공되지 않은 근거 ID가 있습니다.")
         if claim.verdict == "supported" and not claim.evidence_ids:
             raise ValueError("supported 주장에는 이를 뒷받침한 근거 ID가 필요합니다.")
+        if claim.verdict != "unsupported" and _marked_fact_error_type(claim.reason):
+            raise ValueError("사실 오류 유형 표식은 unsupported 주장에만 사용할 수 있습니다.")
         covered.add(claim.unit_index)
     if covered != set(range(len(units))):
         raise ValueError("모든 답변 문단을 검수해야 합니다. 사실이 아닌 문단은 not_factual로 표시하세요.")
@@ -254,6 +317,8 @@ def evaluate_records(records: list[AnswerEvalRecord], reviews: list[AnswerReview
     abstention_tp = abstention_tn = abstention_fp = abstention_fn = abstention_eligible = 0
     gold_abstention = gold_answered = 0
     commands_ok = commands_total = 0
+    fact_error_counts: Counter[str] = Counter()
+    fact_errors: list[dict] = []
     pending = []
     details = []
     for record in records:
@@ -284,6 +349,7 @@ def evaluate_records(records: list[AnswerEvalRecord], reviews: list[AnswerReview
         review = review_map.get(case.id)
         if review is not None:
             validate_review(record, review)
+        case_fact_errors = []
         if response.status == "answered":
             if review is None or not review.complete:
                 pending.append(case.id)
@@ -296,11 +362,15 @@ def evaluate_records(records: list[AnswerEvalRecord], reviews: list[AnswerReview
                 good_links += sum(item.supports is True for item in review.citation_links)
                 relevancy += review.answer_relevancy
                 korean += review.korean_compliant
+                case_fact_errors = fact_error_findings(record, review)
+                fact_errors.extend(case_fact_errors)
+                fact_error_counts.update(item["type"] for item in case_fact_errors)
         details.append({
             "case_id": case.id, "route": case.route,
             "expected_status": case.expected_status, "actual_status": response.status,
             "citation_format_valid": formatting, "commands": checks,
             "semantic_review": "complete" if review and review.complete else "pending" if response.status == "answered" else "not_applicable",
+            "fact_error_types": sorted({item["type"] for item in case_fact_errors}),
         })
     return {
         "schema_version": "1.0.0", "rubric_version": "picare-answer-v1",
@@ -311,6 +381,16 @@ def evaluate_records(records: list[AnswerEvalRecord], reviews: list[AnswerReview
         "semantic_status": "pending_review" if pending else "not_applicable" if not answered else "reviewed",
         "review_methods": sorted({review.method for review in review_map.values() if review.complete}),
         "review_coverage": _fraction(reviewed, answered), "pending_case_ids": pending,
+        "fact_error_summary": {
+            "total": len(fact_errors),
+            "type_counts": dict(fact_error_counts.most_common()),
+            "findings": fact_errors,
+            "classification_instruction": (
+                "unsupported claim의 reason을 [claim_contradicts_cited_evidence] 또는 "
+                "[unsupported_operational_inference]로 시작하면 해당 유형으로 집계합니다. "
+                "표식이 없으면 unclassified_unsupported_claim로 남겨 임의 자동 분류하지 않습니다."
+            ),
+        },
         "metrics": {
             "faithfulness": _fraction(supported, claims),
             "answer_relevancy": _fraction(relevancy, reviewed * 2),
