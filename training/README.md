@@ -15,6 +15,13 @@ PyTorch wheel을 고정한다.
 ```bash
 # RunPod Pod 내부, 프로젝트 루트에서 실행
 python -m pip install --upgrade pip
+
+# 일반 설치: `-m pip`은 현재 가상환경의 pip를 사용하고,
+# `-r`은 지정한 requirements 파일을 읽는다. 이미 설치되어 버전 조건을 만족하는 패키지는 건너뛴다.
+python -m pip install -r training/runpod_requirements.txt
+
+# 강제 재설치: CUDA 빌드를 교체했거나 패키지 설치가 손상됐을 때만 사용한다.
+# 이미 설치된 대용량 PyTorch·CUDA 패키지도 다시 내려받으므로 평소에는 사용하지 않는다.
 python -m pip install --force-reinstall -r training/runpod_requirements.txt
 ```
 

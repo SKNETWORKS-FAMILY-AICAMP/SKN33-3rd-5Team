@@ -3,7 +3,7 @@
 # 이 파일은 RunPod GPU 학습 전용이므로 macOS/Windows의 루트 requirements.txt에는 넣지 않는다.
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.11.0+cu128 ; platform_system == "Linux" and platform_machine == "x86_64"
-transformers>=4.51,<6
+transformers>=4.51,<5
 huggingface_hub>=0.34,<2
 datasets>=3.6,<5
 accelerate>=1.6,<2
