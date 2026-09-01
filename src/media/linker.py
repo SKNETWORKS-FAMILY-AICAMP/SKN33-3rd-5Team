@@ -51,6 +51,31 @@ def _guide_items(payload: dict[str, Any], *, source: Path) -> list[dict[str, Any
     return guides
 
 
+def _reviewed_direct_chunk_ids(path: Path) -> dict[str, tuple[str, ...]]:
+    """Read the optional human review that narrows video links to shown steps."""
+    payload = _read_json(path)
+    reviews = payload.get("video_reviews")
+    if not isinstance(reviews, list):
+        raise ValueError(f"video review must contain a video_reviews array: {path}")
+
+    reviewed: dict[str, tuple[str, ...]] = {}
+    for review in reviews:
+        if not isinstance(review, dict):
+            raise ValueError(f"video review item must be an object: {path}")
+        media_id = review.get("media_id")
+        chunk_ids = review.get("direct_chunk_ids")
+        if not isinstance(media_id, str) or not media_id:
+            raise ValueError(f"video review media_id is missing: {path}")
+        if not isinstance(chunk_ids, list) or not all(isinstance(value, str) and value for value in chunk_ids):
+            raise ValueError(f"video review direct_chunk_ids are invalid: {media_id}")
+        if len(chunk_ids) != len(set(chunk_ids)):
+            raise ValueError(f"video review has duplicate direct_chunk_ids: {media_id}")
+        if media_id in reviewed:
+            raise ValueError(f"duplicate video review media_id: {media_id}")
+        reviewed[media_id] = tuple(chunk_ids)
+    return reviewed
+
+
 def _validate_image(item: dict[str, Any], *, repository_root: Path) -> None:
     relative_path = item.get("relative_path")
     expected_checksum = item.get("checksum")
@@ -78,6 +103,7 @@ def build_media_chunk_map(
     video_manifest_path: Path,
     output_path: Path,
     repository_root: Path | None = None,
+    video_review_path: Path | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic media-to-chunk map from reviewed manifests."""
     document_manifest_path = document_manifest_path.resolve()
@@ -85,6 +111,7 @@ def build_media_chunk_map(
     video_manifest_path = video_manifest_path.resolve()
     output_path = output_path.resolve()
     repository_root = (repository_root or Path.cwd()).resolve()
+    review_path = (video_review_path or video_manifest_path.with_name("video_chunk_audit_v1.json")).resolve()
 
     document_manifest = _read_json(document_manifest_path)
     chunks = document_manifest.get("chunks")
@@ -96,6 +123,16 @@ def build_media_chunk_map(
     media_items = _guide_items(image_payload, source=image_manifest_path) + _guide_items(
         video_payload, source=video_manifest_path
     )
+    reviewed_direct = _reviewed_direct_chunk_ids(review_path) if review_path.is_file() else {}
+    video_media_ids = {
+        item.get("media_id")
+        for item in media_items
+        if item.get("media_type") == "video" and isinstance(item.get("media_id"), str)
+    }
+    unknown_reviewed_media = set(reviewed_direct).difference(video_media_ids)
+    if unknown_reviewed_media:
+        unknown = ", ".join(sorted(unknown_reviewed_media))
+        raise ValueError(f"video review references media absent from manifest: {unknown}")
 
     seen_ids: set[str] = set()
     links: list[dict[str, Any]] = []
@@ -159,8 +196,34 @@ def build_media_chunk_map(
             )
             continue
 
-        chunk_ids = sorted({str(chunk["chunk_id"]) for chunk in section_candidates})
-        document_ids = sorted({str(chunk["document_id"]) for chunk in section_candidates})
+        reviewed_ids = reviewed_direct.get(media_id) if media_type == "video" else None
+        if reviewed_ids is not None:
+            chunks_by_id = {
+                str(chunk["chunk_id"]): chunk
+                for chunk in url_candidates
+                if isinstance(chunk.get("chunk_id"), str)
+            }
+            missing_ids = sorted(set(reviewed_ids).difference(chunks_by_id))
+            if missing_ids:
+                missing = ", ".join(missing_ids)
+                raise ValueError(f"reviewed direct chunk is not in the video's document scope: {media_id}: {missing}")
+            selected_chunks = [chunks_by_id[chunk_id] for chunk_id in reviewed_ids]
+        else:
+            selected_chunks = section_candidates
+
+        if not selected_chunks:
+            unmatched.append(
+                {
+                    "media_id": media_id,
+                    "reason": "no_direct_chunks_in_review" if reviewed_ids is not None else "section_not_in_collected_document",
+                    "source_document_url": source_url,
+                    "source_section": source_section,
+                }
+            )
+            continue
+
+        chunk_ids = sorted({str(chunk["chunk_id"]) for chunk in selected_chunks})
+        document_ids = sorted({str(chunk["document_id"]) for chunk in selected_chunks})
         links.append(
             {
                 "media_id": media_id,
@@ -197,6 +260,12 @@ def main() -> None:
     parser.add_argument("--video-manifest", type=Path, default=Path("assets/media/video_manifest.json"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repository-root", type=Path, default=Path.cwd())
+    parser.add_argument(
+        "--video-review",
+        type=Path,
+        default=None,
+        help="Optional reviewed direct video-to-chunk mapping; defaults to video_chunk_audit_v1.json beside the video manifest.",
+    )
     args = parser.parse_args()
     payload = build_media_chunk_map(
         document_manifest_path=args.document_manifest,
@@ -204,6 +273,7 @@ def main() -> None:
         video_manifest_path=args.video_manifest,
         output_path=args.output,
         repository_root=args.repository_root,
+        video_review_path=args.video_review,
     )
     print(json.dumps(payload["summary"], ensure_ascii=False))
 
