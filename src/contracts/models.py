@@ -199,6 +199,19 @@ class ChatCitation(StrictContract):
     quote: NonEmptyText
 
 
+class ProductSpecSummary(StrictContract):
+    """Reviewed catalog specs shown on product cards and comparison tables.
+
+    These values come from the human-reviewed product catalog, never from an
+    LLM. ``dimensions`` stays null when the official corpus does not confirm it.
+    """
+
+    cpu: NonEmptyText
+    memory: NonEmptyText
+    wireless: NonEmptyText
+    dimensions: NonEmptyText | None
+
+
 class ProductRecommendation(StrictContract):
     """Structured card for product recommendation or comparison UI."""
 
@@ -210,6 +223,7 @@ class ProductRecommendation(StrictContract):
     citation_ids: NonEmptyTextList
     product_url: HttpUrl
     image_url: HttpUrl | None
+    specs: ProductSpecSummary
 
 
 class MediaItem(StrictContract):

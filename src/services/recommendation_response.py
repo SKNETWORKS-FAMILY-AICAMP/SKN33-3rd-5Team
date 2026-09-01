@@ -7,6 +7,7 @@ from src.contracts import (
     ChatResponse,
     ConditionPayload,
     ProductRecommendation,
+    ProductSpecSummary,
     SearchResponse,
 )
 
@@ -190,6 +191,12 @@ def build_recommendation_chat_response(
                 citation_ids=citation_ids,
                 product_url=candidate.product_url,
                 image_url=candidate.image_url,
+                specs=ProductSpecSummary(
+                    cpu=candidate.display.cpu,
+                    memory=candidate.display.memory,
+                    wireless=candidate.display.wireless,
+                    dimensions=candidate.display.dimensions,
+                ),
             )
         )
         if answer is None:

@@ -37,6 +37,17 @@ st.markdown(APP_CSS, unsafe_allow_html=True)
 
 RUNTIME_READINESS = check_runtime_readiness(ROOT)
 
+# 카드 위 요약 배지는 추천 화면 전용 문구를 쓴다. 답변 상태 라벨은
+# QA 화면과 공유하므로 render_answer의 문구를 그대로 유지한다.
+RECOMMENDATION_STATUS_LABELS = {
+    "answered": "조건 충족",
+    "needs_clarification": "추가 정보 필요",
+    "insufficient_evidence": "근거 부족",
+    "out_of_scope": "답변 범위 외",
+    "safety_blocked": "안전 정책으로 보류",
+    "error": "실행 오류",
+}
+
 
 @st.cache_resource(show_spinner=False)
 def citation_presenter() -> CitationPresenter | None:
@@ -181,25 +192,87 @@ def render_sources(sources, *, preferred_use_case: str | None = None) -> None:
         )
 
 
-def product_card(product) -> str:
+RANK_TONES = ("tone-best", "tone-mid", "tone-light")
+RANK_LABELS = ("⭐ 가장 추천", "2순위 추천", "3순위 추천")
+
+
+def rank_tone(rank: int) -> str:
+    """Return the card accent class for a 1-based recommendation rank."""
+
+    return RANK_TONES[min(rank, len(RANK_TONES)) - 1]
+
+
+def rank_label(rank: int) -> str:
+    """Return the rank badge text; ranking comes from the scored candidates."""
+
+    return RANK_LABELS[rank - 1] if rank <= len(RANK_LABELS) else f"{rank}순위 추천"
+
+
+def product_card(product, rank: int) -> str:
     """Render one server-validated ProductRecommendation contract."""
 
     name = str(product.product_model)
     image = str(product.image_url) if product.image_url else ""
-    limitations = " ".join(product.limitations) or "추가 유의사항 없음"
-    citation_ids = ", ".join(product.citation_ids)
+    tone = rank_tone(rank)
+    stage = (
+        f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" class="product-image" />'
+        if image
+        else '<span class="product-image-empty">공식 이미지 없음</span>'
+    )
+    specs = "".join(
+        f'<div class="spec-row"><span class="spec-key">{html.escape(key)}</span>'
+        f'<span class="spec-value">{html.escape(value)}</span></div>'
+        for key, value in (
+            ("CPU", product.specs.cpu),
+            ("RAM", product.specs.memory),
+            ("무선", product.specs.wireless),
+        )
+    )
+    tagline = product.matched_conditions[0] if product.matched_conditions else product.recommendation
     return f"""
-        <div class="product-card">
-          <div class="product-card-header"><div class="product-name">{html.escape(name)}</div></div>
-          <div class="product-card-body">
-            {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" class="product-image" />' if image else ''}
-            <div class="product-reason">{html.escape(product.recommendation)}</div>
-            <div class="product-limitations">{html.escape(limitations)}</div>
-            <div class="product-card-footer">
-              <a class="product-link" href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer">자세히 보기 <span>→</span></a>
-              <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
-            </div>
+        <article class="product-card">
+          <div class="product-card-top">
+            <span class="product-rank {tone}">{html.escape(rank_label(rank))}</span>
+            <div class="product-name">{html.escape(name)}</div>
           </div>
+          <div class="product-card-main">
+            <div class="product-stage">{stage}</div>
+            <div class="spec-list">{specs}</div>
+          </div>
+          <div class="product-card-foot">
+            <span class="product-tagline {tone}">{html.escape(tagline)}</span>
+            <a class="product-link" href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer">자세히 보기</a>
+          </div>
+        </article>
+        """
+
+
+def comparison_table(products) -> str:
+    """Compare the recommended products using reviewed catalog specs only."""
+
+    headers = "".join(
+        f'<th class="{rank_tone(rank)}">{html.escape(str(product.product_model))}</th>'
+        for rank, product in enumerate(products, start=1)
+    )
+    rows = ""
+    for label, read in (
+        ("CPU", lambda item: item.specs.cpu),
+        ("메모리", lambda item: item.specs.memory),
+        ("무선 연결", lambda item: item.specs.wireless),
+        ("크기", lambda item: item.specs.dimensions or "공식 문서 미확인"),
+        (
+            "충족한 조건",
+            lambda item: ", ".join(item.matched_conditions) or item.recommendation,
+        ),
+    ):
+        cells = "".join(f"<td>{html.escape(str(read(product)))}</td>" for product in products)
+        rows += f"<tr><th>{html.escape(label)}</th>{cells}</tr>"
+    return f"""
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead><tr><th>항목</th>{headers}</tr></thead>
+            <tbody>{rows}</tbody>
+          </table>
         </div>
         """
 
@@ -220,8 +293,10 @@ def render_recommendation_page() -> None:
             placeholder="예: 모니터 없이 홈 서버로 사용하고 싶어요.",
         )
         st.caption("사용 목적과 환경을 자유롭게 적어주세요.")
-        st.markdown("**추가 조건**")
-        c1, c2, c3, c4, c5, c6 = st.columns([1.15, 1.15, .8, .8, .8, .8])
+        st.markdown('<div class="form-group-label">추가 조건</div>', unsafe_allow_html=True)
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(
+            [1.15, 1.15, .78, .78, .78, .78, 1.35], vertical_alignment="bottom"
+        )
         with c1:
             user_level = st.selectbox("사용자 수준", ["입문자", "중급자", "고급자"])
         with c2:
@@ -234,7 +309,8 @@ def render_recommendation_page() -> None:
             gpio = st.toggle("GPIO 사용", value=False)
         with c6:
             monitor_absent = st.toggle("모니터 없음", value=True)
-        submitted = st.form_submit_button("추천 결과 보기  ✨", use_container_width=True)
+        with c7:
+            submitted = st.form_submit_button("추천 결과 보기  ✨", use_container_width=True)
 
     if submitted:
         if not purpose.strip():
@@ -270,17 +346,27 @@ def render_recommendation_page() -> None:
             st.warning(RUNTIME_READINESS.message)
         return
 
-    section_title(f"추천 제품 {len(response.products)}개", response.status)
+    section_title(
+        f"추천 제품 {len(response.products)}가지",
+        RECOMMENDATION_STATUS_LABELS[response.status],
+    )
     if response.products:
-        cards = "".join(product_card(product).strip() for product in response.products)
+        cards = "".join(
+            product_card(product, rank).strip()
+            for rank, product in enumerate(response.products, start=1)
+        )
         st.markdown(f'<div class="product-grid">{cards}</div>', unsafe_allow_html=True)
 
+        if len(response.products) > 1:
+            section_title("한눈에 비교")
+            st.markdown(comparison_table(response.products), unsafe_allow_html=True)
+
+    section_title("추천 근거")
     with st.container(key="recommendation_evidence"):
-        with st.expander("추천 근거", expanded=False):
-            render_sources(
-                response.citations,
-                preferred_use_case=response.conditions.use_case if response.conditions else None,
-            )
+        render_sources(
+            response.citations,
+            preferred_use_case=response.conditions.use_case if response.conditions else None,
+        )
     render_citation_media(response.media, grid_images=True)
     render_answer(response, stream_key="recommendation")
     if response.conditions is not None:
@@ -383,86 +469,120 @@ def submit_qa(question: str) -> None:
 
     clean_question = question.strip()
     st.session_state.qa_question = clean_question
-    st.session_state.qa_response = qa_chat_service().answer(
+    response = qa_chat_service().answer(
         request_id=str(uuid.uuid4()),
         question=clean_question,
         retrieval_mode="hybrid",
         trace=True,
     )
+    st.session_state.qa_response = response
+    history = st.session_state.setdefault("qa_history", [])
+    history.append((clean_question, response))
 
 
 def render_qa_page() -> None:
     """Render the document-grounded QA screen."""
 
-    render_hero(
-        "무엇이 궁금하신가요?",
-        None,
-        "사용법, 문제 해결, 공식 지원 절차를 문서 근거와 함께 알려드려요.",
-    )
+    history: list[tuple[str, ChatResponse]] = st.session_state.get("qa_history", [])
+    legacy_response: ChatResponse | None = st.session_state.get("qa_response")
+    if not history and legacy_response is not None and st.session_state.get("qa_question"):
+        history = [(st.session_state.qa_question, legacy_response)]
 
-    categories = st.columns(3)
-    for column, icon, label in zip(
-        categories, ["💻", "🔧", "🛡️"], ["설치·사용법", "문제 해결", "A/S·리콜"], strict=True
-    ):
-        with column:
-            st.markdown(f'<div class="qa-category"><span style="font-size:1.5rem">{icon}</span>&nbsp;&nbsp;{label}</div>', unsafe_allow_html=True)
+    with st.container(key="qa_workspace"):
+        if history:
+            title_column, action_column = st.columns([6, 1.15], vertical_alignment="center")
+            with title_column:
+                st.markdown(
+                    '<div class="qa-conversation-heading">'
+                    '<span class="qa-conversation-mark">🍓</span>'
+                    '<div><strong>PiCare 질의응답</strong>'
+                    '<small>Raspberry Pi 공식 문서를 바탕으로 답변합니다</small></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+            with action_column:
+                if st.button("＋ 새 대화", key="qa_new_conversation", use_container_width=True):
+                    for key in ("qa_response", "qa_question", "qa_history", "qa_streamed_request_id"):
+                        st.session_state.pop(key, None)
+                    st.rerun()
 
-    response: ChatResponse | None = st.session_state.get("qa_response")
-    if response is not None:
+            st.markdown('<div class="qa-thread-divider"></div>', unsafe_allow_html=True)
+            for index, (question, response) in enumerate(history):
+                with st.container(key=f"qa_user_message_{index}"):
+                    st.markdown(
+                        '<div class="qa-message-user">'
+                        f'<div class="qa-message-copy">{html.escape(question)}</div>'
+                        '<div class="qa-avatar qa-avatar-user">나</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                with st.container(key=f"qa_assistant_message_{index}"):
+                    st.markdown(
+                        '<div class="qa-message-head">'
+                        '<div class="qa-avatar qa-avatar-assistant">🍓</div>'
+                        '<div><strong>PiCare</strong><small>공식 문서 기반 답변</small></div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_answer(response, stream_key=f"qa_{index}")
+                    if response.media:
+                        with st.expander("답변과 연결된 이미지·영상", expanded=False):
+                            render_citation_media(
+                                response.media,
+                                grid_images=True,
+                                show_title=False,
+                                container_key_prefix=f"qa_media_{index}",
+                            )
+                    with st.expander(f"공식 문서 출처 {len(response.citations)}건", expanded=False):
+                        render_sources(response.citations)
+        else:
+            with st.container(key="qa_empty_state"):
+                st.markdown(
+                    '<div class="qa-empty-icon">🍓</div>'
+                    '<h1>무엇이 궁금하신가요?</h1>'
+                    '<p>사용법, 문제 해결, 공식 지원 절차를<br>'
+                    '검증된 문서 근거와 함께 알려드려요.</p>',
+                    unsafe_allow_html=True,
+                )
+
+                categories = st.columns(3, gap="medium")
+                for column, icon, label, description in zip(
+                    categories,
+                    ["💻", "🔧", "🛡️"],
+                    ["설치·사용법", "문제 해결", "A/S·리콜"],
+                    ["OS 설치와 초기 설정", "오류 원인과 점검 순서", "공식 지원 절차 확인"],
+                    strict=True,
+                ):
+                    with column:
+                        st.markdown(
+                            '<div class="qa-category">'
+                            f'<span>{icon}</span><strong>{label}</strong><small>{description}</small>'
+                            '</div>',
+                            unsafe_allow_html=True,
+                        )
+
+            if not RUNTIME_READINESS.ready:
+                st.warning(RUNTIME_READINESS.message)
+
         st.markdown(
-            f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>',
+            '<div class="qa-safety-note">🛡️ 입력한 내용은 명령으로 실행되지 않으며, '
+            '검색 근거가 없으면 답변을 보류합니다.</div>',
             unsafe_allow_html=True,
         )
-        left, right = st.columns([1.35, 1], gap="large")
-        with left:
-            with st.container(key="qa_answer_bubble_0"):
-                st.markdown('<div class="qa-answer-speaker">🤖 PiCare</div>', unsafe_allow_html=True)
-                render_answer(response, stream_key="qa")
-            if response.media:
-                with st.expander("인용 근거와 연결된 이미지·영상", expanded=False):
-                    render_citation_media(
-                        response.media,
-                        grid_images=True,
-                        show_title=False,
-                        container_key_prefix="qa_media_0",
-                    )
-        with right:
-            with st.container(key="qa_sources_panel_0"):
-                section_title(f"공식 문서 출처 {len(response.citations)}건")
-                render_sources(response.citations)
-    elif not RUNTIME_READINESS.ready:
-        st.warning(RUNTIME_READINESS.message)
 
-    st.markdown("---")
-    if st.session_state.pop("clear_qa_input", False):
-        st.session_state.qa_input = ""
-    with st.form("qa_form", clear_on_submit=False):
-        c1, c2 = st.columns([8, 1.2])
-        with c1:
-            question = st.text_input(
-                "질문",
-                placeholder="질문을 입력하세요",
-                label_visibility="collapsed",
-                key="qa_input",
-            )
-        with c2:
-            sent = st.form_submit_button("✈ 보내기", use_container_width=True)
-        st.caption("🛡 입력한 내용은 명령으로 실행되지 않습니다. 검색 근거가 없으면 답변을 보류합니다.")
-    if sent:
-        if not question.strip():
-            st.warning("질문을 입력해 주세요.")
-        else:
-            try:
-                with st.status("공식 근거를 확인하고 있습니다…", expanded=True) as progress:
-                    progress.write("질문 범위와 안전 정책을 확인하고 있습니다.")
-                    progress.write("공식 문서에서 관련 청크를 검색하고 있습니다.")
-                    submit_qa(question)
-                    progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
-                    progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
-                st.session_state.clear_qa_input = True
-                st.rerun()
-            except Exception as exc:
-                st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
+    question = st.chat_input("Raspberry Pi에 대해 무엇이든 물어보세요", key="qa_chat_input")
+    if question:
+        try:
+            with st.status("공식 근거를 확인하고 있습니다…", expanded=True) as progress:
+                progress.write("질문 범위와 안전 정책을 확인하고 있습니다.")
+                progress.write("공식 문서에서 관련 청크를 검색하고 있습니다.")
+                submit_qa(question)
+                progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
+                progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
+            st.rerun()
+        except Exception as exc:
+            st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
 
 
 def render_about_page() -> None:
