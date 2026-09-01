@@ -1,0 +1,2 @@
+# 쉘 스크립트는 Linux(RunPod)에서 실행되므로 CRLF로 저장되면 깨진다.
+*.sh text eol=lf
