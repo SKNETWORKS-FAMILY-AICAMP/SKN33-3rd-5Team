@@ -14,6 +14,10 @@ PiCare의 제품 추천 카드와 사용 지원 답변에 표시할 Raspberry Pi
 
 각 파일의 원본 경로, 문서 URL, SHA-256, 크기, 대체 텍스트는 [`manifest.json`](manifest.json)에 기록했습니다. 공식 사용법 영상 4개는 파일을 내려받지 않고 [`video_manifest.json`](video_manifest.json)에 공식 YouTube URL과 연결 문서를 기록했습니다.
 
+영상이 실제로 보이는 절차만 citation에 연결하기 위해, 46개 후보 청크의 사람 검수 결과를
+[`video_chunk_audit_v1.json`](video_chunk_audit_v1.json)에 둡니다. 이 파일의 `direct` 청크만
+linker가 기본 선택하며, `supporting`과 `remove`는 런타임 영상 카드에 연결하지 않습니다.
+
 ## 디렉터리
 
 ```text
@@ -97,6 +101,9 @@ python -m src.media.linker \
   --output document_pipeline/data/media_chunk_map_v3.json \
   --repository-root .
 ```
+
+`video_manifest.json`과 같은 디렉터리에 있는 `video_chunk_audit_v1.json`은 자동으로 읽습니다.
+다른 검수본을 시험하려면 `--video-review <path>`를 넘깁니다.
 
 2026-08-31 검증 결과 사용 지원 미디어 18개 중 13개가 현재 corpus에 연결됐습니다. 아래 5개는 관련 세부 섹션이 수집되지 않아 표시 대상에서 제외됩니다.
 
