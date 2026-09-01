@@ -561,7 +561,7 @@ python -m src.evaluation.extractor_eval --mode lora
 
 | 이름 | 역할 | 담당 업무 |
 |---|---|---|
-| 안정민 | PM·아키텍처·통합 | 일정·범위 관리, 인터페이스 정의, 최종 통합, 발표 |
+| 안정민 | PM·아키텍처·통합 | 일정·범위 관리, 인터페이스 정의, 최종 통합 |
 | 김혜리 | 문서·데이터 | 공식 문서 수집, 라이선스 검토, 정제·청킹, Document Card |
 | 최지흠 | RAG·검색 | multilingual-e5-base, Vector DB, Retriever, 검색 평가 |
 | 이양원 | sLLM·파인튜닝 | JSON Schema, 학습 데이터, Qwen3-4B-Instruct-2507 QLoRA, 모델 평가 |
