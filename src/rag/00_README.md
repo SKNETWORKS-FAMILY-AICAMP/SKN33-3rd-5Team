@@ -62,8 +62,7 @@ python3 -m src.recommendation.validate_catalog \
   --catalog data/products/catalog.json \
   --manifest document_pipeline/data/manifest_v3.json
 
-# .env의 DOCUMENT_MANIFEST/CHROMA_PATH를 v3 경로로 설정한 후 실행한다.
-python3 -m src.services.rag_qa_cli --action index --reset
+# run_pipeline이 media 청크 연결표 생성과 Chroma 전체 재색인까지 수행한다.
 ```
 
 `raw_v3`, `processed_v3`, `manifest_v3.json`, `chroma_official_v3`는 재생성 가능한
@@ -121,17 +120,15 @@ python3 -m src.services.rag_qa_cli \
 # 이후 Streamlit·통합 테스트가 읽을 공통 응답 JSON을 확인한다.
 python3 -m src.services.rag_qa_cli --mode bm25 --query "SSH를 활성화하려면?" --json
 
-# corpus 변경 후 Chroma 색인을 생성·갱신한다.
-python3 -m src.services.rag_qa_cli --action index
-# 기존 collection을 명시적으로 삭제하고 전체 재색인한다.
-python3 -m src.services.rag_qa_cli --action index --reset
+# corpus 변경은 run_pipeline이 미디어 연결과 Chroma 전체 재색인까지 함께 수행한다.
+python3 -m document_pipeline.ingestion.run_pipeline
 ```
 
 ### 명령별 역할
 
 | 명령·옵션 | 역할 | 사용할 시점 |
 | --- | --- | --- |
-| `python3 -m src.services.rag_qa_cli --action index --reset` | `manifest.json` 청크를 E5 임베딩으로 변환해 Chroma DB에 전체 색인한다. 기존 collection은 삭제 후 새로 만든다. | 최초 실행, corpus·metadata 변경 후 |
+| `python3 -m document_pipeline.ingestion.run_pipeline` | v3 문서 수집·manifest·미디어 청크 연결표를 재생성하고 Chroma DB를 전체 재색인한다. | 최초 실행, corpus·metadata 변경 후 |
 | `--mode bm25` | 문서와 질문의 단어 일치를 기준으로 BM25만 검색한 뒤 QA 응답을 만든다. Chroma와 E5 모델이 없어도 된다. | 빠른 기본 검색 확인, Chroma 색인 전 |
 | 기본 실행 또는 `--mode hybrid` | BM25 키워드 검색과 Chroma Dense 의미 검색을 RRF로 결합한 뒤 QA 응답을 만든다. | 실제 시연과 기본 QA 실행 |
 | `--json` | 검색 방식은 바꾸지 않고, 콘솔용 출력 대신 공통 `ChatResponse` JSON을 출력한다. | Streamlit 연결, 자동 테스트, API 응답 확인 |

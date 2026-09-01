@@ -36,3 +36,14 @@ def test_media_map_resolves_manifest_urls_and_ignores_unknown_assets(tmp_path):
     assert mapping["chunk-2"] == [{
         "media_type": "image", "title": "공식 설정 이미지", "url": "https://www.raspberrypi.com/setup.png",
     }]
+
+
+def test_v3_generated_map_path_is_accepted_as_a_setting_path(tmp_path):
+    map_path = tmp_path / "document_pipeline" / "data" / "media_chunk_map_v3.json"
+    map_path.parent.mkdir(parents=True)
+    map_path.write_text('{"links": []}', encoding="utf-8")
+    (tmp_path / "assets" / "media").mkdir(parents=True)
+    (tmp_path / "assets" / "media" / "manifest.json").write_text('{"items": []}', encoding="utf-8")
+    (tmp_path / "assets" / "media" / "video_manifest.json").write_text('{"items": []}', encoding="utf-8")
+
+    assert load_media_by_chunk_id(tmp_path, media_chunk_map_path=map_path) == {}

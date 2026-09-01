@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from io import StringIO
+from pathlib import Path
 
+from src.rag import RagSettings
 from src.services import rag_qa_cli
 
 
@@ -37,3 +39,31 @@ def test_loading_indicator_prints_a_plain_progress_message_when_not_a_tty() -> N
         pass
 
     assert stream.getvalue() == "[loading] 공식 문서를 검색하는 중입니다...\n"
+
+
+def test_cli_uses_configured_v3_media_chunk_map(monkeypatch, tmp_path) -> None:
+    settings = RagSettings(
+        project_root=tmp_path,
+        manifest_path=tmp_path / "manifest.json",
+        chroma_path=tmp_path / "chroma",
+        chroma_collection_name="test",
+        e5_model_name="test-e5",
+        top_k=3,
+        dense_max_distance=0.48,
+        media_manifest_path=None,
+        media_chunk_map_path=tmp_path / "document_pipeline/data/media_chunk_map_v3.json",
+    )
+    calls: dict[str, object] = {}
+
+    def fake_load(root, **kwargs):
+        calls["root"] = root
+        calls.update(kwargs)
+        return {}
+
+    monkeypatch.setattr(rag_qa_cli, "load_media_by_chunk_id", fake_load)
+
+    assert rag_qa_cli._load_media_by_chunk_id(settings) == {}
+    assert calls == {
+        "root": tmp_path,
+        "media_chunk_map_path": Path(tmp_path / "document_pipeline/data/media_chunk_map_v3.json"),
+    }

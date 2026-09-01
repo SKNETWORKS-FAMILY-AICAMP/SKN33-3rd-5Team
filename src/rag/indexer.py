@@ -97,6 +97,26 @@ def build_chroma_index(
     return len(approved)
 
 
+def index_from_settings(
+    settings: RagSettings,
+    *,
+    manifest_path: str | Path | None = None,
+    reset: bool = False,
+) -> int:
+    """RAG 설정을 사용해 지정 manifest를 색인한다.
+
+    ``manifest_path``를 넘기면 문서 파이프라인이 방금 생성한 산출물을 바로
+    색인할 수 있다. 생략하면 기존 CLI처럼 ``DOCUMENT_MANIFEST``를 사용한다.
+    """
+    return build_chroma_index(
+        manifest_path=manifest_path or settings.manifest_path,
+        chroma_path=settings.chroma_path,
+        collection_name=settings.chroma_collection_name,
+        embedding_model_name=settings.e5_model_name,
+        reset=reset,
+    )
+
+
 def main() -> None:
     """`.env` 설정으로 Chroma 색인을 만들고, 필요 시 전체 재색인한다."""
     parser = argparse.ArgumentParser(description="Build the local Raspberry Pi Chroma index.")
@@ -106,13 +126,7 @@ def main() -> None:
         settings = RagSettings.from_env()
     except RagSettingsError as exc:
         raise SystemExit(f"RAG settings error: {exc}") from exc
-    count = build_chroma_index(
-        manifest_path=settings.manifest_path,
-        chroma_path=settings.chroma_path,
-        collection_name=settings.chroma_collection_name,
-        embedding_model_name=settings.e5_model_name,
-        reset=args.reset,
-    )
+    count = index_from_settings(settings, reset=args.reset)
     action = "reset and indexed" if args.reset else "indexed"
     print(f"{action} {count} official chunks in '{settings.chroma_collection_name}'.")
 

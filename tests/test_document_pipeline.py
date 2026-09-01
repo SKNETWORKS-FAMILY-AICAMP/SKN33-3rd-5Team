@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
+
+import pytest
 
 from document_pipeline.ingestion import run_pipeline
 from document_pipeline.ingestion.build_manifest import _processing_metadata, chunk_section, sha256
@@ -207,22 +210,38 @@ def test_run_pipeline_forwards_custom_registry_to_fetch_and_manifest(
     processed_root = tmp_path / "processed"
     manifest_path = tmp_path / "manifest.json"
     calls: dict[str, dict[str, object]] = {}
+    call_order: list[str] = []
 
     def fake_fetch_sources(**kwargs):
+        call_order.append("fetch")
         calls["fetch"] = kwargs
         return {"commit": "a" * 40, "documents": []}
 
     def fake_build_manifest(**kwargs):
+        call_order.append("manifest")
         calls["build"] = kwargs
         return {"chunks": []}
 
     def fake_build_media_manifest(**kwargs):
+        call_order.append("media_manifest")
         calls["media"] = kwargs
         return {"statistics": {"media_items": 0}}
+
+    def fake_build_media_chunk_map(**kwargs):
+        call_order.append("media_chunk_map")
+        calls["media_chunk_map"] = kwargs
+        return {"summary": {"linked_media": 0, "unmatched_media": 0}}
+
+    def fake_reset_index_for_manifest(**kwargs):
+        call_order.append("index")
+        calls["index"] = kwargs
+        return 0
 
     monkeypatch.setattr(run_pipeline, "fetch_sources", fake_fetch_sources)
     monkeypatch.setattr(run_pipeline, "build_manifest", fake_build_manifest)
     monkeypatch.setattr(run_pipeline, "build_media_manifest", fake_build_media_manifest)
+    monkeypatch.setattr(run_pipeline, "build_media_chunk_map", fake_build_media_chunk_map)
+    monkeypatch.setattr(run_pipeline, "_reset_index_for_manifest", fake_reset_index_for_manifest)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -249,3 +268,61 @@ def test_run_pipeline_forwards_custom_registry_to_fetch_and_manifest(
     assert calls["media"]["registry_path"] == registry
     assert calls["media"]["raw_root"] == raw_root
     assert calls["media"]["document_manifest_path"] == manifest_path
+    assert calls["media_chunk_map"]["document_manifest_path"] == manifest_path
+    assert calls["media_chunk_map"]["output_path"] == run_pipeline.V3_MEDIA_CHUNK_MAP_PATH
+    assert calls["index"]["manifest_path"] == manifest_path
+    assert calls["index"]["media_manifest_path"] == run_pipeline.V3_MEDIA_MANIFEST_PATH
+    assert calls["index"]["media_chunk_map_path"] == run_pipeline.V3_MEDIA_CHUNK_MAP_PATH
+    assert call_order == ["fetch", "manifest", "media_manifest", "media_chunk_map", "index"]
+
+
+def test_run_pipeline_reindexes_the_generated_manifest_with_reset(tmp_path, monkeypatch) -> None:
+    manifest_path = tmp_path / "manifest.json"
+    repository_root = tmp_path / "repository"
+    settings = SimpleNamespace(
+        manifest_path=manifest_path,
+        media_manifest_path=tmp_path / "media-manifest.json",
+        media_chunk_map_path=tmp_path / "media-chunk-map.json",
+    )
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(run_pipeline.RagSettings, "from_env", lambda root: settings)
+
+    def fake_index_from_settings(received_settings, **kwargs):
+        calls["settings"] = received_settings
+        calls.update(kwargs)
+        return 17
+
+    monkeypatch.setattr(run_pipeline, "index_from_settings", fake_index_from_settings)
+
+    assert run_pipeline._reset_index_for_manifest(
+        manifest_path=manifest_path,
+        media_manifest_path=settings.media_manifest_path,
+        media_chunk_map_path=settings.media_chunk_map_path,
+        repository_root=repository_root,
+    ) == 17
+    assert calls == {
+        "settings": settings,
+        "manifest_path": manifest_path,
+        "reset": True,
+    }
+
+
+def test_run_pipeline_rejects_rag_settings_that_point_to_other_outputs(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        run_pipeline.RagSettings,
+        "from_env",
+        lambda root: SimpleNamespace(
+            manifest_path=tmp_path / "other-manifest.json",
+            media_manifest_path=tmp_path / "media-manifest.json",
+            media_chunk_map_path=tmp_path / "media-chunk-map.json",
+        ),
+    )
+
+    with pytest.raises(ValueError, match="DOCUMENT_MANIFEST"):
+        run_pipeline._reset_index_for_manifest(
+            manifest_path=tmp_path / "manifest.json",
+            media_manifest_path=tmp_path / "media-manifest.json",
+            media_chunk_map_path=tmp_path / "media-chunk-map.json",
+            repository_root=tmp_path,
+        )

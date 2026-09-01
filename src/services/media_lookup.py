@@ -42,9 +42,9 @@ def _media_url(item: dict) -> str | None:
 def load_media_by_chunk_id(
     project_root: Path,
     *,
-    media_chunk_map_path: str = DEFAULT_MEDIA_CHUNK_MAP_PATH,
-    image_manifest_path: str = DEFAULT_IMAGE_MANIFEST_PATH,
-    video_manifest_path: str = DEFAULT_VIDEO_MANIFEST_PATH,
+    media_chunk_map_path: str | Path = DEFAULT_MEDIA_CHUNK_MAP_PATH,
+    image_manifest_path: str | Path = DEFAULT_IMAGE_MANIFEST_PATH,
+    video_manifest_path: str | Path = DEFAULT_VIDEO_MANIFEST_PATH,
 ) -> Mapping[str, list[MediaCandidate]]:
     """chunk_id별 media 후보 목록을 만든다. 산출물이 없으면 빈 매핑을 반환한다.
 
@@ -53,13 +53,17 @@ def load_media_by_chunk_id(
     파일이 없으면 media 없이 답변만 표시한다.
     """
 
-    chunk_map_file = project_root / media_chunk_map_path
+    def resolve(path: str | Path) -> Path:
+        candidate = Path(path)
+        return candidate if candidate.is_absolute() else project_root / candidate
+
+    chunk_map_file = resolve(media_chunk_map_path)
     if not chunk_map_file.is_file():
         return {}
 
     chunk_map = _read_json(chunk_map_file)
-    image_payload = _read_json(project_root / image_manifest_path)
-    video_payload = _read_json(project_root / video_manifest_path)
+    image_payload = _read_json(resolve(image_manifest_path))
+    video_payload = _read_json(resolve(video_manifest_path))
     items_by_id = {
         item["media_id"]: item
         for item in [*image_payload.get("items", []), *video_payload.get("items", [])]
