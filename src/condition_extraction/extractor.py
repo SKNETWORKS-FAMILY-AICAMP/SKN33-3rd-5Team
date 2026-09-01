@@ -51,7 +51,7 @@ class HuggingFaceConditionExtractor:
             from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
-                "모델 추론 패키지가 없습니다. training/requirements.txt를 설치하세요."
+                "모델 추론 패키지가 없습니다. training/runpod_requirements.txt를 설치하세요."
             ) from exc
 
         try:

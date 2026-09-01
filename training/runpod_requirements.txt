@@ -1,8 +1,8 @@
 # RunPod에서 Qwen3-4B 조건 추출 QLoRA를 학습·추론하는 의존성입니다.
 # A40 Pod의 CUDA 12.8 드라이버와 호환되는 Linux x86_64 wheel을 명시한다.
-# 이 파일은 GPU 학습 전용이므로 macOS/Windows의 루트 requirements.txt에는 넣지 않는다.
+# 이 파일은 RunPod GPU 학습 전용이므로 macOS/Windows의 루트 requirements.txt에는 넣지 않는다.
 --extra-index-url https://download.pytorch.org/whl/cu128
-torch==2.8.0+cu128 ; platform_system == "Linux" and platform_machine == "x86_64"
+torch==2.11.0+cu128 ; platform_system == "Linux" and platform_machine == "x86_64"
 transformers>=4.51,<6
 huggingface_hub>=0.34,<2
 datasets>=3.6,<5

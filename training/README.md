@@ -9,18 +9,18 @@ PiCare QLoRA는 원본 모델 전체 대신 **학습한 LoRA 어댑터**를 저�
 
 일반 RAG·Streamlit 개발은 루트의 `requirements.txt`만 설치하므로 macOS와 Windows에서도
 동일하게 동작한다. QLoRA 학습은 NVIDIA GPU가 있는 RunPod Linux 환경에서만
-`training/requirements.txt`를 설치한다. 이 파일은 A40 Pod 드라이버와 호환되는 CUDA 12.8
+`training/runpod_requirements.txt`를 설치한다. 이 파일은 A40 Pod 드라이버와 호환되는 CUDA 12.8
 PyTorch wheel을 고정한다.
 
 ```bash
 # RunPod Pod 내부, 프로젝트 루트에서 실행
 python -m pip install --upgrade pip
-python -m pip install --force-reinstall -r training/requirements.txt
+python -m pip install --force-reinstall -r training/runpod_requirements.txt
 ```
 
 설치 뒤에는 `python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
 로 CUDA 인식 여부를 확인한다. 로컬 macOS·Windows 가상환경에는
-`training/requirements.txt`를 설치하지 않는다.
+`training/runpod_requirements.txt`를 설치하지 않는다.
 
 ## 학습 전에 검사
 
@@ -106,7 +106,7 @@ python training/publish_adapter.py \
 ## 학습이 끝나면 바로 백업
 
 ```bash
-pip install -r training/requirements.txt
+pip install -r training/runpod_requirements.txt
 python training/train_qlora.py \
   --config training/configs/qwen3_4b_qlora.yaml \
   --hub-repo-id t91004/picare-qwen3-4b-qlora
