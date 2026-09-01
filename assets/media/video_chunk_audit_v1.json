@@ -1,0 +1,137 @@
+{
+  "schema_version": "1.0.0",
+  "reviewed_at": "2026-09-01",
+  "document_manifest": "document_pipeline/data/manifest_v3.json",
+  "scope": {
+    "candidate_link_count": 46,
+    "selection_rule": "A direct link is eligible for runtime display only when the video visibly demonstrates the chunk's physical or UI procedure. Supporting links remain in this audit only; remove links are excluded from both runtime and evaluation media expectations.",
+    "review_method": "Official YouTube player visual review. Captions were unavailable for Imager and M.2 HAT+; the High Quality Camera video's available transcript was used only to confirm the observed physical sequence."
+  },
+  "video_reviews": [
+    {
+      "media_id": "rpi-video-0001",
+      "title": "How to use Raspberry Pi Imager",
+      "document_id": "rpi-doc-getting-started-install",
+      "direct_chunk_ids": [
+        "rpi-doc-getting-started-install-005",
+        "rpi-doc-getting-started-install-016"
+      ],
+      "links": [
+        {"chunk_id": "rpi-doc-getting-started-install-000", "classification": "supporting", "reason": "States that an OS must be flashed, but the video does not establish alternate boot-media policy."},
+        {"chunk_id": "rpi-doc-getting-started-install-001", "classification": "remove", "reason": "Pre-installed OS exceptions for Pi 500 and kits are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-002", "classification": "supporting", "reason": "The video presumes a host computer and storage device; it does not teach the prerequisite list."},
+        {"chunk_id": "rpi-doc-getting-started-install-003", "classification": "supporting", "reason": "Shows Imager screens, but not the claims about third-party images or all preconfiguration capabilities."},
+        {"chunk_id": "rpi-doc-getting-started-install-004", "classification": "supporting", "reason": "The GUI launch is visible, but OS-specific installation commands and AppImage execution are not demonstrated."},
+        {"chunk_id": "rpi-doc-getting-started-install-005", "classification": "direct", "reason": "Shows the Device, OS, and Storage selection flow."},
+        {"chunk_id": "rpi-doc-getting-started-install-006", "classification": "remove", "reason": "The Exclude system drives warning and first-boot fallback are not shown as a procedure."},
+        {"chunk_id": "rpi-doc-getting-started-install-007", "classification": "supporting", "reason": "The Customisation stage is visible, but the detailed set of supported settings is documentary context."},
+        {"chunk_id": "rpi-doc-getting-started-install-008", "classification": "supporting", "reason": "Hostname UI is in the Customisation flow, but hostname syntax and mDNS behavior are not demonstrated."},
+        {"chunk_id": "rpi-doc-getting-started-install-009", "classification": "supporting", "reason": "Localisation appears as a setting, but regulatory-domain behavior is not demonstrated."},
+        {"chunk_id": "rpi-doc-getting-started-install-010", "classification": "supporting", "reason": "User setup is contextual; username rules, auto-login, and sudo consequences are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-011", "classification": "supporting", "reason": "Wi-Fi is a Customisation option, but secure/open/hidden-SSID handling is not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-012", "classification": "supporting", "reason": "Remote Access is listed in the flow, but SSH authentication choices are not demonstrated."},
+        {"chunk_id": "rpi-doc-getting-started-install-013", "classification": "remove", "reason": "Raspberry Pi Connect account and temporary-auth-key procedure are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-014", "classification": "remove", "reason": "Browser-to-Imager token transfer is not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-015", "classification": "remove", "reason": "App Options and warning-suppression settings are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-016", "classification": "direct", "reason": "Shows writing the image and verifying the SD card."},
+        {"chunk_id": "rpi-doc-getting-started-install-017", "classification": "remove", "reason": "Network Install is a different procedure from host-computer Imager use."},
+        {"chunk_id": "rpi-doc-getting-started-install-018", "classification": "remove", "reason": "Network Install hardware and firmware conditions are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-install-019", "classification": "remove", "reason": "Network Install launch and Shift-key sequence are not shown."}
+      ]
+    },
+    {
+      "media_id": "rpi-video-0002",
+      "title": "How to set up a Raspberry Pi",
+      "document_id": "rpi-doc-getting-started-setting-up",
+      "direct_chunk_ids": [
+        "rpi-doc-getting-started-setting-up-022",
+        "rpi-doc-getting-started-setting-up-023",
+        "rpi-doc-getting-started-setting-up-024"
+      ],
+      "links": [
+        {"chunk_id": "rpi-doc-getting-started-setting-up-020", "classification": "supporting", "reason": "The desktop/headless distinction is explanatory context, not a demonstrated procedure."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-021", "classification": "supporting", "reason": "This is a high-level sequence summary; the following step chunks carry the visible actions."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-022", "classification": "direct", "reason": "Shows flashing boot media and moving it into the Raspberry Pi."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-023", "classification": "direct", "reason": "Shows the desktop setup's keyboard, mouse, and display connection stage."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-024", "classification": "direct", "reason": "Shows connecting power after the other hardware."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-025", "classification": "supporting", "reason": "Network is presented as optional follow-up context, not a visible configuration procedure."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-026", "classification": "remove", "reason": "Wi-Fi configuration and 5 GHz compatibility conditions are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-027", "classification": "remove", "reason": "The detailed Ethernet connection/removal procedure is not shown as its own step."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-028", "classification": "remove", "reason": "Headless-only requirements, VNC limitation, and raspi-config alternatives are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-029", "classification": "remove", "reason": "Headless OS Lite and SSH/Connect preconfiguration are not shown."},
+        {"chunk_id": "rpi-doc-getting-started-setting-up-030", "classification": "remove", "reason": "The video does not establish the headless-specific power step or its product requirements."}
+      ]
+    },
+    {
+      "media_id": "rpi-video-0003",
+      "title": "How to fit the Raspberry Pi M.2 HAT+",
+      "document_id": "rpi-doc-boot-nvme",
+      "direct_chunk_ids": [
+        "rpi-doc-boot-nvme-001"
+      ],
+      "links": [
+        {"chunk_id": "rpi-doc-boot-nvme-000", "classification": "supporting", "reason": "Defines NVMe boot scope; the video demonstrates the HAT fitting rather than boot policy."},
+        {"chunk_id": "rpi-doc-boot-nvme-001", "classification": "direct", "reason": "Shows the Raspberry Pi 5 M.2 HAT+ and physical NVMe hardware fitting context."},
+        {"chunk_id": "rpi-doc-boot-nvme-002", "classification": "remove", "reason": "The software update command is not shown."},
+        {"chunk_id": "rpi-doc-boot-nvme-003", "classification": "remove", "reason": "raspi-config, CM4, and BOOT_ORDER actions are not shown."},
+        {"chunk_id": "rpi-doc-boot-nvme-004", "classification": "remove", "reason": "EEPROM boot mode 6 is not shown."},
+        {"chunk_id": "rpi-doc-boot-nvme-005", "classification": "remove", "reason": "UART diagnostics and lsblk interpretation are not shown."},
+        {"chunk_id": "rpi-doc-boot-nvme-006", "classification": "remove", "reason": "The partition-output example is not shown."},
+        {"chunk_id": "rpi-doc-boot-nvme-007", "classification": "remove", "reason": "Boot failure issue-reporting procedure is not shown."}
+      ]
+    },
+    {
+      "media_id": "rpi-video-0004",
+      "title": "HOW TO USE the Raspberry Pi High Quality Camera",
+      "document_id": "rpi-doc-camera-install",
+      "direct_chunk_ids": [
+        "rpi-doc-camera-install-004",
+        "rpi-doc-camera-install-005"
+      ],
+      "links": [
+        {"chunk_id": "rpi-doc-camera-install-000", "classification": "supporting", "reason": "The generic installation overview is context; this video specifically uses the High Quality Camera."},
+        {"chunk_id": "rpi-doc-camera-install-001", "classification": "supporting", "reason": "Parts are visible, but ESD protection and the full cable/model matrix are not demonstrated."},
+        {"chunk_id": "rpi-doc-camera-install-002", "classification": "supporting", "reason": "Shows physical connection, but not the Active Cooler warning or the complete safe-power prerequisite."},
+        {"chunk_id": "rpi-doc-camera-install-003", "classification": "supporting", "reason": "Shows one board connection, not the complete model-specific connector-location matrix."},
+        {"chunk_id": "rpi-doc-camera-install-004", "classification": "direct", "reason": "Shows opening the board connector, seating the ribbon cable, and closing the flap."},
+        {"chunk_id": "rpi-doc-camera-install-005", "classification": "direct", "reason": "Shows attaching the other end of the ribbon cable to the camera board."},
+        {"chunk_id": "rpi-doc-camera-install-006", "classification": "remove", "reason": "The video uses legacy Camera enable/raspistill UI; it does not demonstrate the current rpicam-apps software procedure."}
+      ]
+    }
+  ],
+  "boundary_review": [
+    {
+      "document_id": "rpi-doc-getting-started-install",
+      "status": "pass_with_overlap",
+      "details": [
+        "The destructive-storage warning is duplicated in chunks 005 and 006, so the Device/OS/Storage step remains self-contained.",
+        "Raspberry Pi Connect token transfer continues from 013 to 014, with the browser-confirmation sentence repeated at the boundary; retrieve both only for a full Connect walkthrough.",
+        "The write/verify sequence, Network Install prerequisites, and Network Install launch sequence are each self-contained in 016, 018, and 019."
+      ]
+    },
+    {
+      "document_id": "rpi-doc-getting-started-setting-up",
+      "status": "pass_with_pair_requirement",
+      "details": [
+        "The reviewed desktop steps 022–024 each retain their action and product/power condition.",
+        "Manual SSH chunk 035 contains the ssh and openssl commands; macOS LibreSSL compatibility is the adjacent chunk 036. A macOS answer must retrieve both chunks."
+      ]
+    },
+    {
+      "document_id": "rpi-doc-boot-nvme",
+      "status": "pass_with_pair_requirement",
+      "details": [
+        "Hardware condition and ls command remain together in 001; update and bootloader commands are atomic in 002 and 003.",
+        "The lsblk instruction is at the end of 005 and its sample output is 006. Keep them paired only when interpreting the example output."
+      ]
+    },
+    {
+      "document_id": "rpi-doc-camera-install",
+      "status": "pass_with_pair_requirement",
+      "details": [
+        "ESD warning and cable/product compatibility matrix remain together in 001.",
+        "Connector locations are in 003 and the universal flap/cable action is in 004. For a model-specific answer, retrieve 001 + 003 + 004; do not infer cable compatibility from the video."
+      ]
+    }
+  ]
+}
