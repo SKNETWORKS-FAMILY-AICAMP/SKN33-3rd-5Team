@@ -69,7 +69,7 @@ def current_page() -> str:
 
 
 def render_header(page: str) -> str:
-    """Render functional Streamlit navigation styled like the shared mockup."""
+    """Render functional Streamlit navigation for the live service."""
 
     page_labels = {
         "about": "서비스 소개",
@@ -106,7 +106,7 @@ def render_hero(title: str, highlighted: str | None, subtitle: str) -> None:
     st.markdown(
         f"""
         <div class="hero">
-          <div class="mock-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.2.0</div>
+          <div class="service-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.2.0</div>
           <h1>{safe_title}</h1>
           <p>{html.escape(subtitle)}</p>
         </div>
