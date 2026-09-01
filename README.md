@@ -156,6 +156,11 @@ python -m document_pipeline.ingestion.run_pipeline \
 git clone --depth 1 https://github.com/raspberrypi/documentation.git document/
 ```
 
+> [!NOTE]
+> 2026-09-01에 저장소에 있던 전체 사본(`document/`, 915개 파일·약 137MB)을 제거했습니다.
+> `git pull` 하면 로컬에서도 사라지므로, 오프라인 원문이 필요하면 위 명령으로 다시 받으세요.
+> 이 경로는 `.gitignore` 대상이라 저장소에 다시 포함되지 않습니다.
+
 ### 핵심 온라인 문서
 
 | 영역 | 공식 문서 | 활용 목적 |
@@ -574,6 +579,17 @@ streamlit run streamlit_app/app.py
 | `requirements.txt` | 기본 (CPU, 모든 OS) | Streamlit 화면, Hybrid RAG 검색, 문서 파이프라인, 테스트 |
 | `requirements-gpu.txt` | 기본 + GPU 추론 | RunPod에서 Qwen 답변 생성·LoRA 조건 추출 |
 | `requirements-training.txt` | 기본 + GPU + 학습 | RunPod에서 QLoRA 학습 (CUDA 12.8 Linux) |
+
+> [!IMPORTANT]
+> 2026-09-01에 requirements 파일이 통합되면서 경로가 바뀌었습니다. 기존 명령을
+> 쓰던 환경(특히 RunPod)에서는 아래로 교체하세요.
+>
+> | 이전 | 현재 |
+> |---|---|
+> | `pip install -r requirements.txt -r runpod/requirements.txt` | `pip install -r requirements-gpu.txt` |
+> | `pip install -r training/runpod_requirements.txt` | `pip install -r requirements-training.txt` |
+>
+> 뒤 파일이 앞 파일을 `-r`로 포함하므로 `requirements.txt`를 따로 설치하지 않습니다.
 
 브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. `--action index`는 manifest의 검증된 문서로 로컬 Chroma 색인을 준비합니다. 문서나 색인 설정을 바꿔 기존 collection을 재생성해야 할 때만 `--reset`을 추가합니다. Streamlit 실행 파일, 답변 스트리밍, 화면 스타일은 `streamlit_app/` 디렉터리에서 함께 관리하며, UI는 모델·검색 로직을 직접 구현하지 않고 `src/services/`의 공통 응답을 내부 추론 대신 질문 확인·공식 문서 검색·인용 검증 단계로 표시합니다. 답변은 근거와 인용 검증을 통과한 뒤 타이핑되듯 스트리밍 출력합니다.
 
