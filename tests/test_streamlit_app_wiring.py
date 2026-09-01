@@ -48,3 +48,28 @@ def test_recommendation_sources_receive_the_extracted_use_case() -> None:
 
     assert len(source_calls) == 1
     assert [keyword.arg for keyword in source_calls[0].keywords] == ["preferred_use_case"]
+
+
+def test_about_page_links_users_to_the_two_interactive_service_pages() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    assert '"제품 추천 시작하기",\n            "?page=recommend"' in source
+    assert '"질문 바로 하기",\n            "?page=qa"' in source
+    assert 'class="about-card-action"' in source
+
+
+def test_about_page_identifies_the_official_documentation_source() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    assert "https://www.raspberrypi.com/documentation/" in source
+    assert "확인할 수 없으면 보류" in source
+
+
+def test_about_cards_keep_a_fixed_side_by_side_layout() -> None:
+    source = APP_PATH.read_text(encoding="utf-8")
+    styles = Path("streamlit_app/styles.py").read_text(encoding="utf-8")
+
+    assert "grid-template-columns:335px 335px" in source
+    assert 'class="about-card" style="width:335px;height:180px"' in source
+    assert ".about-card-grid { width: 690px" in styles
+    assert ".about-abstention { width: 690px" in styles

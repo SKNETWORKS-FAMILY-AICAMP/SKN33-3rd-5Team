@@ -7,7 +7,8 @@
 # QLoRA 학습까지 하려면 requirements-training.txt를 이어서 설치한다.
 
 # --- 화면·계약·설정 ---
-streamlit>=1.38,<2
+# st.container(key=...)와 st-key-* CSS 선택자는 Streamlit 1.41부터 지원한다.
+streamlit>=1.41,<2
 pydantic>=2.8,<3
 python-dotenv>=1.0,<2
 PyYAML>=6.0,<7
