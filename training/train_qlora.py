@@ -73,7 +73,7 @@ def load_config(path: str | Path) -> dict[str, Any]:
         import yaml
     except ImportError as exc:
         raise RuntimeError(
-            "PyYAML이 없습니다. training/runpod_requirements.txt를 설치하세요."
+            "PyYAML이 없습니다. requirements-training.txt를 설치하세요."
         ) from exc
 
     resolved = Path(path)

@@ -60,7 +60,7 @@ python3 -m venv /workspace/venvs/skn_33_3rd_5team
 source /workspace/venvs/skn_33_3rd_5team/bin/activate
 
 python -m pip install --upgrade pip
-python -m pip install -r training/runpod_requirements.txt
+python -m pip install -r requirements-training.txt
 ```
 
 `python -m pip`은 활성화된 가상환경의 pip를 명시적으로 사용한다. `-r`은 requirements 파일을 읽는 옵션이며, 이미 설치되어 버전 조건을 만족하는 패키지는 재설치하지 않는다.
@@ -68,7 +68,7 @@ python -m pip install -r training/runpod_requirements.txt
 CUDA 빌드를 바꿨거나 설치가 깨졌을 때만 다음 강제 재설치를 사용한다. PyTorch와 CUDA 관련 대용량 파일을 다시 받으므로 평소에는 사용하지 않는다.
 
 ```bash
-python -m pip install --force-reinstall -r training/runpod_requirements.txt
+python -m pip install --force-reinstall -r requirements-training.txt
 ```
 
 설치가 끝나면 아래 네 가지를 확인한다.
@@ -286,8 +286,8 @@ http://127.0.0.1:8501
 | `zsh: command not found: pip` | Mac 로컬 셸이거나 가상환경 미활성화 | RunPod에서 venv를 활성화한 뒤 `python -m pip ...` 사용 |
 | `/workspace/.../python: no such file or directory` | `/workspace`는 Mac에 없는 RunPod 경로 | SSH로 RunPod에 접속해 실행 |
 | `fatal: not a git repository` | `/` 등 저장소 밖에서 `git pull` 실행 | `cd /workspace/skn_33_3rd_5team` 후 재시도 |
-| CUDA 초기화 경고, `CUDA: False` | 드라이버보다 새 CUDA wheel(예: cu130)을 설치 | venv에서 `training/runpod_requirements.txt`의 cu128 wheel로 설치 후 CUDA 재확인 |
-| `pip check`가 `fsspec` 또는 `transformers` 충돌을 보고 | 개별 최신 버전 설치로 상한 조건 위반 | `python -m pip install -r training/runpod_requirements.txt` 후 `python -m pip check` 실행 |
+| CUDA 초기화 경고, `CUDA: False` | 드라이버보다 새 CUDA wheel(예: cu130)을 설치 | venv에서 `requirements-training.txt`의 cu128 wheel로 설치 후 CUDA 재확인 |
+| `pip check`가 `fsspec` 또는 `transformers` 충돌을 보고 | 개별 최신 버전 설치로 상한 조건 위반 | `python -m pip install -r requirements-training.txt` 후 `python -m pip check` 실행 |
 | `HF_HUB_ENABLE_HF_TRANSFER=1`인데 `No module named hf_transfer` | 고속 다운로드 옵션의 선택 의존성이 없음 | `python -m pip install hf_transfer` 또는 환경 변수를 해제 |
 | `받게 되는 학습 파일이 없습니다` | `data/finetuning/`에 JSONL이 없음 | Mac 로컬에서 `scp`로 세 파일을 전송하고 `ls -lah data/finetuning` 확인 |
 | `schema_version`이 `1.0.0`, 기대값은 `1.1.0` | 전달 데이터 계약과 코드 계약이 다름 | 먼저 팀 계약·데이터 버전을 확인한다. 계약상 1.1.0이 맞고 백업을 만든 경우에만 세 파일을 변경한 뒤 다시 검증한다. 임의로 1.2.0으로 올리지 않는다. |

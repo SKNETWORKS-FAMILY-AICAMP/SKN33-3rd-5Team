@@ -9,7 +9,7 @@ PiCare QLoRA는 원본 모델 전체 대신 **학습한 LoRA 어댑터**를 저�
 
 일반 RAG·Streamlit 개발은 루트의 `requirements.txt`만 설치하므로 macOS와 Windows에서도
 동일하게 동작한다. QLoRA 학습은 NVIDIA GPU가 있는 RunPod Linux 환경에서만
-`training/runpod_requirements.txt`를 설치한다. 이 파일은 A40 Pod 드라이버와 호환되는 CUDA 12.8
+`requirements-training.txt`를 설치한다. 이 파일은 A40 Pod 드라이버와 호환되는 CUDA 12.8
 PyTorch wheel을 고정한다.
 
 ```bash
@@ -18,16 +18,16 @@ python -m pip install --upgrade pip
 
 # 일반 설치: `-m pip`은 현재 가상환경의 pip를 사용하고,
 # `-r`은 지정한 requirements 파일을 읽는다. 이미 설치되어 버전 조건을 만족하는 패키지는 건너뛴다.
-python -m pip install -r training/runpod_requirements.txt
+python -m pip install -r requirements-training.txt
 
 # 강제 재설치: CUDA 빌드를 교체했거나 패키지 설치가 손상됐을 때만 사용한다.
 # 이미 설치된 대용량 PyTorch·CUDA 패키지도 다시 내려받으므로 평소에는 사용하지 않는다.
-python -m pip install --force-reinstall -r training/runpod_requirements.txt
+python -m pip install --force-reinstall -r requirements-training.txt
 ```
 
 설치 뒤에는 `python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
 로 CUDA 인식 여부를 확인한다. 로컬 macOS·Windows 가상환경에는
-`training/runpod_requirements.txt`를 설치하지 않는다.
+`requirements-training.txt`를 설치하지 않는다.
 
 RunPod에 `HF_HUB_ENABLE_HF_TRANSFER=1`이 설정되어 있다면 이 requirements 파일이
 `hf_transfer`도 설치한다. 이는 Qwen 파일을 빠르게 내려받기 위한 선택 의존성이다.
@@ -63,7 +63,7 @@ train/dev/holdout **300/40/20**이며, 실제 파일을 검사하기 전에는 �
 
 토큰 검사와 단위 테스트만으로 CUDA 학습 성공이나 LoRA 품질 향상을 판단하지 않는다.
 이번 로컬 점검 범위와 미완료 항목은
-[파인튜닝 사전 검사 기록](../docs/validation/2026-08-31-finetuning-preflight.md)을 참고한다.
+[파인튜닝 사전 검사 기록](../validation/2026-08-31-finetuning-preflight.md)을 참고한다.
 
 
 ## 학습 결과가 만들어지는 위치
@@ -116,7 +116,7 @@ python training/publish_adapter.py \
 ## 학습이 끝나면 바로 백업
 
 ```bash
-pip install -r training/runpod_requirements.txt
+pip install -r requirements-training.txt
 python training/train_qlora.py \
   --config training/configs/qwen3_4b_qlora.yaml \
   --hub-repo-id t91004/picare-qwen3-4b-qlora

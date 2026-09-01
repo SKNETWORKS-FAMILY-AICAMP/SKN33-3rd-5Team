@@ -29,5 +29,5 @@ RAG 연결과 검색 로직을 확인하기 위한 최소 **legacy fixture**다.
 - `.env`의 `DOCUMENT_MANIFEST`, 서비스 Chroma 색인, Dev/Holdout 성능평가에 사용하지
   않는다.
 - legacy schema 거부와 검색 단위 테스트를 위한 로컬 fixture로만 유지한다.
-- 서비스 실행·색인·평가는 [`src/rag/00_README.md`](../../../src/rag/00_README.md)의 v3
+- 서비스 실행·색인·평가는 [`src/rag/README.md`](../../../src/rag/README.md)의 v3
   절차를 사용한다.

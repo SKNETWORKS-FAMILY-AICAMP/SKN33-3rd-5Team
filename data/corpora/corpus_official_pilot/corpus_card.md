@@ -50,5 +50,5 @@ Git checkout은 청킹·재현을 위한 원본이고, `source_url`은 사용자
 
 - `.env`의 `DOCUMENT_MANIFEST`나 Chroma 색인 입력으로 설정하지 않는다.
 - legacy 거부와 이전 검색 흐름을 확인하는 로컬 fixture로만 보관한다.
-- 서비스 실행·색인·평가는 [`src/rag/00_README.md`](../../../src/rag/00_README.md)의 v3
+- 서비스 실행·색인·평가는 [`src/rag/README.md`](../../../src/rag/README.md)의 v3
   절차를 사용한다.

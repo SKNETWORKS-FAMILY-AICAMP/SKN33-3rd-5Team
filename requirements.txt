@@ -1,15 +1,31 @@
+# 기본 실행 환경 (Windows·macOS·Linux, CPU)
+#
+#   pip install -r requirements.txt
+#
+# Streamlit 화면, Hybrid RAG 검색, 문서 파이프라인, 테스트가 모두 동작한다.
+# GPU에서 Qwen 답변 생성이나 LoRA 조건 추출을 실행하려면 requirements-gpu.txt를,
+# QLoRA 학습까지 하려면 requirements-training.txt를 이어서 설치한다.
+
+# --- 화면·계약·설정 ---
 streamlit>=1.38,<2
 pydantic>=2.8,<3
-requests>=2.32,<3
 python-dotenv>=1.0,<2
+PyYAML>=6.0,<7
+
+# --- 문서 수집·정제 ---
+requests>=2.32,<3
+beautifulsoup4>=4.12,<5
+
+# --- RAG 검색 ---
 # Chroma 0.6.x는 Windows/Python 3.12 wheel이 없어 로컬 설치가 실패한다.
 # 1.x의 PersistentClient/collection API는 현재 indexer와 호환된다.
 chromadb>=1,<2
 sentence-transformers>=3.0,<4
 rank-bm25>=0.2.2,<1
-beautifulsoup4>=4.12,<5
-pytest>=8.0,<9
 
-# RAG QA 공통 계약용 패키지. RunPod Qwen 추론 전용 패키지는 runpod/requirements.txt에 둔다.
-transformers>=4.45,<5
-PyYAML>=6.0,<7
+# --- 토크나이저·계약 (CPU에서도 필요) ---
+# 실제 모델 추론은 requirements-gpu.txt에서 설치한다.
+transformers>=4.51,<5
+
+# --- 테스트 ---
+pytest>=8.0,<9

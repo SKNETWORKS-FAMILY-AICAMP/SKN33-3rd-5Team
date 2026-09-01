@@ -128,14 +128,14 @@ flowchart LR
 
 근거를 검색하지 못한 후보는 카드와 Qwen 프롬프트에서 제외하며, 남은 후보가 없으면
 `insufficient_evidence`로 보류한다. 로컬 template 확인 또는 RunPod 실제 Qwen 실행의
-구체적 명령은 [`src/rag/00_README.md`](src/rag/00_README.md)와
-[`runpod/README.md`](runpod/README.md)를 따른다.
+구체적 명령은 [`src/rag/README.md`](src/rag/README.md)와
+[`docs/guides/runpod-pod-setup.md`](docs/guides/runpod-pod-setup.md)를 따른다.
 
 ## 공식 문서 출처
 
 핵심 corpus는 라이선스와 변경 이력을 확인하기 쉬운 **Raspberry Pi 공식 온라인 문서**를 우선 사용합니다. 아래 링크는 최초 수집 후보이며 실제 색인 여부·수집일·checksum은 Document Card와 manifest에서 관리합니다.
 
-실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
+실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`docs/guides/license-review.md`](docs/guides/license-review.md)를 기준으로 합니다.
 
 ### 핵심 온라인 문서
 
@@ -493,8 +493,11 @@ docs/
 ├── model-card.md
 └── schemas/          # 조건·검색 결과·최종 응답 JSON Schema
 tests/
+.streamlit/           # Streamlit 테마 설정
 .env.example
-requirements.txt
+requirements.txt              # 기본 (CPU, 모든 OS)
+requirements-gpu.txt          # + GPU 추론 (RunPod)
+requirements-training.txt     # + QLoRA 학습 (CUDA 12.8)
 README.md
 ```
 
@@ -535,6 +538,15 @@ python -m src.services.rag_qa_cli --action index
 streamlit run streamlit_app/app.py
 ```
 
+설치 환경은 목적에 따라 하나만 고르면 됩니다. 뒤의 파일이 앞의 파일을 포함하므로
+여러 개를 함께 설치할 필요가 없습니다.
+
+| 파일 | 설치 대상 | 쓰는 경우 |
+|---|---|---|
+| `requirements.txt` | 기본 (CPU, 모든 OS) | Streamlit 화면, Hybrid RAG 검색, 문서 파이프라인, 테스트 |
+| `requirements-gpu.txt` | 기본 + GPU 추론 | RunPod에서 Qwen 답변 생성·LoRA 조건 추출 |
+| `requirements-training.txt` | 기본 + GPU + 학습 | RunPod에서 QLoRA 학습 (CUDA 12.8 Linux) |
+
 브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. `--action index`는 manifest의 검증된 문서로 로컬 Chroma 색인을 준비합니다. 문서나 색인 설정을 바꿔 기존 collection을 재생성해야 할 때만 `--reset`을 추가합니다. Streamlit 실행 파일, 답변 스트리밍, 화면 스타일은 `streamlit_app/` 디렉터리에서 함께 관리하며, UI는 모델·검색 로직을 직접 구현하지 않고 `src/services/`의 공통 응답을 내부 추론 대신 질문 확인·공식 문서 검색·인용 검증 단계로 표시합니다. 답변은 근거와 인용 검증을 통과한 뒤 타이핑되듯 스트리밍 출력합니다.
 
 조건 추출기는 환경변수로 교체할 수 있게 구성합니다.
@@ -555,7 +567,7 @@ python -m src.evaluation.extractor_eval --mode lora
 학습 데이터·모델 cache·checkpoint는 RunPod의 /workspace에 저장하고, 학습 후 adapter·설정·평가 결과를 외부에 백업합니다. API Key, Hugging Face token, 개인정보와 원문 내부 문서는 Git에 커밋하지 않습니다. .env.example에는 변수 이름만 제공합니다.
 
 어댑터를 Hugging Face 모델 저장소에 별도로 보관하는 명령과 다시 불러오는 방법은
-[모델 별도 저장 가이드](training/README.md)를 참고하세요. 기본은 비공개 백업이며,
+[모델 별도 저장 가이드](docs/guides/finetuning-training.md)를 참고하세요. 기본은 비공개 백업이며,
 실제 학습 결과가 있어야 업로드할 수 있습니다.
 
 ## 역할 분담

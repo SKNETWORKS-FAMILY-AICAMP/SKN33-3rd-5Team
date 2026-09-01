@@ -80,7 +80,7 @@ Git에 포함되지 않을 수 있으므로 팀 공유 저장소나 volume에서
 
 ```bash
 cd /workspace/skn_33_3rd_5team
-pip install -r requirements.txt -r runpod/requirements.txt
+pip install -r requirements-gpu.txt
 export HF_HOME=/workspace/.cache/huggingface
 ```
 

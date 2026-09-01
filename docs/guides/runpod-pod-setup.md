@@ -15,7 +15,7 @@ LoRA adapter를 사용하지 않지만, 제품 추천 CLI에서는 같은 계열
 
 ```bash
 cd /workspace/skn_33_3rd_5team
-pip install -r requirements.txt -r runpod/requirements.txt
+pip install -r requirements-gpu.txt
 export HF_HOME=/workspace/.cache/huggingface
 ```
 
