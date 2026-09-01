@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
-from typing import Literal, Mapping, Protocol, Sequence
+from typing import Literal, Protocol, Sequence
 
 from src.contracts import ChatCitation, ChatResponse, MediaItem
 from src.lang import (
@@ -50,7 +49,6 @@ class RagQaService:
         answer_generator: AnswerGenerator | None = None,
         media_resolver: MediaResolver | None = None,
         top_k: int = 5,
-        media_by_chunk_id: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
     ) -> None:
         if not 1 <= top_k <= 20:
             raise ValueError("top_k must be between 1 and 20.")
@@ -58,7 +56,6 @@ class RagQaService:
         self.answer_generator = answer_generator or EvidenceTemplateGenerator()
         self.media_resolver = media_resolver
         self.top_k = top_k
-        self.media_by_chunk_id = media_by_chunk_id or {}
 
     @staticmethod
     def _status_response(
@@ -130,40 +127,6 @@ class RagQaService:
             license=result.license,
             quote=result.content,
         )
-
-    def _media(self, results: Sequence[RagResult], used_citation_ids: set[str]) -> list[MediaItem]:
-        """실제 인용에 쓰인 근거 청크에 연결된 공식 이미지·영상만 표시한다."""
-
-        media: list[MediaItem] = []
-        seen_urls: set[str] = set()
-        for result in results:
-            citation_id = f"C{result.rank}"
-            if citation_id not in used_citation_ids:
-                continue
-            for candidate in self.media_by_chunk_id.get(result.chunk_id, ()):
-                if candidate["url"] in seen_urls:
-                    continue
-                seen_urls.add(candidate["url"])
-                media_type = candidate["media_type"]
-                url = candidate["url"]
-                media.append(
-                    MediaItem(
-                        # Legacy lookup tables predate ChatResponse 1.2.0. Keep
-                        # them usable only when no validated MediaResolver exists,
-                        # while adapting their official URL metadata to the current
-                        # response contract.
-                        media_id="media-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:20],
-                        media_type=media_type,
-                        title=candidate["title"],
-                        url=url,
-                        alt_text=candidate.get("alt_text") or candidate["title"],
-                        display_mode="inline" if media_type == "image" else "external_embed",
-                        license=candidate.get("license") or "See official source manifest",
-                        attribution=candidate.get("attribution") or "Raspberry Pi Ltd",
-                        source_citation_id=citation_id,
-                    )
-                )
-        return media
 
     def answer(
         self,
@@ -303,11 +266,9 @@ class RagQaService:
             for result in results
             if f"C{result.rank}" in used_citation_ids
         ]
-        media = (
-            self.media_resolver.resolve(citations)
-            if self.media_resolver is not None
-            else self._media(results, used_citation_ids)
-        )
+        # The server, never the LLM, joins reviewed media to citation chunk IDs
+        # that survived grounded-answer validation.
+        media = self.media_resolver.resolve(citations) if self.media_resolver is not None else []
         return ChatResponse(
             schema_version="1.2.0",
             request_id=request_id,

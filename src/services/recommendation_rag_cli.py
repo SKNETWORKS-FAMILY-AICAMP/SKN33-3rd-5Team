@@ -135,13 +135,12 @@ def main() -> int:
             manifest_path=rag_settings.manifest_path,
         )
         answer_settings = AnswerGeneratorSettings.from_env(rag_settings.project_root)
-        media_resolver = (
-            MediaResolver.from_file(
-                rag_settings.media_manifest_path,
-                document_manifest_path=rag_settings.manifest_path,
-            )
-            if rag_settings.media_manifest_path is not None
-            else None
+        media_resolver = MediaResolver.from_paths(
+            media_manifest_path=rag_settings.media_manifest_path,
+            document_manifest_path=rag_settings.manifest_path,
+            media_chunk_map_path=rag_settings.media_chunk_map_path,
+            image_manifest_path=rag_settings.project_root / "assets/media/manifest.json",
+            video_manifest_path=rag_settings.project_root / "assets/media/video_manifest.json",
         )
     except (
         ValueError,

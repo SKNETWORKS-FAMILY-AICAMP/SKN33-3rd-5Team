@@ -370,7 +370,7 @@
       "description": "Official image or video linked to a verified citation.",
       "properties": {
         "media_id": {
-          "pattern": "^media-[0-9a-f]{20}$",
+          "pattern": "^(?:media-[0-9a-f]{20}|rpi-(?:product|guide|video)-[0-9]{4})$",
           "title": "Media Id",
           "type": "string"
         },

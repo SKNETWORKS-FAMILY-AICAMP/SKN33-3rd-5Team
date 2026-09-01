@@ -27,7 +27,6 @@ from src.rag_to_llm import (
 )
 from src.media import MediaManifestError, MediaResolver
 
-from .media_lookup import load_media_by_chunk_id
 from .rag_qa_service import RagQaService
 
 
@@ -137,13 +136,15 @@ def _run_indexer(settings: RagSettings, *, reset: bool) -> int:
     return 0
 
 
-def _load_media_by_chunk_id(settings: RagSettings):
-    """설정된 v3 미디어 맵이 있으면 해당 파일을, 없으면 기존 기본값을 사용한다."""
-    if settings.media_chunk_map_path is None:
-        return load_media_by_chunk_id(settings.project_root)
-    return load_media_by_chunk_id(
-        settings.project_root,
+def _build_media_resolver(settings: RagSettings) -> MediaResolver | None:
+    """Resolve every configured citation-media source through one code path."""
+
+    return MediaResolver.from_paths(
+        media_manifest_path=settings.media_manifest_path,
+        document_manifest_path=settings.manifest_path,
         media_chunk_map_path=settings.media_chunk_map_path,
+        image_manifest_path=settings.project_root / "assets/media/manifest.json",
+        video_manifest_path=settings.project_root / "assets/media/video_manifest.json",
     )
 
 
@@ -193,14 +194,7 @@ def main() -> int:
     try:
         generator_settings = AnswerGeneratorSettings.from_env(settings.project_root)
         answer_generator = build_answer_generator(generator_settings)
-        media_resolver = (
-            MediaResolver.from_file(
-                settings.media_manifest_path,
-                document_manifest_path=settings.manifest_path,
-            )
-            if settings.media_manifest_path is not None
-            else None
-        )
+        media_resolver = _build_media_resolver(settings)
     except (AnswerGeneratorSettingsError, MediaManifestError) as exc:
         print(f"Answer generator settings error: {exc}", file=sys.stderr)
         return 2
@@ -223,7 +217,6 @@ def main() -> int:
             answer_generator=answer_generator,
             media_resolver=media_resolver,
             top_k=settings.top_k,
-            media_by_chunk_id=_load_media_by_chunk_id(settings),
         )
         response = service.answer(
             request_id=request_id,

@@ -78,30 +78,68 @@ class SpyMediaResolver:
         ]
 
 
+class ChunkAwareMediaResolver:
+    """Server-side citation chunk lookup double; never reads model text."""
+
+    def __init__(self) -> None:
+        self.chunk_ids: list[str] = []
+
+    def resolve(self, citations):
+        self.chunk_ids = [citation.chunk_id for citation in citations]
+        if "ssh-001" not in self.chunk_ids:
+            return []
+        citation = next(item for item in citations if item.chunk_id == "ssh-001")
+        return [
+            MediaItem(
+                media_id="rpi-guide-0001",
+                media_type="image",
+                title="SSH 설정 이미지",
+                url="https://raw.githubusercontent.com/raspberrypi/documentation/" + "a" * 40 + "/ssh.png",
+                alt_text="SSH setup screen",
+                display_mode="inline",
+                license="CC BY-SA 4.0",
+                attribution="Raspberry Pi Ltd",
+                source_citation_id=citation.citation_id,
+            ),
+            MediaItem(
+                media_id="rpi-video-0001",
+                media_type="video",
+                title="Raspberry Pi Imager 사용 방법",
+                url="https://www.youtube.com/embed/O4IQE2E8oOw",
+                alt_text="Raspberry Pi Imager 사용 방법",
+                display_mode="external_embed",
+                license="YouTube Terms of Service",
+                attribution="Raspberry Pi official channel: https://www.youtube.com/@raspberrypi",
+                source_citation_id=citation.citation_id,
+            ),
+        ]
+
+
 def retrieved_decision() -> RetrievalDecision:
     """답변 가능한 단일 근거 검색 결과를 만든다."""
 
     return RetrievalDecision(status="retrieved", results=(result(),))
 
 
-def test_media_only_uses_cited_chunks_and_deduplicates_urls():
+def test_media_only_uses_final_citation_chunks_with_server_metadata():
     generator = Mock()
     generator.generate.return_value = GenerationResult("SSH를 활성화하세요. [C1]", "test", "fixture", 0)
-    image = {"media_type": "image", "title": "SSH 설정", "url": "https://www.raspberrypi.com/ssh.png"}
-    video = {"media_type": "video", "title": "설정 영상", "url": "https://www.youtube.com/embed/example"}
+    resolver = ChunkAwareMediaResolver()
     service = RagQaService(
         retriever=StaticRetriever(decision=RetrievalDecision(
             status="retrieved", results=(result(), result(rank=2, chunk_id="unused")),
         )),
         answer_generator=generator,
-        media_by_chunk_id={"ssh-001": [image, image, video], "unused": [dict(image, url="https://www.raspberrypi.com/unused.png")]},
+        media_resolver=resolver,
     )
     response = service.answer(request_id="cited-media", question="SSH를 활성화하려면?", retrieval_mode="bm25")
     assert response.status == "answered"
-    assert [str(item.url) for item in response.media] == [image["url"], video["url"]]
+    assert resolver.chunk_ids == ["ssh-001"]
+    assert [item.media_id for item in response.media] == ["rpi-guide-0001", "rpi-video-0001"]
     assert all(item.source_citation_id == "C1" for item in response.media)
-    assert all(item.media_id.startswith("media-") for item in response.media)
     assert [item.display_mode for item in response.media] == ["inline", "external_embed"]
+    assert response.media[1].license == "YouTube Terms of Service"
+    assert "official channel" in response.media[1].attribution
     generator.generate.return_value = GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
     abstention = service.answer(request_id="no-media-on-abstention", question="SSH를 활성화하려면?", retrieval_mode="bm25")
     assert abstention.status == "insufficient_evidence"
@@ -151,61 +189,22 @@ def test_only_validated_final_citations_are_sent_to_media_resolver():
     assert response.schema_version == "1.2.0"
 
 
-def test_media_resolver_takes_precedence_over_legacy_media_fallback():
-    resolver = SpyMediaResolver()
-    legacy_media = {
-        "ssh-001": [
-            {
-                "media_type": "image",
-                "title": "Legacy SSH image",
-                "url": "https://example.test/legacy-ssh.png",
-            }
-        ]
-    }
+def test_unrelated_citation_does_not_return_a_video():
+    resolver = ChunkAwareMediaResolver()
     response = RagQaService(
-        retriever=StaticRetriever(decision=retrieved_decision()),
+        retriever=StaticRetriever(
+            decision=RetrievalDecision(status="retrieved", results=(result(chunk_id="unrelated-001"),))
+        ),
         media_resolver=resolver,
-        media_by_chunk_id=legacy_media,
     ).answer(
-        request_id="request-media-precedence",
-        question="SSH를 활성화하려면?",
+        request_id="request-unrelated-media",
+        question="라즈베리 파이 일반 설정을 알려줘",
         retrieval_mode="hybrid",
     )
 
-    assert resolver.chunk_ids == ["ssh-001"]
-    assert [str(item.url) for item in response.media] == [
-        "https://raw.githubusercontent.com/raspberrypi/documentation/"
-        + "a" * 40
-        + "/setup.png"
-    ]
-
-
-def test_legacy_media_fallback_preserves_available_display_metadata():
-    response = RagQaService(
-        retriever=StaticRetriever(decision=retrieved_decision()),
-        media_by_chunk_id={
-            "ssh-001": [
-                {
-                    "media_type": "image",
-                    "title": "SSH setup",
-                    "url": "https://example.test/ssh-setup.png",
-                    "alt_text": "SSH setup screen",
-                    "license": "CC BY-SA 4.0",
-                    "attribution": "Raspberry Pi Ltd",
-                }
-            ]
-        },
-    ).answer(
-        request_id="request-legacy-media-metadata",
-        question="SSH를 활성화하려면?",
-        retrieval_mode="hybrid",
-    )
-
-    media = response.media[0]
-    assert media.alt_text == "SSH setup screen"
-    assert media.license == "CC BY-SA 4.0"
-    assert media.attribution == "Raspberry Pi Ltd"
-    assert media.display_mode == "inline"
+    assert response.status == "answered"
+    assert resolver.chunk_ids == ["unrelated-001"]
+    assert response.media == []
 
 
 def test_template_generator_keeps_multiline_evidence_on_a_cited_line():
