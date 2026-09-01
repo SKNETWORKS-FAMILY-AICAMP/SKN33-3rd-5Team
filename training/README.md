@@ -15,12 +15,22 @@ PyTorch wheel을 고정한다.
 ```bash
 # RunPod Pod 내부, 프로젝트 루트에서 실행
 python -m pip install --upgrade pip
+
+# 일반 설치: `-m pip`은 현재 가상환경의 pip를 사용하고,
+# `-r`은 지정한 requirements 파일을 읽는다. 이미 설치되어 버전 조건을 만족하는 패키지는 건너뛴다.
+python -m pip install -r training/runpod_requirements.txt
+
+# 강제 재설치: CUDA 빌드를 교체했거나 패키지 설치가 손상됐을 때만 사용한다.
+# 이미 설치된 대용량 PyTorch·CUDA 패키지도 다시 내려받으므로 평소에는 사용하지 않는다.
 python -m pip install --force-reinstall -r training/runpod_requirements.txt
 ```
 
 설치 뒤에는 `python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"`
 로 CUDA 인식 여부를 확인한다. 로컬 macOS·Windows 가상환경에는
 `training/runpod_requirements.txt`를 설치하지 않는다.
+
+RunPod에 `HF_HUB_ENABLE_HF_TRANSFER=1`이 설정되어 있다면 이 requirements 파일이
+`hf_transfer`도 설치한다. 이는 Qwen 파일을 빠르게 내려받기 위한 선택 의존성이다.
 
 ## 학습 전에 검사
 
