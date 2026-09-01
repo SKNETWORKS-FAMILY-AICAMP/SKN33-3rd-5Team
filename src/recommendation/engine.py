@@ -252,6 +252,7 @@ class ProductRecommender:
             tradeoffs=tradeoffs,
             required_accessories=product.required_accessories,
             conditional_accessories=product.conditional_accessories,
+            evidence_by_field=product.evidence_by_field,
             evidence_document_ids=product.document_ids,
             product_url=product.product_url,
             image_url=product.image_url,

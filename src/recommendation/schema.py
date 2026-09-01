@@ -340,6 +340,7 @@ class RecommendationCandidate(StrictContract):
     tradeoffs: list[str]
     required_accessories: list[str]
     conditional_accessories: list[ConditionalAccessory] = Field(default_factory=list)
+    evidence_by_field: ProductFieldEvidence
     evidence_document_ids: list[str]
     product_url: HttpUrl
     image_url: HttpUrl | None
