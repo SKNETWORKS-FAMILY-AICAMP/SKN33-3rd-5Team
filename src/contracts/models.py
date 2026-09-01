@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
 
 CONTRACT_VERSION = "1.1.0"
+CHAT_RESPONSE_VERSION = "1.2.0"
 
 NonEmptyText = Annotated[str, Field(min_length=1)]
 NonEmptyTextList = Annotated[list[NonEmptyText], Field(min_length=1)]
@@ -214,10 +215,22 @@ class ProductRecommendation(StrictContract):
 class MediaItem(StrictContract):
     """Official image or video linked to a verified citation."""
 
+    media_id: Annotated[str, Field(pattern=r"^media-[0-9a-f]{20}$")]
     media_type: Literal["image", "video"]
     title: NonEmptyText
     url: HttpUrl
+    alt_text: NonEmptyText | None
+    display_mode: Literal["inline", "external_embed"]
+    license: NonEmptyText
+    attribution: NonEmptyText
     source_citation_id: Annotated[str, Field(pattern=r"^C[1-9][0-9]*$")]
+
+    @model_validator(mode="after")
+    def validate_display_mode(self) -> "MediaItem":
+        expected = "inline" if self.media_type == "image" else "external_embed"
+        if self.display_mode != expected:
+            raise ValueError(f"{self.media_type} media must use {expected} display mode")
+        return self
 
 
 class ChatResponse(StrictContract):
@@ -239,7 +252,7 @@ class ChatResponse(StrictContract):
         },
     )
 
-    schema_version: Literal[CONTRACT_VERSION]
+    schema_version: Literal[CHAT_RESPONSE_VERSION]
     request_id: NonEmptyText
     status: AnswerStatus
     language: Annotated[str, Field(pattern=r"^[a-z]{2,3}(?:-[A-Z]{2})?$")]
@@ -265,6 +278,9 @@ class ChatResponse(StrictContract):
             raise ValueError("needs_clarification responses require clarification_questions")
         product_citation_ids = {item for product in self.products for item in product.citation_ids}
         media_citation_ids = {item.source_citation_id for item in self.media}
+        media_ids = [item.media_id for item in self.media]
+        if len(media_ids) != len(set(media_ids)):
+            raise ValueError("media items must not contain duplicate media_id values")
         if not product_citation_ids.issubset(citation_ids):
             raise ValueError("product cards reference a citation ID missing from citations")
         if not media_citation_ids.issubset(citation_ids):

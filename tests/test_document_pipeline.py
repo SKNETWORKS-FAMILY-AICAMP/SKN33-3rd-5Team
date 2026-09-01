@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+
+from document_pipeline.ingestion import run_pipeline
 from document_pipeline.ingestion.build_manifest import _processing_metadata, chunk_section, sha256
 from document_pipeline.ingestion.fetch import REGISTRY_PATH, included_sources
 from document_pipeline.ingestion.parse_asciidoc import parse_asciidoc
@@ -71,6 +74,26 @@ Use a secured password.
     assert chunks
     assert all(not chunk.startswith("cli") for chunk in chunks)
     assert any("```console\n$ nmcli dev wifi list\n```" in chunk for chunk in chunks)
+
+
+def test_media_macros_are_parsed_but_never_become_retrieval_chunks() -> None:
+    section = parse_asciidoc(
+        """== Setup
+
+Install the operating system first.
+
+image::images/setup.png[Imager setup]
+
+video::CQtliTJ41ZE[youtube,title="Setup video"]
+""",
+        fallback_title="Setup",
+    )[0]
+
+    assert [block.kind for block in section.blocks] == ["paragraph", "image", "video"]
+    assert section.blocks[2].label == "youtube"
+    chunks = chunk_section(section, tokenizer=FakeE5Tokenizer())
+    assert chunks == ["Install the operating system first."]
+    assert all("[IMAGE]" not in chunk and "[VIDEO]" not in chunk for chunk in chunks)
 
 
 def test_manifest_adapter_maps_collected_at_without_dropping_manifest_contract() -> None:
@@ -172,3 +195,57 @@ def test_catalog_to_rag_v3_registry_keeps_v2_and_adds_product_evidence_documents
         "rpi-doc-getting-started-setting-up",
     }.issubset(v3_sources)
     assert v3_sources["rpi-doc-camera-multicam"].product_models == ["Raspberry Pi 5"]
+
+
+def test_run_pipeline_forwards_custom_registry_to_fetch_and_manifest(
+    tmp_path, monkeypatch
+) -> None:
+    """v3 CLI가 fetch와 manifest 생성에 같은 registry를 넘기는지 회귀 검증한다."""
+
+    registry = tmp_path / "registry.csv"
+    raw_root = tmp_path / "raw"
+    processed_root = tmp_path / "processed"
+    manifest_path = tmp_path / "manifest.json"
+    calls: dict[str, dict[str, object]] = {}
+
+    def fake_fetch_sources(**kwargs):
+        calls["fetch"] = kwargs
+        return {"commit": "a" * 40, "documents": []}
+
+    def fake_build_manifest(**kwargs):
+        calls["build"] = kwargs
+        return {"chunks": []}
+
+    def fake_build_media_manifest(**kwargs):
+        calls["media"] = kwargs
+        return {"statistics": {"media_items": 0}}
+
+    monkeypatch.setattr(run_pipeline, "fetch_sources", fake_fetch_sources)
+    monkeypatch.setattr(run_pipeline, "build_manifest", fake_build_manifest)
+    monkeypatch.setattr(run_pipeline, "build_media_manifest", fake_build_media_manifest)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_pipeline",
+            "--source-registry",
+            str(registry),
+            "--raw-root",
+            str(raw_root),
+            "--processed-root",
+            str(processed_root),
+            "--manifest-path",
+            str(manifest_path),
+        ],
+    )
+
+    run_pipeline.main()
+
+    assert calls["fetch"]["registry_path"] == registry
+    assert calls["build"]["registry_path"] == registry
+    assert calls["build"]["raw_root"] == raw_root
+    assert calls["build"]["processed_root"] == processed_root
+    assert calls["build"]["output_path"] == manifest_path
+    assert calls["media"]["registry_path"] == registry
+    assert calls["media"]["raw_root"] == raw_root
+    assert calls["media"]["document_manifest_path"] == manifest_path

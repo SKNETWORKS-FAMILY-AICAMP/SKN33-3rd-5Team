@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Literal, Protocol, Sequence
+import hashlib
+from typing import Literal, Mapping, Protocol, Sequence
 
-from src.contracts import ChatCitation, ChatResponse
+from src.contracts import ChatCitation, ChatResponse, MediaItem
 from src.lang import (
     AnswerSafetyError,
     PromptBuildError,
@@ -12,8 +13,8 @@ from src.lang import (
     build_grounded_answer_messages,
     evaluate_request,
     is_evidence_abstention,
-    validate_grounded_answer,
 )
+from src.media import MediaResolver
 from src.rag import DenseRetrievalError, RagFilters, RagResult, RetrievalDecision
 from src.rag_to_llm import AnswerGenerationError, AnswerGenerator, EvidenceTemplateGenerator
 
@@ -47,13 +48,17 @@ class RagQaService:
         *,
         retriever: QaRetriever,
         answer_generator: AnswerGenerator | None = None,
+        media_resolver: MediaResolver | None = None,
         top_k: int = 5,
+        media_by_chunk_id: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
     ) -> None:
         if not 1 <= top_k <= 20:
             raise ValueError("top_k must be between 1 and 20.")
         self.retriever = retriever
         self.answer_generator = answer_generator or EvidenceTemplateGenerator()
+        self.media_resolver = media_resolver
         self.top_k = top_k
+        self.media_by_chunk_id = media_by_chunk_id or {}
 
     @staticmethod
     def _status_response(
@@ -76,7 +81,7 @@ class RagQaService:
         if status == "needs_clarification" and not questions:
             questions = [answer]
         return ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id=request_id,
             status=status,
             language="ko",
@@ -125,6 +130,40 @@ class RagQaService:
             license=result.license,
             quote=result.content,
         )
+
+    def _media(self, results: Sequence[RagResult], used_citation_ids: set[str]) -> list[MediaItem]:
+        """실제 인용에 쓰인 근거 청크에 연결된 공식 이미지·영상만 표시한다."""
+
+        media: list[MediaItem] = []
+        seen_urls: set[str] = set()
+        for result in results:
+            citation_id = f"C{result.rank}"
+            if citation_id not in used_citation_ids:
+                continue
+            for candidate in self.media_by_chunk_id.get(result.chunk_id, ()):
+                if candidate["url"] in seen_urls:
+                    continue
+                seen_urls.add(candidate["url"])
+                media_type = candidate["media_type"]
+                url = candidate["url"]
+                media.append(
+                    MediaItem(
+                        # Legacy lookup tables predate ChatResponse 1.2.0. Keep
+                        # them usable only when no validated MediaResolver exists,
+                        # while adapting their official URL metadata to the current
+                        # response contract.
+                        media_id="media-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:20],
+                        media_type=media_type,
+                        title=candidate["title"],
+                        url=url,
+                        alt_text=candidate.get("alt_text") or candidate["title"],
+                        display_mode="inline" if media_type == "image" else "external_embed",
+                        license=candidate.get("license") or "See official source manifest",
+                        attribution=candidate.get("attribution") or "Raspberry Pi Ltd",
+                        source_citation_id=citation_id,
+                    )
+                )
+        return media
 
     def answer(
         self,
@@ -192,7 +231,13 @@ class RagQaService:
         evidence = self._prompt_evidence(results)
         try:
             messages = build_grounded_answer_messages(question, evidence)
-            generation = self.answer_generator.generate(messages, evidence)
+            validated_generation = generate_validated_grounded_answer(
+                generator=self.answer_generator,
+                messages=messages,
+                evidence=evidence,
+                require_korean=True,
+            )
+            generation = validated_generation.generation
             if is_evidence_abstention(generation.text):
                 return self._status_response(
                     request_id=request_id,
@@ -201,14 +246,18 @@ class RagQaService:
                     warnings=[
                         "abstention_reason=model_insufficient_evidence",
                         f"answer_generator={generation.provider}",
-                        *(["trace.generator_invoked=true", f"trace.model_id={generation.model_id}"] if trace else []),
+                        *(
+                            [
+                                "trace.generator_invoked=true",
+                                f"trace.model_id={generation.model_id}",
+                                "trace.citation_validation=skipped_abstention",
+                            ]
+                            if trace
+                            else []
+                        ),
                     ],
                 )
-            used_citation_ids = validate_grounded_answer(
-                generation.text,
-                allowed_citation_ids=[item.citation_id for item in evidence],
-                require_korean=True,
-            )
+            used_citation_ids = validated_generation.used_citation_ids
         except AnswerGenerationError as exc:
             return self._status_response(
                 request_id=request_id,
@@ -254,8 +303,13 @@ class RagQaService:
             for result in results
             if f"C{result.rank}" in used_citation_ids
         ]
+        media = (
+            self.media_resolver.resolve(citations)
+            if self.media_resolver is not None
+            else self._media(results, used_citation_ids)
+        )
         return ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id=request_id,
             status="answered",
             language="ko",
@@ -263,7 +317,7 @@ class RagQaService:
             conditions=None,
             citations=citations,
             products=[],
-            media=[],
+            media=media,
             clarification_questions=[],
             warnings=[
                 f"retrieval_mode={retrieval_mode}",

@@ -5,7 +5,6 @@ from __future__ import annotations
 from src.contracts import (
     ChatCitation,
     ChatResponse,
-    MediaItem,
     ProductRecommendation,
     SearchResponse,
 )
@@ -52,7 +51,7 @@ def build_recommendation_chat_response(
 
     decision = agent_result.decision
     common = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "request_id": request_id,
         "language": language,
         "conditions": decision.conditions,
@@ -91,7 +90,6 @@ def build_recommendation_chat_response(
         )
 
     contract_products: list[ProductRecommendation] = []
-    media: list[MediaItem] = []
     answer_lines: list[str] = []
     response_citation_ids: set[str] = set(used_citation_ids or ())
     result_by_citation = {item.citation_id: item for item in search_response.results}
@@ -110,6 +108,10 @@ def build_recommendation_chat_response(
         limitations.extend(
             f"필수 구성품: {accessory}" for accessory in candidate.required_accessories
         )
+        limitations.extend(
+            f"조건부 구성품({accessory.condition}): {accessory.item}"
+            for accessory in candidate.conditional_accessories
+        )
         contract_products.append(
             ProductRecommendation(
                 product_id=candidate.product_id,
@@ -124,15 +126,6 @@ def build_recommendation_chat_response(
         )
         if answer is None:
             answer_lines.append(f"{candidate.name}: {recommendation} [{citation_ids[0]}]")
-        if candidate.image_url is not None:
-            media.append(
-                MediaItem(
-                    media_type="image",
-                    title=f"{candidate.name} 공식 제품 이미지",
-                    url=candidate.image_url,
-                    source_citation_id=citation_ids[0],
-                )
-            )
 
     if not contract_products:
         return ChatResponse(
@@ -156,7 +149,9 @@ def build_recommendation_chat_response(
         answer=answer if answer is not None else "\n".join(answer_lines),
         citations=citations,
         products=contract_products,
-        media=media,
+        # Product card images remain in ProductRecommendation.image_url.
+        # ChatResponse.media is reserved for citation-linked guide media.
+        media=[],
         clarification_questions=[],
     )
 

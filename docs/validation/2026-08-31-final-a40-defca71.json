@@ -1,0 +1,330 @@
+{
+  "source_commit": "defca713dcc9e480c0ab7b9eb4e19443b1e6d858",
+  "source_changes_during_run": [],
+  "tests": {
+    "tests": 236,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "qa": {
+    "expected_status_matches": 7,
+    "total": 7,
+    "cases": [
+      {
+        "case": "ssh",
+        "status": "answered",
+        "seconds": 43.351,
+        "peak_allocated_gib": 4.767,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 2
+      },
+      {
+        "case": "os",
+        "status": "answered",
+        "seconds": 13.112,
+        "peak_allocated_gib": 4.021,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 1
+      },
+      {
+        "case": "boot",
+        "status": "answered",
+        "seconds": 27.816,
+        "peak_allocated_gib": 4.102,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 2
+      },
+      {
+        "case": "recall",
+        "status": "insufficient_evidence",
+        "seconds": 0.0,
+        "peak_allocated_gib": 3.538,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 0
+      },
+      {
+        "case": "price",
+        "status": "out_of_scope",
+        "seconds": 0.0,
+        "peak_allocated_gib": 3.538,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 0
+      },
+      {
+        "case": "injection",
+        "status": "safety_blocked",
+        "seconds": 0.0,
+        "peak_allocated_gib": 3.538,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 0
+      },
+      {
+        "case": "no_evidence",
+        "status": "insufficient_evidence",
+        "seconds": 0.072,
+        "peak_allocated_gib": 3.54,
+        "peak_reserved_gib": 4.871,
+        "media_count": 0,
+        "generation_attempts": 0
+      }
+    ]
+  },
+  "recommendation": {
+    "expected_status_matches": 4,
+    "total": 4,
+    "cases": [
+      {
+        "case": "home_server",
+        "status": "answered",
+        "seconds": 36.899,
+        "peak_allocated_gib": 7.156,
+        "peak_reserved_gib": 7.641,
+        "media_count": 2,
+        "generation_attempts": 1
+      },
+      {
+        "case": "camera",
+        "status": "answered",
+        "seconds": 21.901,
+        "peak_allocated_gib": 7.274,
+        "peak_reserved_gib": 7.641,
+        "media_count": 2,
+        "generation_attempts": 1
+      },
+      {
+        "case": "smart_farm",
+        "status": "answered",
+        "seconds": 32.44,
+        "peak_allocated_gib": 7.276,
+        "peak_reserved_gib": 7.641,
+        "media_count": 2,
+        "generation_attempts": 2
+      },
+      {
+        "case": "education",
+        "status": "answered",
+        "seconds": 22.732,
+        "peak_allocated_gib": 7.276,
+        "peak_reserved_gib": 7.641,
+        "media_count": 2,
+        "generation_attempts": 1
+      }
+    ]
+  },
+  "recommendation_lora_primary_count": 4,
+  "ui": [
+    {
+      "case": "initial",
+      "status": null,
+      "errors": 0,
+      "exceptions": 0,
+      "seconds": 0,
+      "media_count": 0
+    },
+    {
+      "case": "qa",
+      "status": "answered",
+      "errors": 0,
+      "exceptions": 0,
+      "seconds": 43.979,
+      "media_count": 0
+    },
+    {
+      "case": "recommendation",
+      "status": "answered",
+      "errors": 0,
+      "exceptions": 0,
+      "seconds": 51.8,
+      "media_count": 2
+    }
+  ],
+  "dev": {
+    "metrics": {
+      "record_count": 40,
+      "json_schema_valid_rate": 0.975,
+      "exact_match_rate": 0.575,
+      "field_accuracy": {
+        "intent": 0.875,
+        "use_case": 0.85,
+        "product_models": 0.925,
+        "os_versions": 0.925,
+        "task": 0.8,
+        "performance_priority": 0.95,
+        "wireless_required": 0.975,
+        "camera_required": 0.975,
+        "gpio_required": 0.975,
+        "monitor_available": 0.975,
+        "remote_access_required": 0.975,
+        "user_level": 0.925,
+        "needs_clarification": 0.95
+      },
+      "field_macro_f1": {
+        "intent": 0.7781827928169391,
+        "use_case": 0.7617724867724868,
+        "product_models": 0.6312056737588653,
+        "os_versions": 0.4611111111111111,
+        "task": 0.7679487179487179,
+        "performance_priority": 0.7069327731092436,
+        "wireless_required": 0.7450980392156863,
+        "camera_required": 0.6666666666666666,
+        "gpio_required": 0.6666666666666666,
+        "monitor_available": 0.7450980392156863,
+        "remote_access_required": 0.6613756613756614,
+        "user_level": 0.5855072463768116,
+        "needs_clarification": 0.6097883597883598
+      },
+      "overall_macro_f1": 0.6759503257556079,
+      "unprovided_condition_invention_rate": 0.006825938566552901,
+      "recommendation_top1_accuracy": null,
+      "recommendation_evaluated_count": 0
+    },
+    "field_error_counts": {
+      "task": 7,
+      "use_case": 5,
+      "intent": 4,
+      "clarification_questions": 4,
+      "user_level": 2,
+      "product_models": 2,
+      "os_versions": 2,
+      "performance_priority": 1,
+      "needs_clarification": 1
+    },
+    "error_types": {
+      "omission": 11,
+      "different_value": 15,
+      "schema_or_extraction_failure": 1,
+      "unprovided_value": 2
+    },
+    "mismatched_records": 17,
+    "not_comparable_to_prior_holdout": true
+  },
+  "corpus": {
+    "document_count": 18,
+    "chunk_count": 270,
+    "media_statistics": {
+      "media_items": 71,
+      "media_occurrences": 72,
+      "linked_chunks": 49,
+      "image_items": 70,
+      "video_items": 1
+    },
+    "manifest_sha256": "4a0848ed8efad23303f3b654df60234a29ffd45013f27bf55c27392c266684a5",
+    "media_manifest_sha256": "57801ef7438cf7cd2a13d7486ae2db6ebadbaf1e63717c0b2647936ef462899b"
+  },
+  "semantic_accuracy_certified": false,
+  "timing_includes_cold_loads": true,
+  "p50_p95_not_measured": true,
+  "retrained": false,
+  "pod_terminated": false,
+  "adapter_weights_sha256": "23f9308d310143a60869077e1a947455bf419676e8283d0c86dcd3b24bdecd4f",
+  "cli_qa": {
+    "status": "answered",
+    "warnings": [
+      "retrieval_mode=hybrid",
+      "metadata_compatibility: canonical collected_at is carried through legacy RagResult.retrieved_at",
+      "answer_generator=huggingface",
+      "trace.evidence_chunks=5",
+      "trace.generator=huggingface",
+      "trace.model_id=Qwen/Qwen3-4B-Instruct-2507",
+      "trace.generation_elapsed_ms=40846.1",
+      "trace.generation_attempts=2",
+      "trace.citation_repair=applied",
+      "trace.citation_validation=passed"
+    ],
+    "media_count": 0
+  },
+  "cli_recommendation": {
+    "status": "answered",
+    "warnings": [
+      "retrieval_mode=hybrid",
+      "condition_extractor=primary",
+      "answer_generator=huggingface",
+      "trace.evidence_chunks=5",
+      "trace.generator=huggingface",
+      "trace.model_id=Qwen/Qwen3-4B-Instruct-2507",
+      "trace.generation_elapsed_ms=18471.7",
+      "trace.generation_attempts=1",
+      "trace.citation_repair=not_needed",
+      "trace.citation_validation=passed"
+    ],
+    "media_count": 2
+  },
+  "tested_local_patches": [
+    "tests/test_rag.py: use generated legacy fixture",
+    "src/services/recommendation_rag_cli.py: print each citation once"
+  ],
+  "local_tests_after_manifest_restore": {
+    "passed": 235,
+    "skipped": 1,
+    "failed": 0,
+    "skip_reason": "Windows symlink privilege"
+  },
+  "backup": {
+    "archive_verified": true,
+    "archive_sha256": "a78d8bbb59b35e0dd0ccf52553092771117e56f1ff370f119fe5d691393c77c2",
+    "files_verified": 74,
+    "local_generated_manifests_restored": [
+      "document_pipeline/data/manifest_v3.json",
+      "document_pipeline/data/media_manifest_v3.json"
+    ],
+    "adapter_archive_separately_preserved": true
+  },
+  "semantic_findings": {
+    "review_type": "manual_counterexample_audit",
+    "semantic_accuracy_certified": false,
+    "not_a_scored_benchmark": true,
+    "source_changed_to_fit_smoke_questions": false,
+    "findings": [
+      {
+        "id": "QA-BOOT-LED",
+        "case": "qa/boot",
+        "kind": "claim_contradicts_cited_evidence",
+        "claim": "SD 카드 활동 시 빨간색에서 녹색으로 변한다.",
+        "citation_id": "C2",
+        "evidence": "Flashes off to indicate microSD card activity.",
+        "explanation": "전원 인가·펌웨어 시작의 색 변화와 microSD 활동 표시를 혼동했다.",
+        "result": "unresolved"
+      },
+      {
+        "id": "REC-CAMERA-RANGE",
+        "case": "recommendation/camera",
+        "kind": "unsupported_operational_inference",
+        "claim": "Zero 2 W는 Wi-Fi 범위가 제한적이어서 장거리 환경에서 부적절할 수 있다.",
+        "citation_ids": [
+          "C2",
+          "C3"
+        ],
+        "explanation": "검색 근거는 주파수 대역·연결 사양을 제공하지만 통신 거리나 반려동물 관찰 실측 결과를 제공하지 않는다.",
+        "result": "unresolved"
+      },
+      {
+        "id": "REC-EDUCATION-CARD",
+        "case": "recommendation/education",
+        "kind": "recommendation_card_and_answer_disagree",
+        "claim": "본문은 Pi 5의 구체적 근거가 없어 추천할 수 없다고 하지만 제품 카드에는 Pi 5가 포함된다.",
+        "explanation": "후보와 카드 인용을 document_id 교집합으로 연결해 Pi 5 카드에 Pi 400 표(C1)·Pi 4 표(C2)가 붙었다. 함께 붙은 범용 OS 설정 청크(C4)는 Pi 5 태그가 있지만 Wi-Fi·모니터 사양 근거는 아니다. 따라서 제품 태그 검사만 추가해도 완전히 해결되지는 않는다.",
+        "code_location": "src/services/recommendation_rag_service.py:347",
+        "result": "unresolved"
+      }
+    ],
+    "recommended_followup": "후보별·조건별 실제 검색 청크와 표의 제품 행을 연결하고 최종 본문·제품 카드의 일관성을 검사한다. 제품 태그만으로 개별 사양의 근거 유무를 판정하지 않는다. QA 사실 주장과 인용 원문의 의미 일치 여부는 별도 검수한다."
+  },
+  "runtime": {
+    "gpu": "NVIDIA A40",
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6",
+    "peft": "0.20.0",
+    "bitsandbytes": "0.50.2",
+    "chromadb": "1.5.9",
+    "streamlit": "1.62.0",
+    "base_revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+    "e5_revision": "d128750597153bb5987e10b1c3493a34e5a4502a"
+  }
+}

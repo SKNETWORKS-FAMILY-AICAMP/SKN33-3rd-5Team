@@ -2,9 +2,11 @@ import hashlib
 import json
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
+from src.contracts.retrieval_text import build_e5_passage
 from src.rag import (
     DenseRetrievalError,
     DocumentChunk,
@@ -17,11 +19,11 @@ from src.rag import (
     evaluate_rankings,
     rrf_fuse,
 )
+from src.rag import demo
+
 from src.contracts.retrieval_text import build_e5_passage
 from src.rag.chroma_metadata import chroma_where, chunk_to_chroma_metadata, tag_flag_key
-from src.rag import demo
 from src.rag.demo import DEMO_QUERIES, create_parser, prompt_for_query, select_query
-
 
 def make_chunk(chunk_id: str, content: str, use_cases: tuple[str, ...]) -> DocumentChunk:
     return DocumentChunk(
@@ -89,6 +91,43 @@ def test_document_id_filter_limits_bm25_candidates_to_catalog_evidence() -> None
     results = retriever.search("camera", RagFilters(document_ids=("doc-zero",)))
 
     assert [result.chunk_id for result in results] == ["zero"]
+
+
+def test_strict_product_filter_rejects_untagged_and_other_product_chunks() -> None:
+    base = make_chunk("untagged", "generic connector setup", ("camera",))
+    pi5 = DocumentChunk(
+        **{
+            **base.__dict__,
+            "chunk_id": "pi5",
+            "content": "camera connector setup",
+            "product_models": ("Raspberry Pi 5",),
+        }
+    )
+    pico = DocumentChunk(
+        **{**base.__dict__, "chunk_id": "pico", "product_models": ("Raspberry Pi Pico",)}
+    )
+    retriever = HybridRetriever([base, pi5, pico])
+
+    results = retriever.search(
+        "camera",
+        RagFilters(product_models=("Raspberry Pi 5",), strict_product_match=True),
+    )
+
+    assert [result.chunk_id for result in results] == ["pi5"]
+
+
+def test_official_filter_rejects_unapproved_bm25_chunks() -> None:
+    approved = make_chunk("approved", "camera connector", ("camera",))
+    unreviewed = DocumentChunk(
+        **{**approved.__dict__, "chunk_id": "unreviewed", "quality_status": "unreviewed"}
+    )
+    unrelated = [
+        make_chunk(f"other-{index}", f"unrelated topic {index}", ("server",))
+        for index in range(3)
+    ]
+    retriever = HybridRetriever([approved, unreviewed, *unrelated])
+
+    assert [result.chunk_id for result in retriever.search("camera")] == ["approved"]
 
 
 def test_evaluation_reports_hit_and_mrr() -> None:
@@ -313,6 +352,14 @@ def test_chroma_metadata_and_where_include_tag_filters() -> None:
         for options in tag_conditions
     )
 
+    strict_where = chroma_where(
+        RagFilters(product_models=("Raspberry Pi 5",), strict_product_match=True)
+    )
+    assert strict_where is not None
+    assert strict_where["$and"][2] == {
+        tag_flag_key("product_models", "Raspberry Pi 5"): True
+    }
+
     document_where = chroma_where(RagFilters(document_ids=("doc-pi5", "doc-zero")))
     assert document_where == {
         "$and": [
@@ -334,6 +381,12 @@ def test_dense_configuration_error_is_not_silently_hidden(monkeypatch) -> None:
 
 def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tmp_path, monkeypatch) -> None:
     manifest_path = tmp_path / "manifest.json"
+    embedding_input = build_e5_passage(
+        title="Camera", section="Setup", content="camera setup"
+    )
+    embedding_checksum = "sha256:" + hashlib.sha256(
+        embedding_input.encode("utf-8")
+    ).hexdigest()
     manifest_path.write_text(
         json.dumps(
             {
@@ -348,17 +401,17 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
                         "title": "Camera",
                         "section": "Setup",
                         "content": "camera setup",
-                            "source_url": "https://www.raspberrypi.com/documentation/",
-                            "source_anchor": None,
-                            "collected_at": "2026-08-28",
+                        "source_url": "https://www.raspberrypi.com/documentation/",
+                        "source_anchor": None,
+                        "collected_at": "2026-08-28",
                         "document_version": None,
                         "license": "CC BY-SA 4.0",
                         "product_models": ["Raspberry Pi 5"],
                         "use_cases": ["camera"],
                         "os_versions": ["Raspberry Pi OS"],
-                            "official_verified": True,
-                            "quality_status": "approved",
-                            "embedding_checksum": "sha256:" + hashlib.sha256(
+                        "official_verified": True,
+                        "quality_status": "approved",
+                        "embedding_checksum": "sha256:" + hashlib.sha256(
                                 build_e5_passage(
                                     title="Camera",
                                     section="Setup",
@@ -402,9 +455,7 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
             assert name == "test-e5"
 
         def encode(self, texts: list[str], normalize_embeddings: bool) -> list[list[float]]:
-            assert texts == [
-                build_e5_passage(title="Camera", section="Setup", content="camera setup")
-            ]
+            assert texts == [embedding_input]
             assert normalize_embeddings is True
             return [[0.1, 0.2]]
 
@@ -424,6 +475,29 @@ def test_indexer_reset_deletes_existing_collection_and_writes_scalar_metadata(tm
     assert (tmp_path / "chroma" / "picare-index.json").is_file()
 
 
-def test_manifest_adapter_rejects_legacy_manifest_schema() -> None:
+def test_manifest_adapter_rejects_legacy_manifest_schema(tmp_path) -> None:
+    legacy_manifest = {
+        "chunks": [
+            {
+                "chunk_id": "legacy-camera-001",
+                "document_id": "legacy-camera",
+                "title": "Legacy camera fixture",
+                "section": "Setup",
+                "content": "Legacy fixture content.",
+                "source_url": "https://example.test/legacy-camera",
+                "retrieved_at": "2026-08-28",
+                "document_version": None,
+                "license": "CC BY-SA 4.0",
+                "product_models": [],
+                "use_cases": ["camera"],
+                "os_versions": ["Raspberry Pi OS"],
+                "source_type": "documentation",
+                "official_verified": True,
+            }
+        ]
+    }
+    path = tmp_path / "legacy-manifest.json"
+    path.write_text(json.dumps(legacy_manifest), encoding="utf-8")
+
     with pytest.raises(ValueError, match="schema_version 1.1.0"):
-        HybridRetriever.from_manifest("data/corpora/corpus_section_test/manifest.json")
+        HybridRetriever.from_manifest(path)

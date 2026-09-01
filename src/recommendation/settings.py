@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from src.condition_extraction.extractor import DEFAULT_MODEL_ID, ConditionExtractor
 from src.condition_extraction.baseline import BaselineConditionExtractor
 from src.condition_extraction.lora import LoraConditionExtractor
+from src.model_runtime import InferenceDeviceError, normalize_inference_device
 
 
 class RecommendationSettingsError(ValueError):
@@ -28,6 +29,7 @@ class RecommendationSettings:
     condition_model_id: str
     lora_adapter_path: Path | str | None
     condition_load_in_4bit: bool
+    condition_device: str
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "RecommendationSettings":
@@ -54,6 +56,12 @@ class RecommendationSettings:
             raise RecommendationSettingsError(
                 "CONDITION_LOAD_IN_4BIT must be either 'true' or 'false'."
             )
+        try:
+            condition_device = normalize_inference_device(
+                os.getenv("INFERENCE_DEVICE", "auto")
+            )
+        except InferenceDeviceError as exc:
+            raise RecommendationSettingsError(str(exc)) from exc
 
         adapter_path: Path | str | None = None
         if extractor == "lora":
@@ -95,6 +103,7 @@ class RecommendationSettings:
             condition_model_id=model_id,
             lora_adapter_path=adapter_path,
             condition_load_in_4bit=bool_values[load_in_4bit_raw],
+            condition_device=condition_device,
         )
 
 
@@ -105,12 +114,14 @@ def build_condition_extractor(settings: RecommendationSettings) -> ConditionExtr
         return BaselineConditionExtractor(
             model_id=settings.condition_model_id,
             load_in_4bit=settings.condition_load_in_4bit,
+            device=settings.condition_device,
         )
     assert settings.lora_adapter_path is not None
     return LoraConditionExtractor(
         str(settings.lora_adapter_path),
         model_id=settings.condition_model_id,
         load_in_4bit=settings.condition_load_in_4bit,
+        device=settings.condition_device,
     )
 
 

@@ -13,6 +13,7 @@ class BaselineConditionExtractor(HuggingFaceConditionExtractor):
         *,
         model_id: str = DEFAULT_MODEL_ID,
         load_in_4bit: bool = True,
+        device: str = "auto",
     ) -> None:
         """Base 모델 ID와 4-bit 로딩 여부를 받아 추출기를 초기화한다."""
 
@@ -21,4 +22,5 @@ class BaselineConditionExtractor(HuggingFaceConditionExtractor):
             adapter_path=None,
             include_few_shots=True,
             load_in_4bit=load_in_4bit,
+            device=device,
         )

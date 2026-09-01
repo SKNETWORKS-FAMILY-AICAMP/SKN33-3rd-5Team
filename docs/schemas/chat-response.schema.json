@@ -369,6 +369,11 @@
       "additionalProperties": false,
       "description": "Official image or video linked to a verified citation.",
       "properties": {
+        "media_id": {
+          "pattern": "^media-[0-9a-f]{20}$",
+          "title": "Media Id",
+          "type": "string"
+        },
         "media_type": {
           "enum": [
             "image",
@@ -389,6 +394,36 @@
           "title": "Url",
           "type": "string"
         },
+        "alt_text": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Alt Text"
+        },
+        "display_mode": {
+          "enum": [
+            "inline",
+            "external_embed"
+          ],
+          "title": "Display Mode",
+          "type": "string"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "attribution": {
+          "minLength": 1,
+          "title": "Attribution",
+          "type": "string"
+        },
         "source_citation_id": {
           "pattern": "^C[1-9][0-9]*$",
           "title": "Source Citation Id",
@@ -396,9 +431,14 @@
         }
       },
       "required": [
+        "media_id",
         "media_type",
         "title",
         "url",
+        "alt_text",
+        "display_mode",
+        "license",
+        "attribution",
         "source_citation_id"
       ],
       "title": "MediaItem",
@@ -522,7 +562,7 @@
   "description": "Stable chatbot-to-Streamlit response contract.",
   "properties": {
     "schema_version": {
-      "const": "1.1.0",
+      "const": "1.2.0",
       "title": "Schema Version",
       "type": "string"
     },

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.media import MediaResolver
 from src.rag import HybridRetriever, RagSettings, load_indexed_at
 from src.rag_to_llm import AnswerGeneratorSettings, build_answer_generator
 from src.recommendation import (
@@ -14,6 +15,7 @@ from src.recommendation import (
     load_and_validate_catalog,
 )
 from src.services.integration_adapters import manifest_to_rag_result_metadata
+from src.services.media_lookup import load_media_by_chunk_id
 from src.services.rag_qa_service import RagQaService
 from src.services.recommendation_agent import RecommendationAgent
 from src.services.recommendation_rag_service import RecommendationRagService
@@ -55,24 +57,34 @@ def _rag_dependencies(project_root: Path):
         embedding_model_name=rag_settings.e5_model_name,
         dense_max_distance=rag_settings.dense_max_distance,
     )
-    return rag_settings, retriever, build_answer_generator(answer_settings)
+    media_resolver = (
+        MediaResolver.from_file(
+            rag_settings.media_manifest_path,
+            document_manifest_path=rag_settings.manifest_path,
+        )
+        if rag_settings.media_manifest_path is not None
+        else None
+    )
+    return rag_settings, retriever, build_answer_generator(answer_settings), media_resolver
 
 
 def build_qa_service(project_root: Path) -> RagQaService:
     """CLI와 동일한 설정으로 Streamlit QA 서비스를 조립한다."""
 
-    rag_settings, retriever, answer_generator = _rag_dependencies(project_root)
+    rag_settings, retriever, answer_generator, media_resolver = _rag_dependencies(project_root)
     return RagQaService(
         retriever=retriever,
         answer_generator=answer_generator,
+        media_resolver=media_resolver,
         top_k=rag_settings.top_k,
+        media_by_chunk_id=load_media_by_chunk_id(project_root),
     )
 
 
 def build_recommendation_service(project_root: Path) -> RecommendationRagService:
     """sLLM→catalog→Hybrid RAG→답변 생성 흐름을 Streamlit용으로 조립한다."""
 
-    rag_settings, retriever, answer_generator = _rag_dependencies(project_root)
+    rag_settings, retriever, answer_generator, media_resolver = _rag_dependencies(project_root)
     recommendation_settings = RecommendationSettings.from_env(project_root)
     catalog, manifest = load_and_validate_catalog(
         catalog_path=recommendation_settings.catalog_path,
@@ -94,6 +106,7 @@ def build_recommendation_service(project_root: Path) -> RecommendationRagService
             indexed_at=indexed_at,
         ),
         answer_generator=answer_generator,
+        media_resolver=media_resolver,
         top_k=rag_settings.top_k,
     )
 

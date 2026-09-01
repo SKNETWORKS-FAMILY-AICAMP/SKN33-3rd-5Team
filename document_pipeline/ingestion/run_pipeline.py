@@ -5,6 +5,7 @@ import argparse
 from pathlib import Path
 
 try:  # Supports both `python -m` and direct script execution.
+    from .build_media_manifest import MEDIA_MANIFEST_PATH, build_media_manifest
     from .build_manifest import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_OVERLAP_TOKENS,
@@ -16,6 +17,7 @@ try:  # Supports both `python -m` and direct script execution.
     )
     from .fetch import RAW_ROOT, REGISTRY_PATH, fetch_sources
 except ImportError:  # pragma: no cover - direct invocation path
+    from build_media_manifest import MEDIA_MANIFEST_PATH, build_media_manifest
     from build_manifest import (
         DEFAULT_MAX_TOKENS,
         DEFAULT_OVERLAP_TOKENS,
@@ -40,6 +42,7 @@ def main() -> None:
     parser.add_argument("--raw-root", type=Path, default=RAW_ROOT)
     parser.add_argument("--processed-root", type=Path, default=PROCESSED_ROOT)
     parser.add_argument("--manifest-path", type=Path, default=MANIFEST_PATH)
+    parser.add_argument("--media-manifest-path", type=Path, default=MEDIA_MANIFEST_PATH)
     args = parser.parse_args()
 
     ledger = fetch_sources(
@@ -58,10 +61,18 @@ def main() -> None:
         max_tokens=args.max_tokens,
         overlap_tokens=args.overlap_tokens,
     )
+    media_manifest = build_media_manifest(
+        document_manifest_path=args.manifest_path,
+        raw_root=args.raw_root,
+        registry_path=args.source_registry,
+        output_path=args.media_manifest_path,
+    )
     print(f"commit: {ledger['commit']}")
     print(f"documents: {len(ledger['documents'])}")
     print(f"chunks: {len(manifest['chunks'])}")
     print(f"manifest: {args.manifest_path}")
+    print(f"media: {media_manifest['statistics']['media_items']}")
+    print(f"media manifest: {args.media_manifest_path}")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from typing import Protocol
 from .parser import parse_condition_output
 from .prompts import build_inference_messages
 from src.contracts import ConditionPayload
+from src.model_runtime import InferenceDeviceError, resolve_inference_runtime
 
 from .schema import SurveyResponse
 
@@ -40,44 +41,54 @@ class HuggingFaceConditionExtractor:
         adapter_path: str | None = None,
         include_few_shots: bool = True,
         load_in_4bit: bool = True,
+        device: str = "auto",
         max_new_tokens: int = 512,
     ) -> None:
         """모델·tokenizer를 로드하고 필요하면 4-bit 양자화와 LoRA를 적용한다."""
 
         try:
             import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:
             raise RuntimeError(
                 "모델 추론 패키지가 없습니다. training/requirements.txt를 설치하세요."
             ) from exc
 
-        if load_in_4bit and not torch.cuda.is_available():
-            raise RuntimeError("4-bit 추론에는 CUDA GPU가 필요합니다.")
+        try:
+            runtime = resolve_inference_runtime(
+                torch,
+                requested_device=device,
+                load_in_4bit=load_in_4bit,
+            )
+        except InferenceDeviceError as exc:
+            raise RuntimeError(str(exc)) from exc
 
         self.model_id = model_id
         self.adapter_path = adapter_path
         self.include_few_shots = include_few_shots
         self.max_new_tokens = max_new_tokens
+        self.device = runtime.device
+        self.load_in_4bit = runtime.load_in_4bit
         self.tokenizer = AutoTokenizer.from_pretrained(adapter_path or model_id)
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        model_kwargs: dict[str, object] = {"device_map": "auto"}
-        if load_in_4bit:
+        model_kwargs: dict[str, object] = {"torch_dtype": runtime.dtype}
+        if runtime.device == "cuda":
+            model_kwargs["device_map"] = "auto"
+        if runtime.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_compute_dtype=torch.bfloat16,
             )
-            model_kwargs["torch_dtype"] = torch.bfloat16
-        else:
-            model_kwargs["torch_dtype"] = (
-                torch.bfloat16 if torch.cuda.is_available() else torch.float32
-            )
 
         model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+        if runtime.device != "cuda":
+            model.to(runtime.device)
         if adapter_path:
             try:
                 from peft import PeftModel
@@ -102,7 +113,7 @@ class HuggingFaceConditionExtractor:
             return_dict=True,
             return_tensors="pt",
         )
-        encoded = encoded.to(self.model.device)
+        encoded = encoded.to(getattr(self.model, "device", self.device))
         prompt_length = encoded["input_ids"].shape[-1]
         with torch.inference_mode():
             output_ids = self.model.generate(

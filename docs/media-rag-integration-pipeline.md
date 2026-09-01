@@ -11,8 +11,9 @@
 - A/S: 기술 문제 해결과 보증·수리·리콜을 분리한다. 공식 corpus가 없는 항목은 답변과
   미디어 표시를 모두 보류한다.
 
-제품 사진과 RAG용 미디어는 같은 `assets/media/manifest.json`에서 관리할 수 있지만,
-선택 규칙은 분리한다.
+제품 사진은 제품 catalog에서, 공식 문서의 RAG용 미디어는 생성된 media manifest에서
+관리한다. 기존 `assets/media/*.json`은 팀이 수동 검수한 자산 대장과 호환 linker용으로
+유지하지만 런타임 자동 수집 경로와 섞지 않는다.
 
 | 구분 | category | 선택 기준 | 표시 위치 |
 |---|---|---|---|
@@ -27,10 +28,10 @@ flowchart LR
     subgraph Ingestion[색인 전 처리]
         D1[공식 문서 registry] --> D2[수집·파싱·청킹]
         D2 --> D3[document manifest]
-        M1[이미지·영상 registry] --> M2[라이선스·URL 검증]
-        D3 --> L[Media Linker]
-        M2 --> L
-        L --> MAP[media_chunk_map.json]
+        D2 --> M1[문서 media macro 추출]
+        D3 --> L[Media Linker·검증]
+        M1 --> L
+        L --> MAP[media_manifest_v3.json<br/>items + chunk links]
         D3 --> IDX[E5·BM25·Chroma 색인]
     end
 
@@ -51,91 +52,90 @@ flowchart LR
 
 ## 3. 저장소별 역할
 
-### 기존 파일을 그대로 사용하는 영역
+### 현재 사용하는 영역
 
 | 경로 | 역할 |
 |---|---|
 | `document_pipeline/data/source_registry_v3.csv` | RAG에 사용할 공식 문서 목록 |
 | `document_pipeline/ingestion/` | 문서 수집·파싱·청킹과 manifest 생성 |
-| `assets/media/manifest.json` | 제품 사진 5개와 guide 이미지 14개의 출처·라이선스 대장 |
+| `document_pipeline/ingestion/build_media_manifest.py` | 공식 원문의 media macro를 검증하고 `media_id`와 청크 연결을 함께 생성 |
+| `document_pipeline/data/media_manifest_v3.json` | 생성된 공식 guide 미디어와 `chunk_id ↔ media_id` 링크; Git 제외 |
+| `assets/media/manifest.json`, `assets/media/video_manifest.json` | 팀이 수동 검수한 기존 자산 대장; 호환·별도 검증용 |
+| `src/media/linker.py` | 기존 수동 자산 대장을 document manifest에 연결하는 호환 linker |
+| `src/media/resolver.py` | 최종 citation의 청크에 연결된 생성 media만 선택 |
 | `src/rag/` | BM25·Dense·Hybrid 검색과 Chroma 색인 |
 | `src/services/rag_qa_service.py` | 사용법·문제 해결 답변과 citation 생성 |
 | `src/contracts/models.py` | `ChatCitation`, `MediaItem`, `ChatResponse` 계약 |
 | `streamlit_app/app.py` | 최종 답변·출처·미디어 표시 화면 |
 
-### 새로 추가할 영역
+### 실제 파일 구조
 
 ```text
-assets/media/
-├── manifest.json                   # 기존 이미지 + 이후 검증된 영상 metadata
-└── images/
-    ├── products/                   # 제품 추천용
-    └── guides/                     # 사용법·문제 해결용
+document_pipeline/
+├── ingestion/
+│   ├── parse_asciidoc.py           # image/video macro를 텍스트와 분리해 구조 보존
+│   ├── build_manifest.py           # 미디어를 제외한 citation-safe 텍스트 청크
+│   └── build_media_manifest.py     # media item + 청크 링크 생성·검증
+├── contracts/
+│   ├── media-manifest.schema.json
+│   └── media-manifest-contract.md
+└── data/
+    └── media_manifest_v3.json      # 실행 시 생성, Git 제외
 
 src/media/
 ├── __init__.py
-├── models.py                       # 내부 registry 모델
-├── registry.py                     # registry 로딩·검증
-├── linker.py                       # document/section → chunk_id 자동 연결
+├── linker.py                       # 기존 수동 자산 대장의 호환 연결기
 └── resolver.py                     # 사용된 citation → 표시할 media 선택
 
-data/indexed/
-└── media_chunk_map.json            # 실행 시 생성, Git 제외
-
 tests/
-├── test_media_registry.py
-├── test_media_linker.py
-└── test_media_resolver.py
+├── test_media_linker.py             # 수동 대장 호환 경로
+└── test_media_pipeline.py           # 자동 추출·연결·resolver 경로
 ```
 
 ## 4. 미디어 수집 계약
 
 ### 이미지
 
-기존 `assets/media/manifest.json` 필드는 보존하고 다음 연결 필드를 선택적으로 추가한다.
+자동 수집 경로는 공식 AsciiDoc의 `image::` macro를 읽어 다음 형태로 생성한다. 원문의
+상대 URL은 수집 commit에 고정된 `raw.githubusercontent.com/raspberrypi/documentation/...`
+URL로 해석하며 허용된 공식 호스트가 아니면 생성에 실패한다.
 
 ```json
 {
-  "media_id": "rpi-guide-0006",
+  "media_id": "media-0123456789abcdefabcd",
   "media_type": "image",
-  "category": "guide",
   "title": "Raspberry Pi Imager SSH 설정",
-  "alt_text_ko": "Raspberry Pi Imager에서 SSH를 활성화하는 설정 화면",
-  "relative_path": "assets/media/images/guides/imager-ssh.png",
-  "source_document_url": "https://www.raspberrypi.com/documentation/computers/getting-started.html",
-  "source_section": "Install using Imager",
-  "source_asset_url": "https://raw.githubusercontent.com/.../imager-ssh.png",
-  "topics": ["os_installation", "ssh", "remote_access"],
-  "product_models": [],
-  "os_versions": ["current"],
+  "url": "https://raw.githubusercontent.com/raspberrypi/documentation/<commit>/.../imager-ssh.png",
+  "alt_text": "Raspberry Pi Imager에서 SSH를 활성화하는 설정 화면",
+  "caption": null,
+  "display_mode": "inline",
   "license": "CC BY-SA 4.0",
   "attribution": "Raspberry Pi Ltd",
-  "modified": false,
-  "checksum": "sha256:..."
+  "official_verified": true,
+  "source_commit": "<40-character commit>",
+  "occurrences": [{"document_id": "...", "section": "Install using Imager", "source_anchor": "..."}]
 }
 ```
 
 ### 영상
 
-영상은 내려받거나 재배포하지 않고 공식 URL과 표시 구간만 저장한다.
+영상은 내려받거나 재배포하지 않는다. 공식 문서 안의 명시적인 `video::ID[youtube]`
+macro만 YouTube 링크로 저장한다.
 
 ```json
 {
-  "media_id": "rpi-video-0001",
+  "media_id": "media-abcdef0123456789abcd",
   "media_type": "video",
-  "category": "guide",
   "title": "Raspberry Pi Imager로 OS 설치",
   "url": "https://www.youtube.com/watch?v=VIDEO_ID",
-  "video_id": "VIDEO_ID",
-  "start_seconds": 95,
-  "end_seconds": 180,
-  "channel_name": "Raspberry Pi",
+  "alt_text": null,
+  "caption": null,
+  "display_mode": "external_embed",
+  "license": "YouTube Terms of Service",
+  "attribution": "Raspberry Pi Ltd",
   "official_verified": true,
-  "embed_allowed": true,
-  "checked_at": "YYYY-MM-DD",
-  "source_document_url": "https://www.raspberrypi.com/documentation/computers/getting-started.html",
-  "source_section": "Install using Imager",
-  "topics": ["os_installation", "imager"]
+  "source_commit": "<40-character commit>",
+  "occurrences": [{"document_id": "...", "section": "Install using Imager", "source_anchor": "..."}]
 }
 ```
 
@@ -144,17 +144,18 @@ tests/
 
 ## 5. Media Linker
 
-문서 청킹 결과는 변경될 수 있으므로 `chunk_ids`를 사람이 원본 registry에 계속 입력하지
-않는다. `src/media/linker.py`가 document manifest와 media manifest를 읽어 연결 파일을
-자동 생성한다.
+문서 청킹 결과는 변경될 수 있으므로 `chunk_id`를 사람이 입력하지 않는다.
+`build_media_manifest.py`가 원문, 수집 ledger, source registry, document manifest를 함께
+검증하고 media item과 chunk link를 하나의 manifest에 생성한다. `src/media/linker.py`는
+기존 `assets/media/*.json` 수동 대장을 사용하는 경우에만 쓰는 호환 경로다.
 
 ### 연결 우선순위
 
-1. `source_document_url`이 같은 문서만 후보로 선택한다.
-2. `source_section`이 청크의 section 또는 heading path와 일치해야 한다.
-3. `product_models`, `os_versions`가 모두 존재하면 서로 충돌하지 않아야 한다.
-4. 하나의 미디어는 같은 섹션의 여러 청크와 연결할 수 있다.
-5. 연결할 청크가 없으면 임의 연결하지 않고 검증 실패 목록에 기록한다.
+1. 원문 media macro가 속한 `document_id`와 파싱된 `section`을 확정한다.
+2. document manifest에서 `document_id + section`이 정확히 같은 승인 청크만 연결한다.
+3. 하나의 미디어는 같은 섹션의 여러 청크와 연결할 수 있다.
+4. URL, 원문 checksum, registry checksum, 수집 commit이 일치해야 한다.
+5. 연결할 청크가 없거나 알 수 없는 미디어가 있으면 임의 연결하지 않고 생성에 실패한다.
 
 ### 생성 파일 예시
 
@@ -162,22 +163,18 @@ tests/
 {
   "schema_version": "1.0.0",
   "document_manifest_checksum": "sha256:...",
-  "media_manifest_checksum": "sha256:...",
   "generated_at": "YYYY-MM-DDTHH:MM:SSZ",
+  "items": [{"media_id": "media-...", "media_type": "image", "url": "https://..."}],
   "links": [
     {
-      "media_id": "rpi-guide-0006",
-      "chunk_ids": [
-        "rpi-doc-getting-started-install-0003",
-        "rpi-doc-getting-started-install-0004"
-      ]
+      "chunk_id": "rpi-doc-getting-started-install-0003",
+      "media_ids": ["media-..."]
     }
-  ],
-  "unmatched_media_ids": []
+  ]
 }
 ```
 
-문서 manifest 또는 media manifest checksum이 바뀌면 연결 파일을 다시 생성해야 한다.
+문서 manifest, source registry 또는 수집 원문이 바뀌면 media manifest를 다시 생성해야 한다.
 
 ## 6. 런타임 Media Resolver
 
@@ -188,9 +185,7 @@ tests/
 
 - 검증을 통과한 `used_citation_ids`
 - 최종 `ChatCitation` 목록
-- `media_chunk_map.json`
-- media manifest
-- 질문에서 확정된 제품·OS 조건
+- checksum 검증을 통과한 `media_manifest_v3.json`
 
 출력:
 
@@ -199,27 +194,29 @@ tests/
 선택 규칙:
 
 1. 최종 답변 본문에 실제 사용된 citation만 처리한다.
-2. citation의 `chunk_id`와 연결된 `category=guide` 미디어만 QA에 표시한다.
-3. 제품·OS 조건이 충돌하는 미디어는 제외한다.
-4. 같은 이미지·영상은 한 번만 표시한다.
-5. 기본 최대 개수는 이미지 2개, 영상 1개로 제한한다.
-6. 이미지와 영상이 같은 내용을 설명하면 이미지 1개와 영상 1개만 남긴다.
-7. 출처·라이선스·embed 상태가 검증되지 않은 항목은 제외하고 warning을 기록한다.
+2. citation의 `chunk_id`와 연결된 공식 guide 미디어만 QA에 표시한다.
+3. 같은 이미지·영상은 한 번만 표시한다.
+4. 기본 최대 개수는 이미지 2개, 영상 1개로 제한한다.
+5. manifest checksum, URL, 출처·라이선스 검증이 실패하면 서비스 시작 시 해당 manifest를 거부한다.
 
-현재 `MediaItem` 계약은 다음 최소 필드를 지원한다.
+현재 `MediaItem` 계약은 다음 필드를 사용한다.
 
 ```json
 {
+  "media_id": "media-0123456789abcdefabcd",
   "media_type": "image",
   "title": "Raspberry Pi Imager SSH 설정",
   "url": "https://...",
+  "alt_text": "SSH 설정 화면",
+  "display_mode": "inline",
+  "license": "CC BY-SA 4.0",
+  "attribution": "Raspberry Pi Ltd",
   "source_citation_id": "C2"
 }
 ```
 
-1차 Streamlit에서는 이미지의 `source_asset_url`과 영상의 공식 URL을 사용한다. 다음 달
-AWS 전환 후 로컬 이미지는 S3·CloudFront의 HTTPS URL로 교체하되 `media_id`와 원본 출처는
-유지한다.
+Streamlit은 검증된 이미지 URL과 영상의 공식 URL을 사용한다. 향후 저장 위치를 바꾸더라도
+`media_id`, 원본 출처, 라이선스는 유지한다.
 
 ## 7. 서비스별 통합 위치
 
@@ -230,7 +227,6 @@ AWS 전환 후 로컬 이미지는 S3·CloudFront의 HTTPS URL로 교체하되 `
 ```text
 추천 candidate.image_url
 → ProductRecommendation.image_url
-→ category=product MediaItem
 → 제품 카드 표시
 ```
 
@@ -246,7 +242,7 @@ AWS 전환 후 로컬 이미지는 S3·CloudFront의 HTTPS URL로 교체하되 `
 → validate_grounded_answer()
 → used_citation_ids 확정
 → ChatCitation 생성
-→ media_resolver.resolve(citations, conditions)
+→ media_resolver.resolve(final_citations)
 → ChatResponse(media=resolved_media)
 ```
 
@@ -285,41 +281,44 @@ for item in response.media:
 추가할 때는 `published_at`, `updated_at`, `region`, `seller_scope`, `expires_at` metadata를
 필수로 둔다.
 
-## 9. 구현 단계
+## 9. 구현·검증 상태
 
-### 1단계: 기존 자산 연결
+### 완료: 문서·미디어 생성
 
-1. 기존 guide 이미지 14개의 URL·섹션·라이선스를 재검증한다.
-2. v3 document manifest를 생성한다.
-3. `Media Linker`와 registry 검증 테스트를 구현한다.
-4. 모든 guide 이미지의 매핑 결과를 검토한다.
+- 고정된 공식 원문 18개에서 v3 document manifest 270청크를 생성했다.
+- media macro는 텍스트 청크에서 제외하고 구조적으로 추출한다.
+- 이미지 70개·영상 1개(총 71개, 원문상 occurrence 72개)를 49개 청크에 연결했다.
+- JSON Schema, 원문·registry·document manifest checksum, URL allowlist를 검증한다.
 
-통과 기준: guide 이미지 14개가 적절한 청크에 연결되거나 제외 사유가 기록된다.
+생성물은 Git에 커밋하지 않으며 아래 명령으로 함께 재생성한다.
 
-### 2단계: QA 응답 연결
+```bash
+python -m document_pipeline.ingestion.run_pipeline \
+  --source-registry document_pipeline/data/source_registry_v3.csv \
+  --raw-root document_pipeline/data/raw_v3 \
+  --processed-root document_pipeline/data/processed_v3 \
+  --manifest-path document_pipeline/data/manifest_v3.json \
+  --media-manifest-path document_pipeline/data/media_manifest_v3.json
+```
 
-1. `Media Resolver`를 구현한다.
-2. `RagQaService`에 선택적 resolver 의존성을 추가한다.
-3. 실제 사용된 citation과 연결된 미디어만 응답에 포함한다.
-4. 근거 부족 응답에서 media가 비어 있는지 테스트한다.
+### 완료: QA·추천 응답 연결
 
-통과 기준: 관련 질문에는 올바른 이미지가 표시되고 무관한 질문에는 표시되지 않는다.
+- QA와 추천 서비스 모두 인용 검증 후 실제 사용된 citation만 resolver에 전달한다.
+- 보류·범위 밖·오류 응답은 `media=[]`를 유지한다.
+- 제품 카드는 catalog의 `ProductRecommendation.image_url`을 유지한다.
+- 미디어는 이미지 최대 2개·영상 최대 1개로 중복 제거한다.
 
-### 3단계: 영상 추가
+### 완료: Streamlit 런타임 연결
 
-1. 공식 영상 3~5개의 URL·채널·embed 상태·시작 시간을 기록한다.
-2. 영상도 같은 linker와 resolver를 사용한다.
-3. 영상이 삭제·비공개일 때 공식 문서 링크만 남도록 fallback을 구현한다.
+- `MEDIA_MANIFEST`가 설정된 경우 런타임이 시작할 때 checksum까지 검증해 resolver를 구성한다.
+- `ChatResponse.media`의 이미지·영상과 연결 citation을 표시한다.
+- 미디어가 없거나 manifest 설정을 생략해도 텍스트 답변은 독립적으로 동작한다.
 
-통과 기준: 영상 실패가 전체 챗봇 답변 실패로 이어지지 않는다.
+### 운영 전 추가 확인
 
-### 4단계: Streamlit 실연동
-
-1. mock service를 실제 `RagQaService`로 교체한다.
-2. `ChatResponse`의 answer, citations, media를 그대로 표시한다.
-3. 제품 추천 화면은 기존 product 이미지 경로를 유지한다.
-
-통과 기준: 질문 → 답변 → citation → 이미지·영상까지 한 화면에서 확인할 수 있다.
+- 외부 이미지·YouTube 링크의 실제 응답 상태와 embed 가능 여부는 배포 환경에서 점검한다.
+- 공식 원문 commit 또는 청킹 설정 변경 시 document/media manifest와 Chroma 색인을 함께 재생성한다.
+- 실제 LLM 연결 환경에서 답변 → citation → 미디어 표시 시나리오를 최종 확인한다.
 
 ## 10. 필수 테스트
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any, Literal
 
 from pydantic import Field, HttpUrl, model_validator
 
@@ -74,8 +75,34 @@ class ProductRecommendationProfile(StrictContract):
 
     performance_tier: PerformanceTier
     beginner_friendly: bool
-    recommended_use_cases: list[UseCase]
+    recommended_use_cases: list[UseCase] = Field(min_length=1)
     recommended_tasks: list[Task]
+
+    @model_validator(mode="after")
+    def recommendation_tags_are_unique(self) -> "ProductRecommendationProfile":
+        """추천 용도·작업 태그의 중복을 거부한다."""
+
+        if len(self.recommended_use_cases) != len(set(self.recommended_use_cases)):
+            raise ValueError("recommended_use_cases에 중복 값이 있습니다.")
+        if len(self.recommended_tasks) != len(set(self.recommended_tasks)):
+            raise ValueError("recommended_tasks에 중복 값이 있습니다.")
+        return self
+
+
+class ConditionalAccessory(StrictContract):
+    """특정 사용 조건에서만 필요한 구성품이다."""
+
+    condition: str = Field(min_length=1, max_length=200)
+    item: str = Field(min_length=1, max_length=200)
+
+
+class RecommendationPolicyReview(StrictContract):
+    """공식 사양과 별도로 사람이 승인한 추천 정책의 버전 정보다."""
+
+    policy_id: str = Field(min_length=1, max_length=120)
+    reviewed_at: date
+    review_status: Literal["approved"]
+    scope: str = Field(min_length=1, max_length=500)
 
 
 class ProductFieldEvidence(StrictContract):
@@ -95,9 +122,34 @@ class ProductFieldEvidence(StrictContract):
     cpu: list[str] = Field(default_factory=list)
     memory: list[str] = Field(default_factory=list)
     dimensions: list[str] = Field(default_factory=list)
+    performance_tier: list[str] = Field(default_factory=list)
+    beginner_friendly: list[str] = Field(default_factory=list)
+    recommended_use_cases: list[str] = Field(default_factory=list)
+    recommended_tasks: list[str] = Field(default_factory=list)
+    # v1.1 입력 호환용이다. v1.2 카탈로그는 위 추천 필드별 근거를 사용한다.
     recommendation_profile: list[str] = Field(default_factory=list)
     required_accessories: list[str] = Field(default_factory=list)
+    conditional_accessories: list[str] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def split_legacy_recommendation_evidence(cls, value: Any) -> Any:
+        """v1.1의 추천 묶음 근거를 세부 추천 필드에 읽기 호환한다."""
+
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        legacy = normalized.get("recommendation_profile")
+        if legacy:
+            for field_name in (
+                "performance_tier",
+                "beginner_friendly",
+                "recommended_use_cases",
+                "recommended_tasks",
+            ):
+                normalized.setdefault(field_name, legacy)
+        return normalized
 
     @model_validator(mode="after")
     def evidence_ids_are_unique(self) -> "ProductFieldEvidence":
@@ -132,6 +184,7 @@ class ProductRecord(StrictContract):
     display: ProductDisplayMetadata
     recommendation_profile: ProductRecommendationProfile
     required_accessories: list[str] = Field(default_factory=list)
+    conditional_accessories: list[ConditionalAccessory] = Field(default_factory=list)
     caveats: list[str] = Field(default_factory=list)
     evidence_by_field: ProductFieldEvidence
     document_ids: list[str] = Field(min_length=1)
@@ -150,6 +203,16 @@ class ProductRecord(StrictContract):
             raise ValueError("aliases에 대소문자만 다른 중복 값이 있습니다.")
         if len(self.document_ids) != len(set(self.document_ids)):
             raise ValueError("document_ids에 중복 값이 있습니다.")
+        for field_name in ("required_accessories", "caveats"):
+            values = getattr(self, field_name)
+            if len(values) != len(set(value.casefold() for value in values)):
+                raise ValueError(f"{field_name}에 대소문자만 다른 중복 값이 있습니다.")
+        accessory_keys = {
+            (accessory.condition.casefold(), accessory.item.casefold())
+            for accessory in self.conditional_accessories
+        }
+        if len(accessory_keys) != len(self.conditional_accessories):
+            raise ValueError("conditional_accessories에 중복 값이 있습니다.")
         if self.document_ids != self.evidence_by_field.all_document_ids():
             raise ValueError(
                 "document_ids는 evidence_by_field의 정렬된 중복 제거 합집합과 같아야 합니다."
@@ -165,7 +228,10 @@ class ProductRecord(StrictContract):
             "built_in_keyboard",
             "cpu",
             "memory",
-            "recommendation_profile",
+            "performance_tier",
+            "beginner_friendly",
+            "recommended_use_cases",
+            "recommended_tasks",
         )
         missing = [
             field_name
@@ -176,6 +242,11 @@ class ProductRecord(StrictContract):
             missing.append("dimensions")
         if self.required_accessories and not self.evidence_by_field.required_accessories:
             missing.append("required_accessories")
+        if (
+            self.conditional_accessories
+            and not self.evidence_by_field.conditional_accessories
+        ):
+            missing.append("conditional_accessories")
         if self.caveats and not self.evidence_by_field.caveats:
             missing.append("caveats")
         if missing:
@@ -186,9 +257,10 @@ class ProductRecord(StrictContract):
 class ProductCatalog(StrictContract):
     """버전이 지정된 공식 출처와 추천 대상 제품 전체를 담는다."""
 
-    schema_version: str = Field(pattern=r"^1\.1\.0$")
+    schema_version: Literal["1.1.0", "1.2.0"]
     catalog_version: str = Field(min_length=1, max_length=100)
     generated_at: datetime
+    recommendation_policy: RecommendationPolicyReview | None = None
     sources: list[SourceRecord] = Field(min_length=1)
     products: list[ProductRecord] = Field(min_length=1)
 
@@ -202,6 +274,17 @@ class ProductCatalog(StrictContract):
             raise ValueError("sources의 document_id가 중복됩니다.")
         if len(product_ids) != len(set(product_ids)):
             raise ValueError("products의 product_id가 중복됩니다.")
+        accepted_names: dict[str, str] = {}
+        for product in self.products:
+            for name in (product.product_id, product.name, *product.aliases):
+                normalized = name.casefold()
+                previous = accepted_names.get(normalized)
+                if previous is not None:
+                    raise ValueError(
+                        "제품 ID·이름·별칭이 중복되어 명시적 제품 선택이 모호합니다: "
+                        f"{name!r} ({previous}, {product.product_id})"
+                    )
+                accepted_names[normalized] = product.product_id
         known = set(document_ids)
         for product in self.products:
             missing = set(product.document_ids) - known
@@ -209,6 +292,19 @@ class ProductCatalog(StrictContract):
                 raise ValueError(
                     f"{product.product_id}가 알 수 없는 document_id를 참조합니다: "
                     f"{sorted(missing)}"
+                )
+        if self.schema_version == "1.2.0":
+            if self.recommendation_policy is None:
+                raise ValueError("1.2.0 카탈로그에는 recommendation_policy가 필요합니다.")
+            legacy_products = [
+                product.product_id
+                for product in self.products
+                if product.evidence_by_field.recommendation_profile
+            ]
+            if legacy_products:
+                raise ValueError(
+                    "1.2.0 카탈로그는 recommendation_profile 묶음 근거를 사용할 수 "
+                    f"없습니다: {legacy_products}"
                 )
         return self
 
@@ -243,6 +339,7 @@ class RecommendationCandidate(StrictContract):
     matched_conditions: list[str]
     tradeoffs: list[str]
     required_accessories: list[str]
+    conditional_accessories: list[ConditionalAccessory] = Field(default_factory=list)
     evidence_document_ids: list[str]
     product_url: HttpUrl
     image_url: HttpUrl | None

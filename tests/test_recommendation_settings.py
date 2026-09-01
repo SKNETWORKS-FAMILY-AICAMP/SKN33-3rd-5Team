@@ -18,6 +18,7 @@ def configure(monkeypatch, tmp_path, adapter):
     monkeypatch.setenv("CONDITION_EXTRACTOR", "lora")
     monkeypatch.setenv("LORA_ADAPTER_PATH", adapter)
     monkeypatch.setenv("CONDITION_LOAD_IN_4BIT", "true")
+    monkeypatch.setenv("INFERENCE_DEVICE", "mps")
     return RecommendationSettings.from_env(tmp_path)
 
 
@@ -27,7 +28,12 @@ def test_hub_adapter_reaches_peft_without_local_path_conversion(monkeypatch, tmp
     assert settings.lora_adapter_path == repo_id
     with patch("src.recommendation.settings.LoraConditionExtractor") as extractor:
         build_condition_extractor(settings)
-    extractor.assert_called_once_with(repo_id, model_id=settings.condition_model_id, load_in_4bit=True)
+    extractor.assert_called_once_with(
+        repo_id,
+        model_id=settings.condition_model_id,
+        load_in_4bit=True,
+        device="mps",
+    )
 
 
 def test_existing_relative_directory_still_resolves_locally(monkeypatch, tmp_path):
@@ -47,3 +53,13 @@ def test_missing_explicit_paths_and_invalid_hub_ids_fail(monkeypatch, tmp_path, 
 def test_file_cannot_be_used_as_adapter_directory(monkeypatch, tmp_path):
     with pytest.raises(RecommendationSettingsError):
         configure(monkeypatch, tmp_path, str(tmp_path / "catalog.json"))
+
+
+def test_invalid_inference_device_fails_before_building_extractor(monkeypatch, tmp_path):
+    (tmp_path / "catalog.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("PRODUCT_CATALOG", "catalog.json")
+    monkeypatch.setenv("CONDITION_EXTRACTOR", "baseline")
+    monkeypatch.setenv("INFERENCE_DEVICE", "metal")
+
+    with pytest.raises(RecommendationSettingsError, match="INFERENCE_DEVICE"):
+        RecommendationSettings.from_env(tmp_path)

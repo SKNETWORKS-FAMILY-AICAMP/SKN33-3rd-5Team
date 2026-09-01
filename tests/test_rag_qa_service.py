@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from unittest.mock import Mock
 
+from src.contracts import MediaItem
 from src.lang import INSUFFICIENT_EVIDENCE_MARKER, PromptEvidence, validate_grounded_answer
 from src.rag import RagResult, RetrievalDecision
 from src.rag.retriever import DenseRetrievalError
@@ -55,10 +57,55 @@ class SpyGenerator(EvidenceTemplateGenerator):
         return super().generate(messages, evidence)
 
 
+class SpyMediaResolver:
+    def __init__(self) -> None:
+        self.chunk_ids: list[str] = []
+
+    def resolve(self, citations):
+        self.chunk_ids = [citation.chunk_id for citation in citations]
+        return [
+            MediaItem(
+                media_id="media-" + "a" * 20,
+                media_type="image",
+                title="SSH setup",
+                url="https://raw.githubusercontent.com/raspberrypi/documentation/" + "a" * 40 + "/setup.png",
+                alt_text="SSH setup screen",
+                display_mode="inline",
+                license="CC-BY-SA-4.0",
+                attribution="Raspberry Pi Ltd; CC-BY-SA-4.0",
+                source_citation_id=citations[0].citation_id,
+            )
+        ]
+
+
 def retrieved_decision() -> RetrievalDecision:
     """답변 가능한 단일 근거 검색 결과를 만든다."""
 
     return RetrievalDecision(status="retrieved", results=(result(),))
+
+
+def test_media_only_uses_cited_chunks_and_deduplicates_urls():
+    generator = Mock()
+    generator.generate.return_value = GenerationResult("SSH를 활성화하세요. [C1]", "test", "fixture", 0)
+    image = {"media_type": "image", "title": "SSH 설정", "url": "https://www.raspberrypi.com/ssh.png"}
+    video = {"media_type": "video", "title": "설정 영상", "url": "https://www.youtube.com/embed/example"}
+    service = RagQaService(
+        retriever=StaticRetriever(decision=RetrievalDecision(
+            status="retrieved", results=(result(), result(rank=2, chunk_id="unused")),
+        )),
+        answer_generator=generator,
+        media_by_chunk_id={"ssh-001": [image, image, video], "unused": [dict(image, url="https://www.raspberrypi.com/unused.png")]},
+    )
+    response = service.answer(request_id="cited-media", question="SSH를 활성화하려면?", retrieval_mode="bm25")
+    assert response.status == "answered"
+    assert [str(item.url) for item in response.media] == [image["url"], video["url"]]
+    assert all(item.source_citation_id == "C1" for item in response.media)
+    assert all(item.media_id.startswith("media-") for item in response.media)
+    assert [item.display_mode for item in response.media] == ["inline", "external_embed"]
+    generator.generate.return_value = GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
+    abstention = service.answer(request_id="no-media-on-abstention", question="SSH를 활성화하려면?", retrieval_mode="bm25")
+    assert abstention.status == "insufficient_evidence"
+    assert abstention.media == []
 
 
 def insufficient_decision() -> RetrievalDecision:
@@ -86,6 +133,79 @@ def test_retrieved_result_becomes_answered_chat_response():
     assert response.citations[0].citation_id == "C1"
     assert response.citations[0].document_id == "computers-remote-access-ssh"
     assert retriever.calls == 1
+
+
+def test_only_validated_final_citations_are_sent_to_media_resolver():
+    resolver = SpyMediaResolver()
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        media_resolver=resolver,
+    ).answer(
+        request_id="request-media",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+    )
+
+    assert resolver.chunk_ids == ["ssh-001"]
+    assert response.media[0].source_citation_id == "C1"
+    assert response.schema_version == "1.2.0"
+
+
+def test_media_resolver_takes_precedence_over_legacy_media_fallback():
+    resolver = SpyMediaResolver()
+    legacy_media = {
+        "ssh-001": [
+            {
+                "media_type": "image",
+                "title": "Legacy SSH image",
+                "url": "https://example.test/legacy-ssh.png",
+            }
+        ]
+    }
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        media_resolver=resolver,
+        media_by_chunk_id=legacy_media,
+    ).answer(
+        request_id="request-media-precedence",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+    )
+
+    assert resolver.chunk_ids == ["ssh-001"]
+    assert [str(item.url) for item in response.media] == [
+        "https://raw.githubusercontent.com/raspberrypi/documentation/"
+        + "a" * 40
+        + "/setup.png"
+    ]
+
+
+def test_legacy_media_fallback_preserves_available_display_metadata():
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        media_by_chunk_id={
+            "ssh-001": [
+                {
+                    "media_type": "image",
+                    "title": "SSH setup",
+                    "url": "https://example.test/ssh-setup.png",
+                    "alt_text": "SSH setup screen",
+                    "license": "CC BY-SA 4.0",
+                    "attribution": "Raspberry Pi Ltd",
+                }
+            ]
+        },
+    ).answer(
+        request_id="request-legacy-media-metadata",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+    )
+
+    media = response.media[0]
+    assert media.alt_text == "SSH setup screen"
+    assert media.license == "CC BY-SA 4.0"
+    assert media.attribution == "Raspberry Pi Ltd"
+    assert media.display_mode == "inline"
 
 
 def test_template_generator_keeps_multiline_evidence_on_a_cited_line():
@@ -246,6 +366,7 @@ def test_huggingface_generation_retries_once_with_citation_repair():
 
     assert response.status == "answered"
     assert generator.calls == 2
+    assert response.answer == "Raspberry Pi Imager에서 SSH를 활성화하세요. [C1]"
     assert "trace.generation_attempts=2" in response.warnings
     assert "trace.citation_repair=applied" in response.warnings
 
@@ -282,6 +403,33 @@ def test_huggingface_citation_repair_failure_keeps_generated_text_hidden():
     assert "trace.citation_failure=missing_citation" in response.warnings
 
 
+def test_huggingface_repair_can_end_in_abstention_without_exposing_citations():
+    class RepairThenAbstainGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def generate(self, messages, evidence):
+            self.calls += 1
+            text = "SSH 설정을 확인하세요." if self.calls == 1 else INSUFFICIENT_EVIDENCE_MARKER
+            return GenerationResult(text, "huggingface", "Qwen/test", 0.0)
+
+    generator = RepairThenAbstainGenerator()
+    response = RagQaService(
+        retriever=StaticRetriever(decision=retrieved_decision()),
+        answer_generator=generator,
+    ).answer(
+        request_id="request-repair-abstention",
+        question="SSH를 활성화하려면?",
+        retrieval_mode="hybrid",
+        trace=True,
+    )
+
+    assert response.status == "insufficient_evidence"
+    assert generator.calls == 2
+    assert response.citations == []
+    assert "trace.citation_validation=skipped_abstention" in response.warnings
+
+
 def test_explicit_model_failure_becomes_clear_error_response():
     class FailingGenerator:
         def generate(self, messages, evidence):
@@ -302,16 +450,23 @@ def test_explicit_model_failure_becomes_clear_error_response():
 
 def test_model_abstention_with_retrieved_evidence_is_not_answered_or_error():
     class AbstainingGenerator:
+        def __init__(self) -> None:
+            self.calls = 0
+
         def generate(self, messages, evidence):
+            self.calls += 1
             return GenerationResult(INSUFFICIENT_EVIDENCE_MARKER, "test", "fixture", 0)
 
+    generator = AbstainingGenerator()
     response = RagQaService(
-        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=AbstainingGenerator(),
+        retriever=StaticRetriever(decision=retrieved_decision()), answer_generator=generator,
     ).answer(request_id="model-abstention", question="SSH를 켜려면?", retrieval_mode="bm25", trace=True)
     assert response.status == "insufficient_evidence"
+    assert generator.calls == 1
     assert response.citations == []
     assert INSUFFICIENT_EVIDENCE_MARKER not in response.answer
     assert "trace.generator_invoked=true" in response.warnings
+    assert "trace.citation_validation=skipped_abstention" in response.warnings
 
 
 def test_english_answer_is_not_passed_as_korean_just_because_metadata_says_ko():

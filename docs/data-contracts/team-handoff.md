@@ -8,17 +8,21 @@
 
 | 전달 담당 → 받는 담당 | 파일 / 산출물 | 필요한 이유와 현재 상태 |
 |---|---|---|
-| 팀 공동 작성·검수, 김혜리 정리·분할 → 이양원 | `data/finetuning/train.jsonl` | 사용자 입력을 조건 JSON으로 바꾸는 QLoRA 학습용. 현재 작업 폴더에 없음. |
-| 같은 담당 → 이양원 | `data/finetuning/dev.jsonl` | 프롬프트·학습 설정 선택 및 개발 중 오류 분석용. 현재 없음. |
-| 같은 담당 → 이양원 | `data/finetuning/holdout.jsonl` | 고정된 최종 Base–LoRA 비교용. 학습·튜닝에 사용하지 않음. 현재 없음. |
+| 팀 공동 작성·검수, 김혜리 정리·분할 → 이양원 | `data/finetuning/train.jsonl` | 300건 수령·검증 및 A40 학습 완료. Git 제외이므로 다른 환경에는 별도로 전달한다. |
+| 같은 담당 → 이양원 | `data/finetuning/dev.jsonl` | 40건 수령·검증 및 학습 중 평가 완료. 설정 선택·오류 분석에 사용한다. |
+| 같은 담당 → 이양원 | `data/finetuning/holdout.jsonl` | 20건 수령·고정 Base–LoRA 비교 완료. 학습·튜닝에는 사용하지 않는다. |
 | 김혜리 수집·정리, 팀 추천 기준 검수 → 이양원·최지흠 | `data/products/catalog.json` | 조건에 맞는 실제 제품 후보와 근거 ID. 현재 5개 제품 파일이 Git에 있으므로 이를 검수·보완하며 새 ID를 임의로 만들지 않음. |
-| 김혜리 → 최지흠·이양원 | `document_pipeline/data/manifest_v3.json` | 정제·청킹된 공식 원문과 출처. 현재 정식 생성본 없음. 로컬 smoke용 임시 manifest로 대체하지 않음. |
+| 김혜리 → 최지흠·이양원 | `document_pipeline/data/manifest_v3.json` | 최신 main 파이프라인으로 A40 검증 corpus 18개 문서·270개 청크를 생성했다. 정식 인계 시 registry·manifest·색인 해시를 함께 확인한다. |
 | 김혜리 → 최지흠·통합 담당 | 사용한 `source_registry_v3.csv`, 원문 수집 대장·commit, 라이선스 검토 기록 | manifest가 어느 공식 원문과 검수 기준에서 만들어졌는지 재현·확인하기 위해 필요. registry와 검토 문서는 기존 파일을 활용. |
 | 최지흠 → 실행 환경·통합 담당 | `data/indexed/chroma_official_v3/` 전체 또는 같은 manifest로 재생성하는 절차 | 실제 Hybrid 검색에 필요. 문서 담당자가 수작업으로 만드는 파일이 아니라 RAG 색인 코드의 산출물. |
 | 팀 공동 작성·교차 검수 → 최지흠·김나은·통합 담당 | QA 평가 질문과 정답 근거 목록 | 검색·답변·인용·보류가 맞는지 확인. 아래 평가 자료 규칙 참고. 조건 JSONL과 별개. |
 
 이양원이 라벨 기준을 정하고 승인해야 한다. 데이터 담당자에게 정답의 의미까지
 혼자 결정해 달라는 요청이 아니다. README의 담당표를 기준으로 했으며, 세부 작성 분량은 팀 합의로 정한다.
+
+학습·평가 수치와 한계는 [A40 검증 기록](../validation/2026-08-31-runpod-a40.md),
+현재 코드 반영 상태는 [통합 검증 기록](../validation/2026-08-31-finetuning-integration.md)을 참고한다.
+360건의 `expected_product_ids`는 아직 비어 있어 추천 정확도 평가용 제품 라벨 인계는 남아 있다.
 
 ## 1. 학습·검증·최종평가 JSONL 3개
 

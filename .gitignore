@@ -10,6 +10,13 @@ data/*
 !data/README.md
 !data/manifests/
 !data/manifests/**
+# Corpus 카드에는 원문 본문을 넣지 않고 fixture의 용도와 사용 금지를 기록한다.
+# 팀원이 legacy corpus를 서비스 입력으로 오인하지 않도록 이 문서만 추적한다.
+!data/corpora/
+data/corpora/*
+!data/corpora/*/
+data/corpora/*/*
+!data/corpora/*/corpus_card.md
 
 # 하위 디렉터리 자체는 남긴다 — data/* 가 디렉터리를 배제하면
 # git 이 그 안으로 내려가지 않아 .gitkeep 이 통째로 무시된다.
@@ -46,6 +53,10 @@ data/train/*
 !data/products/
 !data/products/catalog.json
 !data/products/README.md
+
+# 사용자용 표시 라벨은 원문 corpus가 아닌 코드가 관리하는 UI 사전이다.
+!data/presentation/
+!data/presentation/citation_labels_ko.json
 
 # 문서·표 형식 자료 (매니페스트·규칙표·골든셋만 예외)
 *.pdf
@@ -174,6 +185,8 @@ document_pipeline/data/media_chunk_map*.json
 document_pipeline/data/raw_v*/
 document_pipeline/data/processed_v*/
 document_pipeline/data/manifest_v*.json
+document_pipeline/data/media_manifest.json
+document_pipeline/data/media_manifest_v*.json
 !document_pipeline/data/source_registry_v*.csv
 
 # ══════════════════════════════════════════════════════════════

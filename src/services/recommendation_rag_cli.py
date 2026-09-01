@@ -17,6 +17,8 @@ from src.rag_to_llm import (
     AnswerGeneratorSettingsError,
     build_answer_generator,
 )
+from src.presentation import CitationPresenter, load_citation_presenter
+from src.media import MediaManifestError, MediaResolver
 from src.recommendation import (
     CatalogManifestValidationError,
     ProductRecommender,
@@ -81,7 +83,7 @@ def _loading_indicator(message: str, *, stream: TextIO) -> Iterator[None]:
         stream.flush()
 
 
-def _print_human_response(response) -> None:
+def _print_human_response(response, presenter: CitationPresenter | None = None) -> None:
     print(f"[{response.status}]")
     print(response.answer)
     if response.products:
@@ -96,9 +98,21 @@ def _print_human_response(response) -> None:
             print(f"- {question}")
     if response.citations:
         print("\n출처:")
+        preferred_use_case = response.conditions.use_case if response.conditions else None
         for citation in response.citations:
-            print(f"[{citation.citation_id}] {citation.title} / {citation.section}")
-            print(citation.source_url)
+            if presenter is not None:
+                lines = presenter.present(citation, preferred_use_case=preferred_use_case).cli_lines()
+            else:
+                lines = (
+                    f"[{citation.citation_id}] {citation.title}",
+                    f"섹션: {citation.section.rsplit(' > ', maxsplit=1)[-1]}",
+                    "태그: 없음",
+                )
+            print("\n".join(lines))
+    if response.media:
+        print("\n관련 미디어:")
+        for item in response.media:
+            print(f"- [{item.source_citation_id}] {item.title}: {item.url}")
     if response.warnings:
         print("\n실행 정보:")
         for warning in response.warnings:
@@ -121,12 +135,21 @@ def main() -> int:
             manifest_path=rag_settings.manifest_path,
         )
         answer_settings = AnswerGeneratorSettings.from_env(rag_settings.project_root)
+        media_resolver = (
+            MediaResolver.from_file(
+                rag_settings.media_manifest_path,
+                document_manifest_path=rag_settings.manifest_path,
+            )
+            if rag_settings.media_manifest_path is not None
+            else None
+        )
     except (
         ValueError,
         RagSettingsError,
         RecommendationSettingsError,
         CatalogManifestValidationError,
         AnswerGeneratorSettingsError,
+        MediaManifestError,
     ) as exc:
         print(f"추천 실행 설정 오류: {exc}", file=sys.stderr)
         return 2
@@ -152,6 +175,7 @@ def main() -> int:
                 retriever=retriever,
                 metadata_by_chunk_id=manifest_to_rag_result_metadata(manifest, indexed_at=indexed_at),
                 answer_generator=build_answer_generator(answer_settings),
+                media_resolver=media_resolver,
                 top_k=rag_settings.top_k,
             )
             response = service.answer(request_id=request_id, question=question, trace=args.trace)
@@ -162,7 +186,11 @@ def main() -> int:
     if args.json:
         print(response.model_dump_json(indent=2))
     else:
-        _print_human_response(response)
+        try:
+            presenter = load_citation_presenter(rag_settings.manifest_path)
+        except (OSError, ValueError):
+            presenter = None
+        _print_human_response(response, presenter)
     return 1 if response.status == "error" else 0
 
 

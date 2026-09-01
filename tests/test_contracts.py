@@ -118,7 +118,7 @@ def test_answered_chat_response_requires_a_known_inline_citation() -> None:
         quote="Install Raspberry Pi OS using Raspberry Pi Imager.",
     )
     response = ChatResponse(
-        schema_version="1.1.0",
+        schema_version="1.2.0",
         request_id="req-0001",
         status="answered",
         language="ko",
@@ -136,7 +136,7 @@ def test_answered_chat_response_requires_a_known_inline_citation() -> None:
 def test_answered_chat_response_rejects_an_unknown_citation() -> None:
     with pytest.raises(ValidationError):
         ChatResponse(
-            schema_version="1.1.0",
+            schema_version="1.2.0",
             request_id="req-0002",
             status="answered",
             language="ko",

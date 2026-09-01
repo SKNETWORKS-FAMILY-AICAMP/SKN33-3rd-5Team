@@ -2,7 +2,9 @@ streamlit>=1.38,<2
 pydantic>=2.8,<3
 requests>=2.32,<3
 python-dotenv>=1.0,<2
-chromadb>=0.5,<1
+# Chroma 0.6.x는 Windows/Python 3.12 wheel이 없어 로컬 설치가 실패한다.
+# 1.x의 PersistentClient/collection API는 현재 indexer와 호환된다.
+chromadb>=1,<2
 sentence-transformers>=3.0,<4
 rank-bm25>=0.2.2,<1
 beautifulsoup4>=4.12,<5

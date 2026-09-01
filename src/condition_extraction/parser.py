@@ -40,6 +40,6 @@ def parse_condition_output(raw_output: str) -> ConditionPayload:
     if text[start + end :].strip():
         raise ConditionOutputError("JSON 뒤에 허용되지 않은 설명이 있습니다.", raw_output)
     try:
-        return ConditionPayload.model_validate(payload)
+        return ConditionPayload.model_validate(payload, strict=True)
     except Exception as exc:
         raise ConditionOutputError(f"조건 JSON Schema 검증 실패: {exc}", raw_output) from exc

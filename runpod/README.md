@@ -32,6 +32,7 @@ ANSWER_MODEL_ID=Qwen/Qwen3-4B-Instruct-2507
 ANSWER_MODEL_REVISION=main
 ANSWER_LOAD_IN_4BIT=true
 ANSWER_MAX_NEW_TOKENS=512
+INFERENCE_DEVICE=cuda
 
 # v3 공식 corpus와 팀 내부 catalog/LoRA adapter 위치
 DOCUMENT_MANIFEST=document_pipeline/data/manifest_v3.json

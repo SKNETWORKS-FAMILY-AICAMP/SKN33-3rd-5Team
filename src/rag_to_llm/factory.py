@@ -16,6 +16,7 @@ def build_answer_generator(settings: AnswerGeneratorSettings) -> AnswerGenerator
         model_revision=settings.model_revision,
         load_in_4bit=settings.load_in_4bit,
         max_new_tokens=settings.max_new_tokens,
+        device=settings.device,
     )
 
 

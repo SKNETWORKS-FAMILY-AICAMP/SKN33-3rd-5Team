@@ -17,6 +17,7 @@ class LoraConditionExtractor(HuggingFaceConditionExtractor):
         *,
         model_id: str = DEFAULT_MODEL_ID,
         load_in_4bit: bool = True,
+        device: str = "auto",
     ) -> None:
         """adapter 경로를 검증하고 Base 모델 위에 LoRA를 로드한다."""
 
@@ -27,6 +28,7 @@ class LoraConditionExtractor(HuggingFaceConditionExtractor):
             adapter_path=adapter_path,
             include_few_shots=True,
             load_in_4bit=load_in_4bit,
+            device=device,
         )
 
     def extract_without_adapter(
