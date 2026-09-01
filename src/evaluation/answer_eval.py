@@ -120,6 +120,7 @@ FACT_ERROR_TYPES = (
     "unsupported_operational_inference",
 )
 UNCLASSIFIED_FACT_ERROR = "unclassified_unsupported_claim"
+FACT_ERROR_REPORT_TYPES = FACT_ERROR_TYPES + (UNCLASSIFIED_FACT_ERROR,)
 
 
 def answer_units(record: AnswerEvalRecord) -> list[str]:
@@ -383,7 +384,10 @@ def evaluate_records(records: list[AnswerEvalRecord], reviews: list[AnswerReview
         "review_coverage": _fraction(reviewed, answered), "pending_case_ids": pending,
         "fact_error_summary": {
             "total": len(fact_errors),
-            "type_counts": dict(fact_error_counts.most_common()),
+            "type_counts": {
+                error_type: fact_error_counts[error_type]
+                for error_type in FACT_ERROR_REPORT_TYPES
+            },
             "findings": fact_errors,
             "classification_instruction": (
                 "unsupported claim의 reason을 [claim_contradicts_cited_evidence] 또는 "
