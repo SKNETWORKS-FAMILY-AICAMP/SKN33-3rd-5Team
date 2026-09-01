@@ -383,86 +383,120 @@ def submit_qa(question: str) -> None:
 
     clean_question = question.strip()
     st.session_state.qa_question = clean_question
-    st.session_state.qa_response = qa_chat_service().answer(
+    response = qa_chat_service().answer(
         request_id=str(uuid.uuid4()),
         question=clean_question,
         retrieval_mode="hybrid",
         trace=True,
     )
+    st.session_state.qa_response = response
+    history = st.session_state.setdefault("qa_history", [])
+    history.append((clean_question, response))
 
 
 def render_qa_page() -> None:
     """Render the document-grounded QA screen."""
 
-    render_hero(
-        "무엇이 궁금하신가요?",
-        None,
-        "사용법, 문제 해결, 공식 지원 절차를 문서 근거와 함께 알려드려요.",
-    )
+    history: list[tuple[str, ChatResponse]] = st.session_state.get("qa_history", [])
+    legacy_response: ChatResponse | None = st.session_state.get("qa_response")
+    if not history and legacy_response is not None and st.session_state.get("qa_question"):
+        history = [(st.session_state.qa_question, legacy_response)]
 
-    categories = st.columns(3)
-    for column, icon, label in zip(
-        categories, ["💻", "🔧", "🛡️"], ["설치·사용법", "문제 해결", "A/S·리콜"], strict=True
-    ):
-        with column:
-            st.markdown(f'<div class="qa-category"><span style="font-size:1.5rem">{icon}</span>&nbsp;&nbsp;{label}</div>', unsafe_allow_html=True)
+    with st.container(key="qa_workspace"):
+        if history:
+            title_column, action_column = st.columns([6, 1.15], vertical_alignment="center")
+            with title_column:
+                st.markdown(
+                    '<div class="qa-conversation-heading">'
+                    '<span class="qa-conversation-mark">🍓</span>'
+                    '<div><strong>PiCare 질의응답</strong>'
+                    '<small>Raspberry Pi 공식 문서를 바탕으로 답변합니다</small></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+            with action_column:
+                if st.button("＋ 새 대화", key="qa_new_conversation", use_container_width=True):
+                    for key in ("qa_response", "qa_question", "qa_history", "qa_streamed_request_id"):
+                        st.session_state.pop(key, None)
+                    st.rerun()
 
-    response: ChatResponse | None = st.session_state.get("qa_response")
-    if response is not None:
+            st.markdown('<div class="qa-thread-divider"></div>', unsafe_allow_html=True)
+            for index, (question, response) in enumerate(history):
+                with st.container(key=f"qa_user_message_{index}"):
+                    st.markdown(
+                        '<div class="qa-message-user">'
+                        f'<div class="qa-message-copy">{html.escape(question)}</div>'
+                        '<div class="qa-avatar qa-avatar-user">나</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                with st.container(key=f"qa_assistant_message_{index}"):
+                    st.markdown(
+                        '<div class="qa-message-head">'
+                        '<div class="qa-avatar qa-avatar-assistant">🍓</div>'
+                        '<div><strong>PiCare</strong><small>공식 문서 기반 답변</small></div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_answer(response, stream_key=f"qa_{index}")
+                    if response.media:
+                        with st.expander("답변과 연결된 이미지·영상", expanded=False):
+                            render_citation_media(
+                                response.media,
+                                grid_images=True,
+                                show_title=False,
+                                container_key_prefix=f"qa_media_{index}",
+                            )
+                    with st.expander(f"공식 문서 출처 {len(response.citations)}건", expanded=False):
+                        render_sources(response.citations)
+        else:
+            with st.container(key="qa_empty_state"):
+                st.markdown(
+                    '<div class="qa-empty-icon">🍓</div>'
+                    '<h1>무엇이 궁금하신가요?</h1>'
+                    '<p>사용법, 문제 해결, 공식 지원 절차를<br>'
+                    '검증된 문서 근거와 함께 알려드려요.</p>',
+                    unsafe_allow_html=True,
+                )
+
+                categories = st.columns(3, gap="medium")
+                for column, icon, label, description in zip(
+                    categories,
+                    ["💻", "🔧", "🛡️"],
+                    ["설치·사용법", "문제 해결", "A/S·리콜"],
+                    ["OS 설치와 초기 설정", "오류 원인과 점검 순서", "공식 지원 절차 확인"],
+                    strict=True,
+                ):
+                    with column:
+                        st.markdown(
+                            '<div class="qa-category">'
+                            f'<span>{icon}</span><strong>{label}</strong><small>{description}</small>'
+                            '</div>',
+                            unsafe_allow_html=True,
+                        )
+
+            if not RUNTIME_READINESS.ready:
+                st.warning(RUNTIME_READINESS.message)
+
         st.markdown(
-            f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>',
+            '<div class="qa-safety-note">🛡️ 입력한 내용은 명령으로 실행되지 않으며, '
+            '검색 근거가 없으면 답변을 보류합니다.</div>',
             unsafe_allow_html=True,
         )
-        left, right = st.columns([1.35, 1], gap="large")
-        with left:
-            with st.container(key="qa_answer_bubble_0"):
-                st.markdown('<div class="qa-answer-speaker">🤖 PiCare</div>', unsafe_allow_html=True)
-                render_answer(response, stream_key="qa")
-            if response.media:
-                with st.expander("인용 근거와 연결된 이미지·영상", expanded=False):
-                    render_citation_media(
-                        response.media,
-                        grid_images=True,
-                        show_title=False,
-                        container_key_prefix="qa_media_0",
-                    )
-        with right:
-            with st.container(key="qa_sources_panel_0"):
-                section_title(f"공식 문서 출처 {len(response.citations)}건")
-                render_sources(response.citations)
-    elif not RUNTIME_READINESS.ready:
-        st.warning(RUNTIME_READINESS.message)
 
-    st.markdown("---")
-    if st.session_state.pop("clear_qa_input", False):
-        st.session_state.qa_input = ""
-    with st.form("qa_form", clear_on_submit=False):
-        c1, c2 = st.columns([8, 1.2])
-        with c1:
-            question = st.text_input(
-                "질문",
-                placeholder="질문을 입력하세요",
-                label_visibility="collapsed",
-                key="qa_input",
-            )
-        with c2:
-            sent = st.form_submit_button("✈ 보내기", use_container_width=True)
-        st.caption("🛡 입력한 내용은 명령으로 실행되지 않습니다. 검색 근거가 없으면 답변을 보류합니다.")
-    if sent:
-        if not question.strip():
-            st.warning("질문을 입력해 주세요.")
-        else:
-            try:
-                with st.status("공식 근거를 확인하고 있습니다…", expanded=True) as progress:
-                    progress.write("질문 범위와 안전 정책을 확인하고 있습니다.")
-                    progress.write("공식 문서에서 관련 청크를 검색하고 있습니다.")
-                    submit_qa(question)
-                    progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
-                    progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
-                st.session_state.clear_qa_input = True
-                st.rerun()
-            except Exception as exc:
-                st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
+    question = st.chat_input("Raspberry Pi에 대해 무엇이든 물어보세요", key="qa_chat_input")
+    if question:
+        try:
+            with st.status("공식 근거를 확인하고 있습니다…", expanded=True) as progress:
+                progress.write("질문 범위와 안전 정책을 확인하고 있습니다.")
+                progress.write("공식 문서에서 관련 청크를 검색하고 있습니다.")
+                submit_qa(question)
+                progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
+                progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
+            st.rerun()
+        except Exception as exc:
+            st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
 
 
 def render_about_page() -> None:
