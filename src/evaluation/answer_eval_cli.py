@@ -34,6 +34,14 @@ def create_parser():
     return parser
 
 
+def _print_fact_error_table(report):
+    """완료 검수에서 집계한 사실 오류 유형과 건수를 표준 출력에 표시한다."""
+
+    print("fact_error_type\tcount")
+    for error_type, count in report["fact_error_summary"]["type_counts"].items():
+        print(f"{error_type}\t{count}")
+
+
 def _run(args):
     cases = load_jsonl(args.cases, AnswerEvalCase)
     ids = [case.id for case in cases]
@@ -140,6 +148,7 @@ def main(argv=None):
             json.dump(report, handle, ensure_ascii=False, indent=2)
             handle.write("\n")
         print(f"{report['semantic_status']}: {args.output}")
+        _print_fact_error_table(report)
         return 2 if args.require_complete and report["pending_case_ids"] else 0
     except (ValueError, OSError, RuntimeError, ImportError) as exc:
         print(f"답변 평가 오류: {exc}", file=sys.stderr)

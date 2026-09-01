@@ -242,6 +242,11 @@ def diagnose_samples(records, samples: list[dict[str, Any]]) -> dict[str, Any]:
             schema_failures.append(
                 {
                     "id": record.id,
+                    "answers": [
+                        item.model_dump(mode="json") for item in record.answers
+                    ],
+                    "label": label,
+                    "raw_output": raw_output,
                     "error": error,
                     "raw_boundary_differences": raw_differences,
                 }
@@ -272,7 +277,7 @@ def diagnose_samples(records, samples: list[dict[str, Any]]) -> dict[str, Any]:
                     (field, normalized(expected), normalized(actual), kind)
                 ].append(record.id)
 
-        if invalid or differences:
+        if differences:
             mismatches.append(
                 {
                     "id": record.id,
@@ -326,6 +331,8 @@ def diagnose_samples(records, samples: list[dict[str, Any]]) -> dict[str, Any]:
         "summary": {
             "record_count": len(records),
             "mismatched_records": len(mismatches),
+            "schema_failure_records": len(schema_failures),
+            "problematic_records": len(mismatches) + len(schema_failures),
             "field_error_counts": dict(field_error_counts.most_common()),
             "error_types": dict(error_type_counts.most_common()),
         },
