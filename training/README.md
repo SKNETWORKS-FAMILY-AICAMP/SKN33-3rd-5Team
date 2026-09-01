@@ -29,6 +29,9 @@ python -m pip install --force-reinstall -r training/runpod_requirements.txt
 로 CUDA 인식 여부를 확인한다. 로컬 macOS·Windows 가상환경에는
 `training/runpod_requirements.txt`를 설치하지 않는다.
 
+RunPod에 `HF_HUB_ENABLE_HF_TRANSFER=1`이 설정되어 있다면 이 requirements 파일이
+`hf_transfer`도 설치한다. 이는 Qwen 파일을 빠르게 내려받기 위한 선택 의존성이다.
+
 ## 학습 전에 검사
 
 전달받은 세 JSONL을 `data/finetuning/`에 둔 뒤 프로젝트 루트에서 실행한다.

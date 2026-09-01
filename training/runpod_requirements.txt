@@ -5,6 +5,8 @@
 torch==2.11.0+cu128 ; platform_system == "Linux" and platform_machine == "x86_64"
 transformers>=4.51,<5
 huggingface_hub>=0.34,<2
+# RunPod에서 HF_HUB_ENABLE_HF_TRANSFER=1을 사용할 때 필요한 고속 다운로드 선택 의존성.
+hf_transfer>=0.1,<1
 datasets>=3.6,<5
 accelerate>=1.6,<2
 peft>=0.17,<1
