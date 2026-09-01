@@ -8,9 +8,15 @@ from src.recommendation.schema import ProductCatalog
 def _catalog_with_field_evidence() -> ProductCatalog:
     return ProductCatalog.model_validate(
         {
-            "schema_version": "1.1.0",
+            "schema_version": "1.2.0",
             "catalog_version": "test-field-evidence",
             "generated_at": datetime.fromisoformat("2026-09-01T10:00:00+09:00"),
+            "recommendation_policy": {
+                "policy_id": "test-field-evidence-policy",
+                "reviewed_at": "2026-09-01",
+                "review_status": "approved",
+                "scope": "테스트용 추천 등급·용도 기준 검수",
+            },
             "sources": [
                 {
                     "document_id": document_id,

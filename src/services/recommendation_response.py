@@ -5,6 +5,7 @@ from __future__ import annotations
 from src.contracts import (
     ChatCitation,
     ChatResponse,
+    ConditionPayload,
     ProductRecommendation,
     SearchResponse,
 )
@@ -31,6 +32,68 @@ def _citation(result) -> ChatCitation:
         license=result.license,
         quote=result.content,
     )
+
+
+def condition_evidence_fields(conditions: ConditionPayload) -> tuple[str, ...]:
+    """사용자 조건이 실제로 근거를 요구하는 evidence_by_field 필드를 고른다.
+
+    후보를 고른 이유가 된 조건만 근거를 요구한다. 요구하지 않은 조건까지
+    근거를 강제하면 정상 후보도 사라지고, 반대로 제품 근거 전체를 인정하면
+    다른 제품의 사양 문서가 이 후보의 근거로 붙는다. v1.1 잔재인
+    ``recommendation_profile`` 묶음 근거는 어느 조건에도 매핑하지 않는다.
+    """
+
+    fields = ["identity"]
+    if conditions.use_case is not None:
+        fields.append("recommended_use_cases")
+    if conditions.task is not None:
+        fields.append("recommended_tasks")
+    if conditions.performance_priority is not None:
+        fields.append("performance_tier")
+    if conditions.user_level == "beginner":
+        fields.append("beginner_friendly")
+    if conditions.wireless_required is True:
+        fields.append("wireless")
+    if conditions.camera_required is True:
+        fields.append("camera_connector_count")
+    if conditions.gpio_required is True:
+        fields.append("gpio_header")
+    if conditions.monitor_available is True:
+        fields.append("display_output_count")
+    if conditions.remote_access_required is True:
+        fields.extend(("wireless", "ethernet"))
+    return tuple(dict.fromkeys(fields))
+
+
+def candidate_condition_document_ids(
+    candidate, conditions: ConditionPayload
+) -> frozenset[str]:
+    """후보의 조건 관련 필드만 뒷받침하는 공식 문서 ID를 모은다."""
+
+    evidence = candidate.evidence_by_field
+    return frozenset(
+        document_id
+        for field_name in condition_evidence_fields(conditions)
+        for document_id in getattr(evidence, field_name)
+    )
+
+
+def result_supports_candidate(
+    *,
+    document_id: str,
+    product_models,
+    candidate,
+    conditions: ConditionPayload,
+) -> bool:
+    """검색 결과 한 건이 이 후보의 조건 판단을 실제로 뒷받침하는지 본다.
+
+    문서 ID가 후보의 조건 근거에 있어도, 그 청크가 이 제품을 다루지 않으면
+    근거가 아니다. 두 조건을 모두 만족해야 후보·인용으로 인정한다.
+    """
+
+    if candidate.name not in product_models:
+        return False
+    return document_id in candidate_condition_document_ids(candidate, conditions)
 
 
 def build_recommendation_chat_response(
@@ -98,7 +161,12 @@ def build_recommendation_chat_response(
         citation_ids = [
             item.citation_id
             for item in search_response.results
-            if item.document_id in candidate.evidence_document_ids
+            if result_supports_candidate(
+                document_id=item.document_id,
+                product_models=item.product_models,
+                candidate=candidate,
+                conditions=decision.conditions,
+            )
         ]
         if not citation_ids:
             continue
@@ -156,4 +224,9 @@ def build_recommendation_chat_response(
     )
 
 
-__all__ = ["build_recommendation_chat_response"]
+__all__ = [
+    "build_recommendation_chat_response",
+    "candidate_condition_document_ids",
+    "condition_evidence_fields",
+    "result_supports_candidate",
+]
