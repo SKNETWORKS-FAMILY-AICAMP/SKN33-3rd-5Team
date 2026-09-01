@@ -87,15 +87,10 @@ assets/media/
 
 ## 문서 청크 연결
 
-v3 문서 corpus와의 연결 파일은 다음 명령으로 생성합니다.
+v3 문서 corpus와의 연결 파일은 `run_pipeline`이 자동으로 생성합니다. 일반적인 corpus 갱신에는 별도로 linker를 실행하지 않습니다.
 
 ```bash
-python -m src.media.linker \
-  --document-manifest document_pipeline/data/manifest_v3.json \
-  --image-manifest assets/media/manifest.json \
-  --video-manifest assets/media/video_manifest.json \
-  --output document_pipeline/data/media_chunk_map_v3.json \
-  --repository-root .
+python -m document_pipeline.ingestion.run_pipeline
 ```
 
 2026-08-31 검증 결과 사용 지원 미디어 18개 중 13개가 현재 corpus에 연결됐습니다. 아래 5개는 관련 세부 섹션이 수집되지 않아 표시 대상에서 제외됩니다.
@@ -115,4 +110,3 @@ python -m src.media.linker \
 - 공식 라이선스 안내: <https://www.raspberrypi.com/licensing/>
 - 저장소 라이선스: <https://github.com/raspberrypi/documentation/blob/master/LICENSE.md>
 - 상표 정책: <https://www.raspberrypi.com/trademark-rules/>
-

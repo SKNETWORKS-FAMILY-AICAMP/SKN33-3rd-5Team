@@ -24,6 +24,7 @@ class RagSettings:
     top_k: int
     dense_max_distance: float
     media_manifest_path: Path | None
+    media_chunk_map_path: Path | None
 
     @classmethod
     def from_env(cls, project_root: Path | None = None) -> "RagSettings":
@@ -74,6 +75,7 @@ class RagSettings:
             top_k=top_k,
             dense_max_distance=dense_max_distance,
             media_manifest_path=optional_path("MEDIA_MANIFEST"),
+            media_chunk_map_path=optional_path("MEDIA_CHUNK_MAP"),
         )
         if not settings.manifest_path.is_file():
             raise RagSettingsError(

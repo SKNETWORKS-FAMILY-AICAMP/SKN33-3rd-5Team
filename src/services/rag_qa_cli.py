@@ -17,7 +17,7 @@ from time import sleep
 import uuid
 from typing import Iterator, Literal, TextIO
 
-from src.rag import HybridRetriever, build_chroma_index
+from src.rag import HybridRetriever, index_from_settings
 from src.rag.sample_queries import DEMO_QUERIES
 from src.rag.settings import RagSettings, RagSettingsError
 from src.rag_to_llm import (
@@ -128,19 +128,23 @@ def _run_indexer(settings: RagSettings, *, reset: bool) -> int:
     """선택된 색인 작업을 실행하고, 저장된 collection 정보를 안내한다."""
 
     try:
-        count = build_chroma_index(
-            manifest_path=settings.manifest_path,
-            chroma_path=settings.chroma_path,
-            collection_name=settings.chroma_collection_name,
-            embedding_model_name=settings.e5_model_name,
-            reset=reset,
-        )
+        count = index_from_settings(settings, reset=reset)
     except Exception as exc:
         print(f"Chroma 색인 중 오류가 발생했습니다: {exc}", file=sys.stderr)
         return 1
     action = "전체 재색인" if reset else "색인 생성·갱신"
     print(f"{action} 완료: {count}개 공식 청크 → '{settings.chroma_collection_name}'")
     return 0
+
+
+def _load_media_by_chunk_id(settings: RagSettings):
+    """설정된 v3 미디어 맵이 있으면 해당 파일을, 없으면 기존 기본값을 사용한다."""
+    if settings.media_chunk_map_path is None:
+        return load_media_by_chunk_id(settings.project_root)
+    return load_media_by_chunk_id(
+        settings.project_root,
+        media_chunk_map_path=settings.media_chunk_map_path,
+    )
 
 
 def _print_human_response(response) -> None:
@@ -219,7 +223,7 @@ def main() -> int:
             answer_generator=answer_generator,
             media_resolver=media_resolver,
             top_k=settings.top_k,
-            media_by_chunk_id=load_media_by_chunk_id(settings.project_root),
+            media_by_chunk_id=_load_media_by_chunk_id(settings),
         )
         response = service.answer(
             request_id=request_id,

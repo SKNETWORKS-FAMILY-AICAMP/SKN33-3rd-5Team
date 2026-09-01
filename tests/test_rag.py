@@ -148,6 +148,7 @@ def test_settings_reads_dotenv_and_resolves_project_relative_paths(tmp_path, mon
                 "CHROMA_COLLECTION_NAME=test_collection",
                 "E5_MODEL_NAME=intfloat/multilingual-e5-base",
                 "TOP_K=3",
+                "MEDIA_CHUNK_MAP=document_pipeline/data/media_chunk_map_v3.json",
             ]
         ),
         encoding="utf-8",
@@ -162,6 +163,7 @@ def test_settings_reads_dotenv_and_resolves_project_relative_paths(tmp_path, mon
     assert settings.chroma_collection_name == "test_collection"
     assert settings.top_k == 3
     assert settings.dense_max_distance == 0.48
+    assert settings.media_chunk_map_path == tmp_path / "document_pipeline" / "data" / "media_chunk_map_v3.json"
 
 
 def test_settings_rejects_invalid_top_k(tmp_path, monkeypatch) -> None:

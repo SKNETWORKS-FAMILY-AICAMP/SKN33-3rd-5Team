@@ -16,6 +16,13 @@ def build_chroma_index(*args: Any, **kwargs: Any) -> int:
 
     return _build_chroma_index(*args, **kwargs)
 
+
+def index_from_settings(*args: Any, **kwargs: Any) -> int:
+    """설정 기반 색인 함수를 지연 import로 제공한다."""
+    from .indexer import index_from_settings as _index_from_settings
+
+    return _index_from_settings(*args, **kwargs)
+
 __all__ = [
     "DocumentChunk",
     "DenseRetrievalError",
@@ -30,6 +37,7 @@ __all__ = [
     "build_chroma_index",
     "evaluate_rankings",
     "hit_at_k",
+    "index_from_settings",
     "load_indexed_at",
     "mean_reciprocal_rank",
     "manifest_chunk_to_document_chunk",

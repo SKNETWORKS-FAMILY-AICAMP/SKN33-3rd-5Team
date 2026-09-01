@@ -43,7 +43,7 @@ python document_pipeline/ingestion/validate_foundation.py
 
 ## 핵심 문서 수집·파싱 실행
 
-아래 명령은 `source_registry.csv`에서 `collection_decision=include`인 AsciiDoc 문서만 수집한다. 실행 시점의 Raspberry Pi 공식 `master` commit을 한 번 조회한 뒤, 모든 원문 URL을 해당 SHA로 고정한다.
+아래 명령은 v3 registry에서 `collection_decision=include`인 AsciiDoc 문서만 수집한다. 실행 시점의 Raspberry Pi 공식 `master` commit을 한 번 조회한 뒤, 모든 원문 URL을 해당 SHA로 고정한다. 문서 manifest와 guide media manifest·청크 연결표를 만든 뒤 Chroma를 전체 재색인하므로, 실행 전 `.env`의 `DOCUMENT_MANIFEST`, `MEDIA_MANIFEST`, `MEDIA_CHUNK_MAP`은 v3 경로로 맞춰야 한다.
 
 ```bash
 python -m document_pipeline.ingestion.run_pipeline
