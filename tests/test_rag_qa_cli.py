@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from io import StringIO
-from pathlib import Path
-
 from src.rag import RagSettings
 from src.services import rag_qa_cli
 

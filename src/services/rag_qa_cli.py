@@ -8,14 +8,10 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
-from itertools import cycle
 import random
 import sys
-from threading import Event, Thread
-from time import sleep
 import uuid
-from typing import Iterator, Literal, TextIO
+from typing import Literal
 
 from src.rag import HybridRetriever, index_from_settings
 from src.rag.sample_queries import DEMO_QUERIES
@@ -27,6 +23,7 @@ from src.rag_to_llm import (
 )
 from src.media import MediaManifestError, MediaResolver
 
+from .cli_support import loading_indicator as _loading_indicator
 from .rag_qa_service import RagQaService
 
 
@@ -86,41 +83,6 @@ def _read_question(query: str | None) -> str:
     if sys.stdin.isatty():
         return select_query(prompt_for_query())
     return select_query(None)
-
-
-@contextmanager
-def _loading_indicator(message: str, *, stream: TextIO) -> Iterator[None]:
-    """질의 처리 중 멈춘 것처럼 보이지 않도록 터미널 진행 표시를 출력한다.
-
-    TTY에서는 한 줄 spinner를 갱신한다. JSON·파이프 실행처럼 비대화형 출력에서는
-    결과 JSON을 오염시키지 않도록 호출자가 전달한 표준 오류에 한 번만 기록한다.
-    """
-
-    if not stream.isatty():
-        print(f"[loading] {message}", file=stream, flush=True)
-        yield
-        return
-
-    stopped = Event()
-    rendered_width = len(message) + 3
-
-    def render() -> None:
-        for symbol in cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"):
-            if stopped.is_set():
-                break
-            stream.write(f"\r{symbol} {message}")
-            stream.flush()
-            sleep(0.1)
-
-    thread = Thread(target=render, daemon=True)
-    thread.start()
-    try:
-        yield
-    finally:
-        stopped.set()
-        thread.join(timeout=0.2)
-        stream.write(f"\r{' ' * rendered_width}\r")
-        stream.flush()
 
 
 def _run_indexer(settings: RagSettings, *, reset: bool) -> int:

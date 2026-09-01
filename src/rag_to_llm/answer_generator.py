@@ -156,7 +156,7 @@ class HuggingFaceAnswerGenerator:
         except ImportError as exc:
             raise AnswerGenerationError(
                 "Qwen QA 추론 패키지가 없습니다. "
-                "`pip install -r requirements.txt -r runpod/requirements.txt`를 실행하세요."
+                "`pip install -r requirements-gpu.txt`를 실행하세요."
             ) from exc
 
         try:
@@ -182,7 +182,7 @@ class HuggingFaceAnswerGenerator:
             except ImportError as exc:
                 raise AnswerGenerationError(
                     "CUDA 4-bit 추론에는 bitsandbytes가 필요합니다. "
-                    "requirements.txt와 runpod/requirements.txt를 설치하세요."
+                    "requirements-gpu.txt를 설치하세요."
                 ) from exc
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,

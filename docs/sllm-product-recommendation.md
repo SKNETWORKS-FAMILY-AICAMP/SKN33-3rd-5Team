@@ -91,7 +91,7 @@ Base 4B 가중치를 NF4 4-bit로 GPU에 올려 고정하고, 작은 LoRA adapte
 RunPod에서 저장소를 `/workspace` 아래에 두고 실행한다.
 
 ```bash
-pip install -r training/runpod_requirements.txt
+pip install -r requirements-training.txt
 
 # 1) 받은 파일만 검증: 쓰거나 고치지 않음
 python training/train_qlora.py \
@@ -120,7 +120,7 @@ python -m src.evaluation.extractor_eval \
 
 ## Agent를 Streamlit 서비스에 연결하는 코드
 
-학습 결과는 [모델 별도 저장 가이드](../training/README.md)에 따라 Hugging Face에
+학습 결과는 [모델 별도 저장 가이드](./guides/finetuning-training.md)에 따라 Hugging Face에
 비공개 백업할 수 있다. `train_qlora.py`의 `--hub-repo-id`로 학습 직후 백업하거나,
 `publish_adapter.py`로 이미 저장된 어댑터를 재학습 없이 업로드한다.
 

@@ -74,7 +74,7 @@ AsciiDoc 주석과 TODO 안의 영상은 제외했으며, 두 섹션에서 반�
 로컬에서 `answered`까지 확인했다. Qwen3 답변 생성과 조건 추출 LoRA는 이 로컬 환경에
 CUDA 및 학습 adapter가 없어 실제 가중치 추론을 실행하지 않았고, provider 계약·오류
 처리·무단 제품 추가 차단은 자동 테스트로 검증했다. 배포 전 RunPod에서는
-[`runpod/README.md`](../../runpod/README.md)의 LoRA·Qwen smoke test가 별도 승인 게이트다.
+[`docs/guides/runpod-pod-setup.md`](../guides/runpod-pod-setup.md)의 LoRA·Qwen smoke test가 별도 승인 게이트다.
 
 추천 시나리오 회귀 결과:
 
