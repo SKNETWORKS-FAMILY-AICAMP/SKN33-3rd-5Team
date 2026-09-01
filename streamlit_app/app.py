@@ -170,26 +170,27 @@ def render_sources(sources, *, preferred_use_case: str | None = None) -> None:
         )
 
 
-def product_card(product) -> None:
+def product_card(product) -> str:
     """Render one server-validated ProductRecommendation contract."""
 
     name = str(product.product_model)
     image = str(product.image_url) if product.image_url else ""
     limitations = " ".join(product.limitations) or "추가 유의사항 없음"
     citation_ids = ", ".join(product.citation_ids)
-    st.markdown(
-        f"""
+    return f"""
         <div class="product-card">
-          <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
-          {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" style="width:100%;height:155px;object-fit:contain;" />' if image else ''}
-          <div class="product-name">{html.escape(name)}</div>
-          <div class="product-reason">{html.escape(product.recommendation)}</div>
-          <div style="color:#677180;font-size:.72rem;margin-top:.55rem;line-height:1.55;">{html.escape(limitations)}</div>
-          <a href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:.65rem;text-align:center;border:1px solid #ed003f;border-radius:7px;padding:.42rem;color:#ed003f;text-decoration:none;font-size:.8rem;font-weight:700;">자세히 보기 ↗</a>
+          <div class="product-card-header"><div class="product-name">{html.escape(name)}</div></div>
+          <div class="product-card-body">
+            {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" class="product-image" />' if image else ''}
+            <div class="product-reason">{html.escape(product.recommendation)}</div>
+            <div class="product-limitations">{html.escape(limitations)}</div>
+            <div class="product-card-footer">
+              <a class="product-link" href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer">자세히 보기 <span>→</span></a>
+              <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
+            </div>
+          </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
 
 
 def render_recommendation_page() -> None:
@@ -258,25 +259,22 @@ def render_recommendation_page() -> None:
             st.warning(RUNTIME_READINESS.message)
         return
 
+    section_title(f"추천 제품 {len(response.products)}개", response.status)
+    if response.products:
+        cards = "".join(product_card(product).strip() for product in response.products)
+        st.markdown(f'<div class="product-grid">{cards}</div>', unsafe_allow_html=True)
+
+    with st.container(key="recommendation_evidence"):
+        with st.expander("추천 근거", expanded=False):
+            render_sources(
+                response.citations,
+                preferred_use_case=response.conditions.use_case if response.conditions else None,
+            )
+    render_citation_media(response.media, grid_images=True)
     render_answer(response, stream_key="recommendation")
     if response.conditions is not None:
         with st.expander("🧩 검증된 조건 JSON", expanded=False):
             st.json(response.conditions.model_dump(mode="json"))
-
-    section_title(f"추천 제품 {len(response.products)}개", response.status)
-    if response.products:
-        columns = st.columns(len(response.products), gap="medium")
-        for column, product in zip(columns, response.products, strict=True):
-            with column:
-                product_card(product)
-
-    section_title("추천 근거")
-    render_sources(
-        response.citations,
-        preferred_use_case=response.conditions.use_case if response.conditions else None,
-    )
-    render_citation_media(response.media)
-    st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
 def answer_label_class(status: str) -> str:
@@ -292,21 +290,45 @@ def answer_label_class(status: str) -> str:
     return "blocked" if status in blocked else ""
 
 
-def render_citation_media(media_items: list[MediaItem]) -> None:
+def render_citation_media(media_items: list[MediaItem], *, grid_images: bool = False) -> None:
     """Render only guide media already resolved from final citations by the server."""
 
     if not media_items:
         return
-    section_title("인용 근거와 연결된 이미지·영상")
-    for item in media_items:
-        if item.media_type == "image":
-            st.image(str(item.url), caption=item.alt_text or item.title, use_container_width=True)
+    with st.container(key="citation_media_card"):
+        section_title("인용 근거와 연결된 이미지·영상")
+
+        images = [item for item in media_items if item.media_type == "image"]
+        videos = [item for item in media_items if item.media_type != "image"]
+
+        def render_media_item(item: MediaItem) -> None:
+            if item.media_type == "image":
+                st.image(str(item.url), caption=item.alt_text or item.title, use_container_width=True)
+            else:
+                st.video(str(item.url))
+            st.caption(
+                f"{item.title} · {item.source_citation_id} · "
+                f"{item.attribution} · {item.license}"
+            )
+
+        if grid_images and len(images) == 1:
+            with st.container(key="citation_media_single"):
+                _, center, _ = st.columns([1, 2, 1])
+                with center:
+                    render_media_item(images[0])
+        elif grid_images and len(images) > 1:
+            with st.container(key="citation_media_grid"):
+                for start in range(0, len(images), 2):
+                    columns = st.columns(2, gap="medium")
+                    for column, item in zip(columns, images[start : start + 2], strict=False):
+                        with column:
+                            render_media_item(item)
         else:
-            st.video(str(item.url))
-        st.caption(
-            f"{item.title} · {item.source_citation_id} · "
-            f"{item.attribution} · {item.license}"
-        )
+            for item in images:
+                render_media_item(item)
+
+        for item in videos:
+            render_media_item(item)
 
 
 def render_answer(response: ChatResponse, *, stream_key: str) -> None:
