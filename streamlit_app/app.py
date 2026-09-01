@@ -66,7 +66,18 @@ def current_page() -> str:
     """Return a supported top-level page from the URL query string."""
 
     page = st.query_params.get("page", "about")
-    return page if page in {"about", "recommend", "qa"} else "about"
+    page = page if page in {"about", "recommend", "qa"} else "about"
+    previous_page = st.session_state.get("active_page")
+    if previous_page is not None and previous_page != page:
+        for key in (
+            "recommendation_response",
+            "qa_response",
+            "qa_question",
+            "qa_history",
+        ):
+            st.session_state.pop(key, None)
+    st.session_state.active_page = page
+    return page
 
 
 def render_header(page: str) -> str:
@@ -170,26 +181,27 @@ def render_sources(sources, *, preferred_use_case: str | None = None) -> None:
         )
 
 
-def product_card(product) -> None:
+def product_card(product) -> str:
     """Render one server-validated ProductRecommendation contract."""
 
     name = str(product.product_model)
     image = str(product.image_url) if product.image_url else ""
     limitations = " ".join(product.limitations) or "추가 유의사항 없음"
     citation_ids = ", ".join(product.citation_ids)
-    st.markdown(
-        f"""
+    return f"""
         <div class="product-card">
-          <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
-          {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" style="width:100%;height:155px;object-fit:contain;" />' if image else ''}
-          <div class="product-name">{html.escape(name)}</div>
-          <div class="product-reason">{html.escape(product.recommendation)}</div>
-          <div style="color:#677180;font-size:.72rem;margin-top:.55rem;line-height:1.55;">{html.escape(limitations)}</div>
-          <a href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer" style="display:block;margin-top:.65rem;text-align:center;border:1px solid #ed003f;border-radius:7px;padding:.42rem;color:#ed003f;text-decoration:none;font-size:.8rem;font-weight:700;">자세히 보기 ↗</a>
+          <div class="product-card-header"><div class="product-name">{html.escape(name)}</div></div>
+          <div class="product-card-body">
+            {f'<img src="{html.escape(image, quote=True)}" alt="{html.escape(name)}" class="product-image" />' if image else ''}
+            <div class="product-reason">{html.escape(product.recommendation)}</div>
+            <div class="product-limitations">{html.escape(limitations)}</div>
+            <div class="product-card-footer">
+              <a class="product-link" href="{html.escape(str(product.product_url), quote=True)}" target="_blank" rel="noopener noreferrer">자세히 보기 <span>→</span></a>
+              <span class="product-badge tone-red">공식 근거 {html.escape(citation_ids)}</span>
+            </div>
+          </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
 
 
 def render_recommendation_page() -> None:
@@ -258,25 +270,22 @@ def render_recommendation_page() -> None:
             st.warning(RUNTIME_READINESS.message)
         return
 
+    section_title(f"추천 제품 {len(response.products)}개", response.status)
+    if response.products:
+        cards = "".join(product_card(product).strip() for product in response.products)
+        st.markdown(f'<div class="product-grid">{cards}</div>', unsafe_allow_html=True)
+
+    with st.container(key="recommendation_evidence"):
+        with st.expander("추천 근거", expanded=False):
+            render_sources(
+                response.citations,
+                preferred_use_case=response.conditions.use_case if response.conditions else None,
+            )
+    render_citation_media(response.media, grid_images=True)
     render_answer(response, stream_key="recommendation")
     if response.conditions is not None:
         with st.expander("🧩 검증된 조건 JSON", expanded=False):
             st.json(response.conditions.model_dump(mode="json"))
-
-    section_title(f"추천 제품 {len(response.products)}개", response.status)
-    if response.products:
-        columns = st.columns(len(response.products), gap="medium")
-        for column, product in zip(columns, response.products, strict=True):
-            with column:
-                product_card(product)
-
-    section_title("추천 근거")
-    render_sources(
-        response.citations,
-        preferred_use_case=response.conditions.use_case if response.conditions else None,
-    )
-    render_citation_media(response.media)
-    st.caption("제품·출처 카드는 모델이 아니라 검증된 catalog와 manifest metadata에서 조립됩니다.")
 
 
 def answer_label_class(status: str) -> str:
@@ -292,21 +301,52 @@ def answer_label_class(status: str) -> str:
     return "blocked" if status in blocked else ""
 
 
-def render_citation_media(media_items: list[MediaItem]) -> None:
+def render_citation_media(
+    media_items: list[MediaItem],
+    *,
+    grid_images: bool = False,
+    show_title: bool = True,
+    container_key_prefix: str = "citation_media",
+) -> None:
     """Render only guide media already resolved from final citations by the server."""
 
     if not media_items:
         return
-    section_title("인용 근거와 연결된 이미지·영상")
-    for item in media_items:
-        if item.media_type == "image":
-            st.image(str(item.url), caption=item.alt_text or item.title, use_container_width=True)
+    with st.container(key=f"{container_key_prefix}_card"):
+        if show_title:
+            section_title("인용 근거와 연결된 이미지·영상")
+
+        images = [item for item in media_items if item.media_type == "image"]
+        videos = [item for item in media_items if item.media_type != "image"]
+
+        def render_media_item(item: MediaItem) -> None:
+            if item.media_type == "image":
+                st.image(str(item.url), caption=item.alt_text or item.title, use_container_width=True)
+            else:
+                st.video(str(item.url))
+            st.caption(
+                f"{item.title} · {item.source_citation_id} · "
+                f"{item.attribution} · {item.license}"
+            )
+
+        if grid_images and len(images) == 1:
+            with st.container(key=f"{container_key_prefix}_single"):
+                _, center, _ = st.columns([1, 2, 1])
+                with center:
+                    render_media_item(images[0])
+        elif grid_images and len(images) > 1:
+            with st.container(key=f"{container_key_prefix}_grid"):
+                for start in range(0, len(images), 2):
+                    columns = st.columns(2, gap="medium")
+                    for column, item in zip(columns, images[start : start + 2], strict=False):
+                        with column:
+                            render_media_item(item)
         else:
-            st.video(str(item.url))
-        st.caption(
-            f"{item.title} · {item.source_citation_id} · "
-            f"{item.attribution} · {item.license}"
-        )
+            for item in images:
+                render_media_item(item)
+
+        for item in videos:
+            render_media_item(item)
 
 
 def render_answer(response: ChatResponse, *, stream_key: str) -> None:
@@ -339,12 +379,13 @@ def render_answer(response: ChatResponse, *, stream_key: str) -> None:
 
 
 def submit_qa(question: str) -> None:
-    """Run the real document-grounded chain and store its contract response."""
+    """Run the real document-grounded chain and store the latest UI response."""
 
-    st.session_state.qa_question = question.strip()
+    clean_question = question.strip()
+    st.session_state.qa_question = clean_question
     st.session_state.qa_response = qa_chat_service().answer(
         request_id=str(uuid.uuid4()),
-        question=question.strip(),
+        question=clean_question,
         retrieval_mode="hybrid",
         trace=True,
     )
@@ -368,22 +409,42 @@ def render_qa_page() -> None:
 
     response: ChatResponse | None = st.session_state.get("qa_response")
     if response is not None:
-        st.markdown(f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>',
+            unsafe_allow_html=True,
+        )
         left, right = st.columns([1.35, 1], gap="large")
         with left:
-            render_answer(response, stream_key="qa")
+            with st.container(key="qa_answer_bubble_0"):
+                st.markdown('<div class="qa-answer-speaker">🤖 PiCare</div>', unsafe_allow_html=True)
+                render_answer(response, stream_key="qa")
+            if response.media:
+                with st.expander("인용 근거와 연결된 이미지·영상", expanded=False):
+                    render_citation_media(
+                        response.media,
+                        grid_images=True,
+                        show_title=False,
+                        container_key_prefix="qa_media_0",
+                    )
         with right:
-            section_title(f"공식 문서 출처 {len(response.citations)}건")
-            render_sources(response.citations)
-            render_citation_media(response.media)
+            with st.container(key="qa_sources_panel_0"):
+                section_title(f"공식 문서 출처 {len(response.citations)}건")
+                render_sources(response.citations)
     elif not RUNTIME_READINESS.ready:
         st.warning(RUNTIME_READINESS.message)
 
     st.markdown("---")
+    if st.session_state.pop("clear_qa_input", False):
+        st.session_state.qa_input = ""
     with st.form("qa_form", clear_on_submit=False):
         c1, c2 = st.columns([8, 1.2])
         with c1:
-            question = st.text_input("질문", placeholder="질문을 입력하세요", label_visibility="collapsed")
+            question = st.text_input(
+                "질문",
+                placeholder="질문을 입력하세요",
+                label_visibility="collapsed",
+                key="qa_input",
+            )
         with c2:
             sent = st.form_submit_button("✈ 보내기", use_container_width=True)
         st.caption("🛡 입력한 내용은 명령으로 실행되지 않습니다. 검색 근거가 없으면 답변을 보류합니다.")
@@ -398,6 +459,7 @@ def render_qa_page() -> None:
                     submit_qa(question)
                     progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
                     progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
+                st.session_state.clear_qa_input = True
                 st.rerun()
             except Exception as exc:
                 st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")
