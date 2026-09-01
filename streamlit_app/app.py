@@ -64,8 +64,8 @@ def recommendation_service():
 def current_page() -> str:
     """Return a supported top-level page from the URL query string."""
 
-    page = st.query_params.get("page", "recommend")
-    return page if page in {"about", "recommend", "qa"} else "recommend"
+    page = st.query_params.get("page", "about")
+    return page if page in {"about", "recommend", "qa"} else "about"
 
 
 def render_header(page: str) -> str:
@@ -76,23 +76,25 @@ def render_header(page: str) -> str:
         "recommend": "제품 추천",
         "qa": "질의응답",
     }
-    label_pages = {label: value for value, label in page_labels.items()}
-    brand, navigation, badge = st.columns([1, 1.6, 1], vertical_alignment="center")
-    with brand:
-        st.markdown('<div class="picare-brand"><span>🍓</span>PiCare</div>', unsafe_allow_html=True)
-    with navigation:
-        selection = st.radio(
-            "페이지",
-            list(label_pages),
-            index=list(label_pages).index(page_labels[page]),
-            horizontal=True,
-            label_visibility="collapsed",
-            key="top_navigation",
-        )
-    with badge:
-        st.markdown('<div class="picare-doc-badge">📖 공식 문서 기반</div>', unsafe_allow_html=True)
+    with st.container(key="topbar"):
+        brand, navigation_area, _ = st.columns([1, 1.5, 1], vertical_alignment="center")
+        with brand:
+            st.markdown('<div class="picare-brand">🍓PiCare</div>', unsafe_allow_html=True)
+        with navigation_area:
+            with st.container(key="top_navigation"):
+                navigation = st.columns(3, gap="small", vertical_alignment="center")
+                for column, (target, label) in zip(navigation, page_labels.items(), strict=True):
+                    with column:
+                        if st.button(
+                            label,
+                            key=f"top_navigation_{target}",
+                            type="primary" if target == page else "secondary",
+                            use_container_width=False,
+                        ):
+                            st.query_params["page"] = target
+                            st.rerun()
     st.markdown('<div class="picare-header-line"></div>', unsafe_allow_html=True)
-    return label_pages[selection]
+    return page
 
 
 def render_hero(title: str, highlighted: str | None, subtitle: str) -> None:
@@ -106,7 +108,6 @@ def render_hero(title: str, highlighted: str | None, subtitle: str) -> None:
     st.markdown(
         f"""
         <div class="hero">
-          <div class="service-ribbon">✨ 실제 서비스 연결 · ChatResponse 1.2.0</div>
           <h1>{safe_title}</h1>
           <p>{html.escape(subtitle)}</p>
         </div>
@@ -389,26 +390,69 @@ def render_qa_page() -> None:
 
 
 def render_about_page() -> None:
-    """Render a compact project introduction for the shared navigation."""
+    """Render a readable project introduction and clear paths into the service."""
 
     render_hero(
-        "공식 근거로 더 안심하고 시작하세요",
-        "공식 근거",
-        "PiCare는 Raspberry Pi 입문자의 제품 선택과 설치·문제 해결을 돕는 비공식 교육용 프로젝트입니다.",
+        "Raspberry Pi 시작을 위한 실용 가이드",
+        "실용 가이드",
+        "제품 선택부터 설치와 문제 해결까지, Raspberry Pi 공식 문서를 바탕으로 필요한 정보를 안내합니다.",
     )
-    cards = st.columns(3)
-    items = [
-        ("🧩", "조건을 구조화", "사용 목적과 환경을 고정 JSON으로 정리합니다."),
-        ("🔎", "공식 문서만 검색", "검증된 Raspberry Pi 문서에서만 근거를 찾습니다."),
-        ("🛡️", "근거가 없으면 보류", "확인할 수 없는 내용은 추측하지 않습니다."),
-    ]
-    for column, (icon, title, text) in zip(cards, items, strict=True):
-        with column:
-            st.markdown(f'<div class="answer-card" style="text-align:center;min-height:180px"><div style="font-size:2.2rem">{icon}</div><h3>{title}</h3><p>{text}</p></div>', unsafe_allow_html=True)
-    if RUNTIME_READINESS.ready:
-        st.success(RUNTIME_READINESS.message)
-    else:
-        st.warning(RUNTIME_READINESS.message)
+    cards = (
+        (
+            "🧩",
+            "맞춤형 제품 추천",
+            "사용 목적과 환경에 맞는 제품·준비 항목 안내",
+            "제품 추천 시작하기",
+            "?page=recommend",
+        ),
+        (
+            "🔎",
+            "사용법·문제 해결 Q&A",
+            "공식 문서 기반 사용법·문제 해결 안내",
+            "질문 바로 하기",
+            "?page=qa",
+        ),
+    )
+    card_markup = "".join(
+        f'<div class="about-card" style="width:335px;height:180px">'
+        f'<div class="about-card-title"><span class="about-card-icon">{icon}</span>'
+        f'<span>{title}</span></div>'
+        f'<div class="about-card-body"><p>{text}</p>'
+        f'<a class="about-card-action" href="{action_url}">{action_label}<span>→</span></a>'
+        f'</div></div>'
+        for icon, title, text, action_label, action_url in cards
+    )
+    st.markdown(
+        f'<div class="about-card-grid" style="grid-template-columns:335px 335px">{card_markup}</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="about-abstention">
+          <div class="about-abstention-icon">🛡️</div>
+          <div>
+            <strong>확인할 수 없으면 보류</strong>
+            <p>근거가 부족한 내용은 추측하지 않고 추가 확인 정보 안내</p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not RUNTIME_READINESS.ready:
+        st.info("화면은 열려 있지만, 답변을 만들려면 검색 색인과 모델 실행 환경이 준비되어야 합니다.")
+        with st.expander("실행 환경 준비 상태 보기", expanded=False):
+            st.code(RUNTIME_READINESS.message, language=None)
+
+    st.markdown(
+        """
+        <div class="about-source">
+          대표 출처: <a href="https://www.raspberrypi.com/documentation/" target="_blank" rel="noopener noreferrer">Raspberry Pi Documentation ↗</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 page = render_header(current_page())
