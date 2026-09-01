@@ -42,7 +42,7 @@ def check_runtime_readiness(project_root: Path) -> RuntimeReadiness:
         return RuntimeReadiness(
             False,
             "Chroma 색인 준비 필요: "
-            f"{index_metadata} (먼저 `python -m src.services.rag_qa_cli --action index` 실행)",
+            f"{index_metadata} (먼저 `python -m document_pipeline.ingestion.run_pipeline` 실행)",
         )
     return RuntimeReadiness(True, "실제 Hybrid RAG 런타임 준비 완료")
 
@@ -68,6 +68,16 @@ def _rag_dependencies(project_root: Path):
     return rag_settings, retriever, build_answer_generator(answer_settings), media_resolver
 
 
+def _load_media_by_chunk_id(rag_settings: RagSettings):
+    """CLI와 동일한 규칙으로 설정된 미디어-청크 맵을 읽는다."""
+    if rag_settings.media_chunk_map_path is None:
+        return load_media_by_chunk_id(rag_settings.project_root)
+    return load_media_by_chunk_id(
+        rag_settings.project_root,
+        media_chunk_map_path=rag_settings.media_chunk_map_path,
+    )
+
+
 def build_qa_service(project_root: Path) -> RagQaService:
     """CLI와 동일한 설정으로 Streamlit QA 서비스를 조립한다."""
 
@@ -77,7 +87,7 @@ def build_qa_service(project_root: Path) -> RagQaService:
         answer_generator=answer_generator,
         media_resolver=media_resolver,
         top_k=rag_settings.top_k,
-        media_by_chunk_id=load_media_by_chunk_id(project_root),
+        media_by_chunk_id=_load_media_by_chunk_id(rag_settings),
     )
 
 
