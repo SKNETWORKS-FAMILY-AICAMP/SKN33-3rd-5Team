@@ -73,6 +73,19 @@ class GroundedPromptTests(unittest.TestCase):
         self.assertIn("인용은 백틱 밖", GROUNDED_ANSWER_SYSTEM_PROMPT)
         self.assertIn(INSUFFICIENT_EVIDENCE_MARKER, GROUNDED_ANSWER_SYSTEM_PROMPT)
 
+    def test_prompt_forbids_inferences_beyond_the_cited_source(self):
+        from src.lang import (
+            GROUNDED_ANSWER_SYSTEM_PROMPT,
+            RECOMMENDATION_ANSWER_SYSTEM_PROMPT,
+        )
+
+        self.assertIn("원문이 말하지 않은 범위로 추론하지 마세요", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("SD 카드 활동", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("부팅 LED의 색 변화", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("통신 거리", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("원인·결과·비교·적합성 판단", GROUNDED_ANSWER_SYSTEM_PROMPT)
+        self.assertIn("통신 거리", RECOMMENDATION_ANSWER_SYSTEM_PROMPT)
+
     def test_abstention_marker_mixed_with_a_claim_is_rejected(self):
         from src.lang import INSUFFICIENT_EVIDENCE_MARKER, is_evidence_abstention
         answer = f"{INSUFFICIENT_EVIDENCE_MARKER} 설치하면 됩니다. [C1]"
