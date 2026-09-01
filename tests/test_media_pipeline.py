@@ -182,6 +182,102 @@ def test_resolver_caps_images_and_videos_independently(tmp_path, monkeypatch) ->
     assert [item.media_type for item in resolved].count("video") == 1
 
 
+def test_unified_resolver_merges_reviewed_map_media_and_caps_official_videos(tmp_path, monkeypatch) -> None:
+    """Curated media-map videos must not disappear when corpus media is enabled."""
+
+    registry, raw_root, document_path, corpus_media_path = write_fixture(tmp_path, monkeypatch)
+    media_builder.build_media_manifest(
+        document_manifest_path=document_path,
+        raw_root=raw_root,
+        registry_path=registry,
+        output_path=corpus_media_path,
+    )
+    image_path = tmp_path / "images.json"
+    image_payload = {
+        "license": "CC BY-SA 4.0",
+        "attribution": "Raspberry Pi Ltd",
+        "items": [
+            {
+                "media_id": "rpi-guide-0001",
+                "media_type": "image",
+                "category": "guide",
+                "title": "Imager SSH 설정",
+                "alt_text_ko": "SSH 설정 화면",
+                "source_asset_url": "https://raw.githubusercontent.com/raspberrypi/documentation/test/ssh.png",
+            }
+        ],
+    }
+    image_path.write_text(json.dumps(image_payload), encoding="utf-8")
+    video_path = tmp_path / "videos.json"
+    video_payload = {
+        "source_channel_name": "Raspberry Pi",
+        "source_channel_url": "https://www.youtube.com/@raspberrypi",
+        "items": [
+            {
+                "media_id": "rpi-video-0001",
+                "media_type": "video",
+                "category": "guide",
+                "title": "Raspberry Pi Imager 사용 방법",
+                "embed_url": "https://www.youtube.com/embed/O4IQE2E8oOw",
+                "official_verified": True,
+                "embed_allowed": True,
+            },
+            {
+                "media_id": "rpi-video-0002",
+                "media_type": "video",
+                "category": "guide",
+                "title": "Raspberry Pi 초기 설정",
+                "embed_url": "https://www.youtube.com/embed/CQtliTJ41ZE",
+                "official_verified": True,
+                "embed_allowed": True,
+            },
+        ],
+    }
+    video_path.write_text(json.dumps(video_payload), encoding="utf-8")
+    map_path = tmp_path / "media_chunk_map_v3.json"
+    map_path.write_text(
+        json.dumps(
+            {
+                "document_manifest_checksum": checksum(document_path.read_bytes()),
+                "image_manifest_checksum": checksum(image_path.read_bytes()),
+                "video_manifest_checksum": checksum(video_path.read_bytes()),
+                "links": [
+                    {"media_id": "rpi-guide-0001", "media_type": "image", "chunk_ids": ["doc-setup-000"]},
+                    {"media_id": "rpi-video-0001", "media_type": "video", "chunk_ids": ["doc-setup-000"]},
+                    {"media_id": "rpi-video-0002", "media_type": "video", "chunk_ids": ["doc-setup-000"]},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolver = MediaResolver.from_paths(
+        document_manifest_path=document_path,
+        media_manifest_path=corpus_media_path,
+        media_chunk_map_path=map_path,
+        image_manifest_path=image_path,
+        video_manifest_path=video_path,
+        max_images=1,
+    )
+    assert resolver is not None
+
+    resolved = resolver.resolve([citation()])
+
+    assert [item.media_id for item in resolved] == ["rpi-guide-0001", "rpi-video-0001"]
+    assert [item.source_citation_id for item in resolved] == ["C1", "C1"]
+    assert str(resolved[1].url) == "https://www.youtube.com/embed/O4IQE2E8oOw"
+    assert resolved[1].license == "YouTube Terms of Service"
+    assert resolved[1].attribution == "Raspberry Pi official channel: https://www.youtube.com/@raspberrypi"
+    assert resolver.resolve([citation(chunk_id="unrelated-001")]) == []
+    assert MediaResolver.from_paths(
+        document_manifest_path=document_path,
+        media_manifest_path=None,
+        media_chunk_map_path=tmp_path / "missing-map.json",
+        image_manifest_path=tmp_path / "missing-images.json",
+        video_manifest_path=tmp_path / "missing-videos.json",
+    ) is None
+
+
 def test_resolver_rejects_stale_document_manifest(tmp_path, monkeypatch) -> None:
     registry, raw_root, manifest, output = write_fixture(tmp_path, monkeypatch)
     media_builder.build_media_manifest(

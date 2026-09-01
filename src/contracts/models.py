@@ -215,7 +215,13 @@ class ProductRecommendation(StrictContract):
 class MediaItem(StrictContract):
     """Official image or video linked to a verified citation."""
 
-    media_id: Annotated[str, Field(pattern=r"^media-[0-9a-f]{20}$")]
+    # ``media-<sha>`` is used by the generated document-media manifest, while
+    # reviewed asset registries use stable IDs such as ``rpi-video-0001``.
+    # Both are server-owned identifiers; they never come from LLM output.
+    media_id: Annotated[
+        str,
+        Field(pattern=r"^(?:media-[0-9a-f]{20}|rpi-(?:product|guide|video)-[0-9]{4})$"),
+    ]
     media_type: Literal["image", "video"]
     title: NonEmptyText
     url: HttpUrl

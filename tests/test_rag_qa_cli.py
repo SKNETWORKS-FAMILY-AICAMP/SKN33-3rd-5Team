@@ -41,7 +41,7 @@ def test_loading_indicator_prints_a_plain_progress_message_when_not_a_tty() -> N
     assert stream.getvalue() == "[loading] 공식 문서를 검색하는 중입니다...\n"
 
 
-def test_cli_uses_configured_v3_media_chunk_map(monkeypatch, tmp_path) -> None:
+def test_cli_builds_one_resolver_with_configured_v3_media_chunk_map(monkeypatch, tmp_path) -> None:
     settings = RagSettings(
         project_root=tmp_path,
         manifest_path=tmp_path / "manifest.json",
@@ -55,15 +55,17 @@ def test_cli_uses_configured_v3_media_chunk_map(monkeypatch, tmp_path) -> None:
     )
     calls: dict[str, object] = {}
 
-    def fake_load(root, **kwargs):
-        calls["root"] = root
+    def fake_from_paths(**kwargs):
         calls.update(kwargs)
-        return {}
+        return "resolver"
 
-    monkeypatch.setattr(rag_qa_cli, "load_media_by_chunk_id", fake_load)
+    monkeypatch.setattr(rag_qa_cli.MediaResolver, "from_paths", fake_from_paths)
 
-    assert rag_qa_cli._load_media_by_chunk_id(settings) == {}
+    assert rag_qa_cli._build_media_resolver(settings) == "resolver"
     assert calls == {
-        "root": tmp_path,
-        "media_chunk_map_path": Path(tmp_path / "document_pipeline/data/media_chunk_map_v3.json"),
+        "media_manifest_path": None,
+        "document_manifest_path": tmp_path / "manifest.json",
+        "media_chunk_map_path": tmp_path / "document_pipeline/data/media_chunk_map_v3.json",
+        "image_manifest_path": tmp_path / "assets/media/manifest.json",
+        "video_manifest_path": tmp_path / "assets/media/video_manifest.json",
     }

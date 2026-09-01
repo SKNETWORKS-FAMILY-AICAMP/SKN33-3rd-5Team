@@ -15,7 +15,6 @@ from src.recommendation import (
     load_and_validate_catalog,
 )
 from src.services.integration_adapters import manifest_to_rag_result_metadata
-from src.services.media_lookup import load_media_by_chunk_id
 from src.services.rag_qa_service import RagQaService
 from src.services.recommendation_agent import RecommendationAgent
 from src.services.recommendation_rag_service import RecommendationRagService
@@ -57,24 +56,19 @@ def _rag_dependencies(project_root: Path):
         embedding_model_name=rag_settings.e5_model_name,
         dense_max_distance=rag_settings.dense_max_distance,
     )
-    media_resolver = (
-        MediaResolver.from_file(
-            rag_settings.media_manifest_path,
-            document_manifest_path=rag_settings.manifest_path,
-        )
-        if rag_settings.media_manifest_path is not None
-        else None
-    )
+    media_resolver = _build_media_resolver(rag_settings)
     return rag_settings, retriever, build_answer_generator(answer_settings), media_resolver
 
 
-def _load_media_by_chunk_id(rag_settings: RagSettings):
-    """CLI와 동일한 규칙으로 설정된 미디어-청크 맵을 읽는다."""
-    if rag_settings.media_chunk_map_path is None:
-        return load_media_by_chunk_id(rag_settings.project_root)
-    return load_media_by_chunk_id(
-        rag_settings.project_root,
+def _build_media_resolver(rag_settings: RagSettings) -> MediaResolver | None:
+    """Use one resolver for corpus media and reviewed media-map entries."""
+
+    return MediaResolver.from_paths(
+        media_manifest_path=rag_settings.media_manifest_path,
+        document_manifest_path=rag_settings.manifest_path,
         media_chunk_map_path=rag_settings.media_chunk_map_path,
+        image_manifest_path=rag_settings.project_root / "assets/media/manifest.json",
+        video_manifest_path=rag_settings.project_root / "assets/media/video_manifest.json",
     )
 
 
@@ -87,7 +81,6 @@ def build_qa_service(project_root: Path) -> RagQaService:
         answer_generator=answer_generator,
         media_resolver=media_resolver,
         top_k=rag_settings.top_k,
-        media_by_chunk_id=_load_media_by_chunk_id(rag_settings),
     )
 
 
