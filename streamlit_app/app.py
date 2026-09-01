@@ -22,6 +22,7 @@ from streamlit_app.runtime import (
     build_recommendation_service,
     check_runtime_readiness,
 )
+from streamlit_app.streaming import iter_text_chunks
 from streamlit_app.styles import APP_CSS
 
 
@@ -237,11 +238,15 @@ def render_recommendation_page() -> None:
             monitor_absent=monitor_absent,
         )
         try:
-            with st.spinner("조건 분석 → catalog 필터 → Hybrid RAG → 답변 검증 중…"):
+            with st.status("추천을 준비하고 있습니다…", expanded=True) as progress:
+                progress.write("입력한 목적과 필수 조건을 확인하고 있습니다.")
+                progress.write("조건 JSON → 제품 catalog → 공식 문서 근거 순서로 검증합니다.")
                 st.session_state.recommendation_response = recommendation_service().answer_form(
                     form=form,
                     trace=True,
                 )
+                progress.write("추천 제품과 인용 근거의 일치를 확인했습니다.")
+                progress.update(label="추천 답변 준비 완료", state="complete", expanded=False)
             st.session_state.purpose = purpose
         except Exception as exc:
             st.error(f"제품 추천 런타임을 준비하지 못했습니다: {exc}")
@@ -252,7 +257,7 @@ def render_recommendation_page() -> None:
             st.warning(RUNTIME_READINESS.message)
         return
 
-    render_answer(response)
+    render_answer(response, stream_key="recommendation")
     if response.conditions is not None:
         with st.expander("🧩 검증된 조건 JSON", expanded=False):
             st.json(response.conditions.model_dump(mode="json"))
@@ -303,8 +308,8 @@ def render_citation_media(media_items: list[MediaItem]) -> None:
         )
 
 
-def render_answer(response: ChatResponse) -> None:
-    """Render the canonical answer without reinterpreting service output."""
+def render_answer(response: ChatResponse, *, stream_key: str) -> None:
+    """Render a validated answer once with a typewriter-style stream."""
 
     status_labels = {
         "answered": "근거 확인 완료",
@@ -319,7 +324,12 @@ def render_answer(response: ChatResponse) -> None:
         f'<div class="answer-label {answer_label_class(status)}">● {html.escape(status_labels[status])}</div>',
         unsafe_allow_html=True,
     )
-    st.markdown(response.answer)
+    streamed_request_key = f"{stream_key}_streamed_request_id"
+    if st.session_state.get(streamed_request_key) != response.request_id:
+        st.write_stream(iter_text_chunks(response.answer))
+        st.session_state[streamed_request_key] = response.request_id
+    else:
+        st.markdown(response.answer)
     for question in response.clarification_questions:
         st.info(question)
     if response.warnings:
@@ -360,7 +370,7 @@ def render_qa_page() -> None:
         st.markdown(f'<div class="user-bubble">{html.escape(st.session_state.qa_question)}</div>', unsafe_allow_html=True)
         left, right = st.columns([1.35, 1], gap="large")
         with left:
-            render_answer(response)
+            render_answer(response, stream_key="qa")
         with right:
             section_title(f"공식 문서 출처 {len(response.citations)}건")
             render_sources(response.citations)
@@ -381,8 +391,12 @@ def render_qa_page() -> None:
             st.warning("질문을 입력해 주세요.")
         else:
             try:
-                with st.spinner("공식 문서 Hybrid 검색과 답변 인용 검증 중…"):
+                with st.status("공식 근거를 확인하고 있습니다…", expanded=True) as progress:
+                    progress.write("질문 범위와 안전 정책을 확인하고 있습니다.")
+                    progress.write("공식 문서에서 관련 청크를 검색하고 있습니다.")
                     submit_qa(question)
+                    progress.write("답변의 핵심 주장과 인용 근거를 검증했습니다.")
+                    progress.update(label="근거 기반 답변 준비 완료", state="complete", expanded=False)
                 st.rerun()
             except Exception as exc:
                 st.error(f"QA 런타임을 준비하지 못했습니다: {exc}")

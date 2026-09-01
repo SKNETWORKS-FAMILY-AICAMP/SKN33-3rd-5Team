@@ -3,12 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
-from itertools import cycle
 import sys
-from threading import Event, Thread
-from time import sleep
-from typing import Iterator, TextIO
 import uuid
 
 from src.rag import HybridRetriever, RagSettings, RagSettingsError, load_indexed_at
@@ -28,6 +23,7 @@ from src.recommendation import (
     load_and_validate_catalog,
 )
 
+from .cli_support import loading_indicator as _loading_indicator
 from .integration_adapters import manifest_to_rag_result_metadata
 from .recommendation_agent import RecommendationAgent
 from .recommendation_rag_service import RecommendationRagService
@@ -52,35 +48,6 @@ def _read_question(query: str | None) -> str:
     if not entered:
         raise ValueError("제품 추천 질문을 입력해 주세요.")
     return entered
-
-
-@contextmanager
-def _loading_indicator(message: str, *, stream: TextIO) -> Iterator[None]:
-    """긴 모델·검색 작업 동안 CLI가 멈춘 것처럼 보이지 않게 한다."""
-
-    if not stream.isatty():
-        print(f"[loading] {message}", file=stream, flush=True)
-        yield
-        return
-    stopped = Event()
-
-    def render() -> None:
-        for symbol in cycle("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"):
-            if stopped.is_set():
-                break
-            stream.write(f"\r{symbol} {message}")
-            stream.flush()
-            sleep(0.1)
-
-    thread = Thread(target=render, daemon=True)
-    thread.start()
-    try:
-        yield
-    finally:
-        stopped.set()
-        thread.join(timeout=0.2)
-        stream.write(f"\r{' ' * (len(message) + 3)}\r")
-        stream.flush()
 
 
 def _print_human_response(response, presenter: CitationPresenter | None = None) -> None:

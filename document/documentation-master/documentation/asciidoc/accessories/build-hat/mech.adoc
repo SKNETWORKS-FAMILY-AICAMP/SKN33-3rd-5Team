@@ -1,5 +1,0 @@
-== Mechanical Drawings
-
-Mechanical drawing of the Raspberry Pi Build HAT. 
-
-image::images/mech-build-hat.png[width="80%"]

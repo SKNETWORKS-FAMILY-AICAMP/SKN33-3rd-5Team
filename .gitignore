@@ -204,3 +204,10 @@ SKN_3rd_5Team_REPORT_*.zip
 
 
 *.ses
+
+# 공식 문서 전체 사본은 저장소에 두지 않는다.
+# corpus에 실제로 쓰이는 원문은 파이프라인이 고정 commit에서 받아
+# document_pipeline/data/raw_v3/ 에 생성한다.
+# 전체 원문을 오프라인으로 볼 필요가 있을 때만 README의 안내대로 내려받는다.
+/document/
+/document

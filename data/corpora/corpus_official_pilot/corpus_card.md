@@ -12,7 +12,7 @@ prototype의 청킹·metadata·검색 흐름을 검증하기 위한 12개 청크
 
 ## 원본과 추적 정보
 
-- 공식 문서 Git checkout: `document/documentation-master`
+- 공식 문서 저장소: `raspberrypi/documentation` (전체 사본은 저장소에 두지 않는다)
 - checkout commit: `3e614e3`
 - 사용자 출처 URL: `https://www.raspberrypi.com/documentation/`
 - 수집일: 2026-08-28
@@ -50,5 +50,5 @@ Git checkout은 청킹·재현을 위한 원본이고, `source_url`은 사용자
 
 - `.env`의 `DOCUMENT_MANIFEST`나 Chroma 색인 입력으로 설정하지 않는다.
 - legacy 거부와 이전 검색 흐름을 확인하는 로컬 fixture로만 보관한다.
-- 서비스 실행·색인·평가는 [`src/rag/00_README.md`](../../../src/rag/00_README.md)의 v3
+- 서비스 실행·색인·평가는 [`src/rag/README.md`](../../../src/rag/README.md)의 v3
   절차를 사용한다.

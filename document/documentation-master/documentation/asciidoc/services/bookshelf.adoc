@@ -1,3 +1,0 @@
-include::bookshelf/intro.adoc[]
-
-include::bookshelf/subscription.adoc[]

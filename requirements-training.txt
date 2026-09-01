@@ -1,0 +1,17 @@
+# QLoRA 학습 환경 (RunPod A40 등 CUDA 12.8 GPU, Linux x86_64)
+#
+#   pip install -r requirements-training.txt
+#
+# 기본·GPU 환경을 포함하므로 앞의 두 파일을 따로 설치하지 않아도 된다.
+# Qwen3-4B 조건 추출 QLoRA 학습 전용이며, Windows/macOS에서는 torch 줄이 건너뛰어진다.
+
+-r requirements-gpu.txt
+
+# A40 Pod의 CUDA 12.8 드라이버와 호환되는 Linux x86_64 wheel을 명시한다.
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128 ; platform_system == "Linux" and platform_machine == "x86_64"
+
+datasets>=3.6,<5
+trl>=0.26,<0.29
+# HF_HUB_ENABLE_HF_TRANSFER=1로 모델을 빠르게 받을 때 필요한 선택 의존성.
+hf_transfer>=0.1,<1

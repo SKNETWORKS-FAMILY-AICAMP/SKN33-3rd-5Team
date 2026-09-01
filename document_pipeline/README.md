@@ -9,7 +9,7 @@ Raspberry Pi 공식 문서 corpus의 출처 검토, 수집, 정제, 청킹 및 m
 - `contracts/media-manifest.schema.json`: `chunk_id`와 `media_id`의 별도 연결 계약
 - `data/source_registry.csv`: README의 우선 수집 후보와 수집 허용 상태
 - `data/product_media_registry.json`: CC BY-SA 4.0 제품 사진 5개의 고정 원문 경로와 출처 표기 조건
-- `docs/license-review.md`: 공식 라이선스·이용약관 조사와 수집 정책
+- [`docs/guides/license-review.md`](../docs/guides/license-review.md): 공식 라이선스·이용약관 조사와 수집 정책
 - `ingestion/validate_foundation.py`: 계약과 source registry의 기본 정합성 검사
 
 원문 수집, 파싱, 정제, 청킹의 기본 구현이 준비됐다. 제품 사진은 `product_media_registry.json`에 등록된 `documentation/` 원본만 사용하고, UI에는 CC BY-SA 4.0 출처와 변경 여부를 표시한다.

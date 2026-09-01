@@ -53,7 +53,7 @@
 - 근거 부족 시 답변 보류
 - 프롬프트 인젝션 및 비밀정보 노출 방지
 - Dev/Holdout을 포함한 RAG 평가 질문 50개
-- Streamlit 채팅 화면과 근거 문서 확인 기능
+- Streamlit 채팅 화면, 처리 단계 표시, 검증된 답변 스트리밍과 근거 문서 확인 기능
 
 한국어 질문으로 영어 공식 문서를 직접 검색할 수 있도록 질문에는 `query: `, 문서 청크에는 `passage: ` 접두어를 붙이고 임베딩을 정규화합니다. E5의 최대 입력 길이인 512 tokens를 넘지 않도록 섹션과 명령어 문맥을 보존해 청킹합니다. 이 모델은 검색 전용이며, 한국어 답변 생성은 검색 근거와 아래 답변 정책을 전달받은 생성 LLM이 담당합니다.
 
@@ -128,14 +128,38 @@ flowchart LR
 
 근거를 검색하지 못한 후보는 카드와 Qwen 프롬프트에서 제외하며, 남은 후보가 없으면
 `insufficient_evidence`로 보류한다. 로컬 template 확인 또는 RunPod 실제 Qwen 실행의
-구체적 명령은 [`src/rag/00_README.md`](src/rag/00_README.md)와
-[`runpod/README.md`](runpod/README.md)를 따른다.
+구체적 명령은 [`src/rag/README.md`](src/rag/README.md)와
+[`docs/guides/runpod-pod-setup.md`](docs/guides/runpod-pod-setup.md)를 따른다.
 
 ## 공식 문서 출처
 
 핵심 corpus는 라이선스와 변경 이력을 확인하기 쉬운 **Raspberry Pi 공식 온라인 문서**를 우선 사용합니다. 아래 링크는 최초 수집 후보이며 실제 색인 여부·수집일·checksum은 Document Card와 manifest에서 관리합니다.
 
-실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`document_pipeline/docs/license-review.md`](document_pipeline/docs/license-review.md)를 기준으로 합니다.
+실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`docs/guides/license-review.md`](docs/guides/license-review.md)를 기준으로 합니다.
+
+### 원문 확보 방식
+
+공식 문서 **전체 사본은 저장소에 두지 않습니다.** 파이프라인이 registry에 적힌 문서만
+고정 commit에서 내려받아 `document_pipeline/data/raw_v3/`에 생성하며, corpus와 인용 검증에
+쓰이는 원문은 이 폴더입니다.
+
+```bash
+# corpus에 쓰이는 18개 원문만 재생성 (약 270KB)
+python -m document_pipeline.ingestion.run_pipeline \
+  --commit 75331a79fbf32d2403b7547729ddccf553873b09
+```
+
+문서 전체를 오프라인으로 훑어봐야 할 때만 아래처럼 공식 저장소를 따로 받습니다.
+이 경로는 `.gitignore` 대상이라 저장소에 다시 포함되지 않습니다.
+
+```bash
+git clone --depth 1 https://github.com/raspberrypi/documentation.git document/
+```
+
+> [!NOTE]
+> 2026-09-01에 저장소에 있던 전체 사본(`document/`, 915개 파일·약 137MB)을 제거했습니다.
+> `git pull` 하면 로컬에서도 사라지므로, 오프라인 원문이 필요하면 위 명령으로 다시 받으세요.
+> 이 경로는 `.gitignore` 대상이라 저장소에 다시 포함되지 않습니다.
 
 ### 핵심 온라인 문서
 
@@ -455,47 +479,57 @@ LLM 답변 평가의 실행·검수·채점은 [답변 품질 평가 가이드](
 
 sLLM Train·Dev·Holdout과 RAG Dev·Holdout의 목적을 구분하고, 학습 데이터 또는 의미가 같은 변형 질문이 최종 평가셋에 들어가지 않도록 누수를 검사합니다.
 
-## 권장 프로젝트 구조
+## 프로젝트 구조
 
 ```text
-app/
-└── streamlit_app.py
+streamlit_app/           # 화면 계층 (모델·검색 로직 없음)
+├── app.py               # 제품 추천·질의응답 탭
+├── runtime.py           # src/services/ 조립과 실행 준비 상태 확인
+├── streaming.py         # 검증 완료 답변의 스트리밍 표시
+└── styles.py
+
 src/
-├── contracts/        # sLLM·RAG·챗봇 공통 Pydantic 계약과 Schema 생성
-├── retrieval/        # 임베딩·Vector DB·Retriever
-├── condition_extraction/
-│   ├── baseline.py   # Base Few-shot 추출기
-│   └── lora.py       # LoRA adapter 추론
-├── recommendation/   # 최소 제품 후보 규칙
-├── generation/       # Prompt·Chain·LLM
-├── safety/           # 답변 보류·인젝션·비밀정보 방어
-├── evaluation/       # RAG·조건 추출 평가
-└── services/         # UI와 분리된 RAG 서비스 계층
-document_pipeline/    # 문서·데이터 담당 작업을 한곳에서 관리
-├── contracts/        # RAG 전달용 manifest 계약
-├── ingestion/        # 문서 로딩·정제·청킹 코드
-├── data/             # source registry와 로컬 원문·정제본
-└── docs/             # 라이선스 검토와 Document Card
+├── contracts/           # 공통 Pydantic 계약(ChatResponse 1.2.0)과 Schema 생성
+├── lang/                # 근거 기반 프롬프트(prompts.py)와 인용·안전 검증(safety.py)
+├── rag/                 # BM25 + E5/Chroma Dense + RRF Hybrid 검색, 색인
+├── rag_to_llm/          # 검색 근거를 답변 생성기로 넘기는 경계
+├── condition_extraction/# Base Few-shot(baseline.py)과 LoRA(lora.py) 조건 추출
+├── recommendation/      # 카탈로그 기반 제품 후보 규칙·점수화
+├── media/               # 인용 청크에 연결된 공식 이미지·영상 해석
+├── presentation/        # 사용자용 인용 라벨 표기
+├── evaluation/          # 조건 추출·답변 품질 평가
+├── services/            # UI와 분리된 QA·추천 서비스 계층과 CLI
+└── model_runtime.py     # CUDA/MPS/CPU 추론 백엔드 선택
+
+document_pipeline/       # 공식 문서 수집·정제·청킹
+├── contracts/           # manifest·media manifest 계약과 JSON Schema
+├── ingestion/           # 수집·파싱·청킹·manifest 생성 실행 코드
+└── data/                # source registry(추적) + 생성 원문·manifest(비추적)
+
 data/
-├── sample/           # 공개 가능한 샘플 문서와 manifest
-└── finetuning/
-    ├── train.jsonl
-    ├── dev.jsonl
-    └── holdout.jsonl
-assets/
-└── media/            # 공식 이미지, 출처·라이선스·checksum manifest
-training/
-├── train_qlora.py
-└── configs/
+├── products/catalog.json  # 팀이 검수한 제품 사실 데이터 (추적)
+├── presentation/          # 인용 라벨 사전
+├── corpora/               # legacy fixture의 corpus card
+├── finetuning/            # 학습 데이터 train/dev/holdout (비추적)
+└── indexed/               # Chroma 색인 (비추적)
+
 docs/
-├── document-card.md
-├── dataset-card.md
-├── model-card.md
-└── schemas/          # 조건·검색 결과·최종 응답 JSON Schema
+├── guides/              # 실행·학습·라이선스 가이드
+├── data-contracts/      # 카탈로그·corpus·파인튜닝 데이터 계약
+├── document-cards/      # corpus Document Card
+├── schemas/             # 조건·검색 결과·최종 응답 JSON Schema
+└── validation/          # 실행·검증 기록
+
+assets/media/            # 공식 이미지와 출처·라이선스·checksum manifest
+training/                # QLoRA 학습(train_qlora.py)·사전 검사·어댑터 백업
+eval/                    # 평가 질문셋
 tests/
+
+.streamlit/config.toml   # Streamlit 테마
 .env.example
-requirements.txt
-README.md
+requirements.txt              # 기본 (CPU, 모든 OS)
+requirements-gpu.txt          # + GPU 추론 (RunPod)
+requirements-training.txt     # + QLoRA 학습 (CUDA 12.8)
 ```
 
 Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/를 통해 호출합니다. Base model 가중치는 Git에 올리지 않고 모델 ID와 revision을 기록하며, LoRA adapter는 저장소 크기 정책에 따라 Release 또는 모델 저장소 링크와 checksum으로 제공합니다.
@@ -503,7 +537,7 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 ## 설치 및 실행
 
 > [!NOTE]
-> Streamlit 화면은 `src/services/`의 실제 제품 추천·RAG QA 서비스를 호출합니다. 실행 환경에는 문서 manifest, 검색 인덱스, 모델 또는 원격 모델 설정이 필요하며, 준비되지 않으면 화면에 런타임 준비 상태가 표시됩니다.
+> Streamlit 화면은 `src/services/`의 실제 제품 추천·RAG QA 서비스를 호출합니다. 실행 환경에는 문서 manifest, 검색 인덱스, 모델 또는 원격 모델 설정이 필요하며, 준비되지 않으면 화면에 런타임 준비 상태가 표시됩니다. 답변은 검색·인용 검증을 통과한 뒤 스트리밍으로 표시합니다.
 
 ### 현재 RAG QA 실행 기준
 
@@ -526,7 +560,9 @@ python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 Streamlit 실행 흐름은 다음과 같습니다.
 
 ```bash
-git clone <PROJECT_REPOSITORY_URL>
+# --filter=blob:none: 커밋 이력은 그대로 받고 파일 내용만 필요할 때 받는다.
+# 과거 커밋에 남아 있는 공식 문서 전체 사본(약 137MB)을 내려받지 않는다.
+git clone --filter=blob:none <PROJECT_REPOSITORY_URL>
 cd <PROJECT_REPOSITORY>
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
@@ -535,7 +571,27 @@ python -m src.services.rag_qa_cli --action index
 streamlit run streamlit_app/app.py
 ```
 
-브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. `--action index`는 manifest의 검증된 문서로 로컬 Chroma 색인을 준비합니다. 문서나 색인 설정을 바꿔 기존 collection을 재생성해야 할 때만 `--reset`을 추가합니다. Streamlit 실행 파일과 화면 스타일은 `streamlit_app/` 디렉터리에서 관리하며, UI는 모델·검색 로직을 직접 구현하지 않고 `src/services/`의 공통 응답을 표시합니다.
+설치 환경은 목적에 따라 하나만 고르면 됩니다. 뒤의 파일이 앞의 파일을 포함하므로
+여러 개를 함께 설치할 필요가 없습니다.
+
+| 파일 | 설치 대상 | 쓰는 경우 |
+|---|---|---|
+| `requirements.txt` | 기본 (CPU, 모든 OS) | Streamlit 화면, Hybrid RAG 검색, 문서 파이프라인, 테스트 |
+| `requirements-gpu.txt` | 기본 + GPU 추론 | RunPod에서 Qwen 답변 생성·LoRA 조건 추출 |
+| `requirements-training.txt` | 기본 + GPU + 학습 | RunPod에서 QLoRA 학습 (CUDA 12.8 Linux) |
+
+> [!IMPORTANT]
+> 2026-09-01에 requirements 파일이 통합되면서 경로가 바뀌었습니다. 기존 명령을
+> 쓰던 환경(특히 RunPod)에서는 아래로 교체하세요.
+>
+> | 이전 | 현재 |
+> |---|---|
+> | `pip install -r requirements.txt -r runpod/requirements.txt` | `pip install -r requirements-gpu.txt` |
+> | `pip install -r training/runpod_requirements.txt` | `pip install -r requirements-training.txt` |
+>
+> 뒤 파일이 앞 파일을 `-r`로 포함하므로 `requirements.txt`를 따로 설치하지 않습니다.
+
+브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. `--action index`는 manifest의 검증된 문서로 로컬 Chroma 색인을 준비합니다. 문서나 색인 설정을 바꿔 기존 collection을 재생성해야 할 때만 `--reset`을 추가합니다. Streamlit 실행 파일, 답변 스트리밍, 화면 스타일은 `streamlit_app/` 디렉터리에서 함께 관리하며, UI는 모델·검색 로직을 직접 구현하지 않고 `src/services/`의 공통 응답을 내부 추론 대신 질문 확인·공식 문서 검색·인용 검증 단계로 표시합니다. 답변은 근거와 인용 검증을 통과한 뒤 타이핑되듯 스트리밍 출력합니다.
 
 조건 추출기는 환경변수로 교체할 수 있게 구성합니다.
 
@@ -555,7 +611,7 @@ python -m src.evaluation.extractor_eval --mode lora
 학습 데이터·모델 cache·checkpoint는 RunPod의 /workspace에 저장하고, 학습 후 adapter·설정·평가 결과를 외부에 백업합니다. API Key, Hugging Face token, 개인정보와 원문 내부 문서는 Git에 커밋하지 않습니다. .env.example에는 변수 이름만 제공합니다.
 
 어댑터를 Hugging Face 모델 저장소에 별도로 보관하는 명령과 다시 불러오는 방법은
-[모델 별도 저장 가이드](training/README.md)를 참고하세요. 기본은 비공개 백업이며,
+[모델 별도 저장 가이드](docs/guides/finetuning-training.md)를 참고하세요. 기본은 비공개 백업이며,
 실제 학습 결과가 있어야 업로드할 수 있습니다.
 
 ## 역할 분담

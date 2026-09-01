@@ -75,4 +75,4 @@ Holdout은 Trainer의 train/eval dataset과 토큰 길이 설정 검사에 전�
    고정 holdout으로 Base–LoRA를 비교한다. 20건에서 1건 차이는 5%p임에 유의한다.
 5. 정식 manifest·색인과 adapter로 추천/QA를 실행하고 실제 화면 연결까지 확인한다.
 
-명령과 검사의 의미는 [학습 가이드](../../training/README.md)를 따른다.
+명령과 검사의 의미는 [학습 가이드](../guides/finetuning-training.md)를 따른다.
