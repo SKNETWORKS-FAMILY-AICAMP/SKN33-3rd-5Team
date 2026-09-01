@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 from typing import Literal, Mapping, Protocol, Sequence
 
@@ -27,7 +28,32 @@ from .integration_adapters import (
 )
 from .grounded_generation import CitationRepairError, generate_validated_grounded_answer
 from .recommendation_agent import RecommendationAgent, RecommendationAgentResult
-from .recommendation_response import build_recommendation_chat_response
+from .recommendation_response import (
+    build_recommendation_chat_response,
+    candidate_condition_document_ids,
+)
+
+
+# 답변 본문에서 후보를 부정하는 표현이다. 사양을 설명하는 부정문("Wi-Fi를
+# 지원하지 않습니다")은 추천 자체를 부정하지 않으므로 넣지 않는다.
+_CANDIDATE_NEGATION_MARKERS = (
+    "추천할 수 없",
+    "추천하지 않",
+    "추천하기 어렵",
+    "추천드리기 어렵",
+    "추천 대상이 아니",
+    "권장하지 않",
+    "권장할 수 없",
+    "적합하지 않",
+    "적절하지 않",
+    "근거가 부족",
+    "근거 부족",
+    "정보가 부족",
+    "확인할 수 없",
+    "확인되지 않",
+    "보류",
+)
+_SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?])\s+|[\n\r]+")
 
 
 class RecommendationRetriever(Protocol):
@@ -147,6 +173,65 @@ class RecommendationRagService:
         for product in self.recommendation_agent.recommender.catalog.products:
             if product.name not in selected and product.name in answer:
                 raise ValueError(f"선정되지 않은 제품을 답변에 추가했습니다: {product.name}")
+
+    def _retrieval_supports_candidate(
+        self,
+        results: Sequence[RagResult],
+        candidate,
+        conditions: ConditionPayload,
+    ) -> bool:
+        """검색 결과가 이 후보의 조건 판단을 실제로 뒷받침하는지 확인한다.
+
+        제품 근거 전체가 아니라 조건 관련 필드 근거만 인정하고, 그 청크가
+        이 제품을 다루는지도 함께 본다. 문서 번호만 겹치면 다른 제품의
+        사양 문서가 이 후보의 근거로 붙기 때문이다.
+        """
+
+        supporting_document_ids = candidate_condition_document_ids(candidate, conditions)
+        for result in results:
+            if result.document_id not in supporting_document_ids:
+                continue
+            metadata = self.metadata_by_chunk_id.get(result.chunk_id)
+            if metadata is not None and candidate.name in metadata.product_models:
+                return True
+        return False
+
+    @staticmethod
+    def _drop_candidates_negated_by_answer(
+        answer: str, agent_result: RecommendationAgentResult, *, provider: str
+    ) -> RecommendationAgentResult:
+        """본문이 부정 문맥으로만 언급한 후보를 제품 카드에서 제외한다.
+
+        "Pi 5는 근거가 부족해 추천할 수 없다"처럼 부정으로만 등장한 제품의
+        카드가 남으면 본문과 카드가 서로 어긋난다. 긍정 문장이 한 번이라도
+        있거나 아예 언급되지 않은 후보는 그대로 둔다.
+
+        로컬 template은 검색 청크 원문을 그대로 보여주는 개발용 생성기라
+        추천 문장을 만들지 않으므로 검사하지 않는다.
+        """
+
+        if provider == "template":
+            return agent_result
+        sentences = [
+            sentence
+            for sentence in _SENTENCE_BOUNDARY.split(answer)
+            if sentence.strip()
+        ]
+        kept = []
+        for candidate in agent_result.decision.candidates:
+            mentions = [
+                sentence for sentence in sentences if candidate.name in sentence
+            ]
+            negated_only = bool(mentions) and all(
+                any(marker in sentence for marker in _CANDIDATE_NEGATION_MARKERS)
+                for sentence in mentions
+            )
+            if not negated_only:
+                kept.append(candidate)
+        if len(kept) == len(agent_result.decision.candidates):
+            return agent_result
+        decision = agent_result.decision.model_copy(update={"candidates": kept})
+        return agent_result.model_copy(update={"decision": decision})
 
     @staticmethod
     def _require_selected_candidate_in_model_answer(
@@ -344,11 +429,12 @@ class RecommendationRagService:
                 ],
             )
 
-        result_document_ids = {result.document_id for result in retrieval.results}
         supported_candidates = [
             candidate
             for candidate in decision.candidates
-            if result_document_ids.intersection(candidate.evidence_document_ids)
+            if self._retrieval_supports_candidate(
+                retrieval.results, candidate, decision.conditions
+            )
         ]
         if not supported_candidates:
             return self._response(
@@ -416,6 +502,11 @@ class RecommendationRagService:
                 supported_agent_result,
                 provider=generation.provider,
             )
+            card_agent_result = self._drop_candidates_negated_by_answer(
+                generation.text,
+                supported_agent_result,
+                provider=generation.provider,
+            )
         except AnswerGenerationError as exc:
             return self._response(
                 request_id=request_id,
@@ -461,9 +552,24 @@ class RecommendationRagService:
                 warnings=[*agent_result.warnings, f"generation_error={type(exc).__name__}"],
             )
 
+        if not card_agent_result.decision.candidates:
+            return self._response(
+                request_id=request_id,
+                status="insufficient_evidence",
+                answer=(
+                    "생성된 추천 본문이 선정 후보를 모두 부정해 제품 카드를 "
+                    "표시하지 않고 답변을 보류합니다."
+                ),
+                conditions=decision.conditions,
+                warnings=[
+                    *agent_result.warnings,
+                    "abstention_reason=answer_negates_all_candidates",
+                ],
+            )
+
         response = build_recommendation_chat_response(
             request_id=request_id,
-            agent_result=supported_agent_result,
+            agent_result=card_agent_result,
             search_response=search_response,
             answer=None if isinstance(self.answer_generator, EvidenceTemplateGenerator) else generation.text,
             used_citation_ids=used_citation_ids,

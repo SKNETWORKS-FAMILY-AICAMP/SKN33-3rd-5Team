@@ -162,7 +162,7 @@ payload = agent_result.model_dump(mode="json")
 | 받는 사람/주는 사람 | 파일 또는 인터페이스 | 이양원이 하는 일 |
 |---|---|---|
 | 문서·데이터 → 이양원 | `catalog.json`, `train/dev/holdout.jsonl` | 스키마·누수 검증 후 그대로 사용 |
-| 이양원 → RAG·검색 | `ConditionPayload`, 후보의 `evidence_document_ids` | `document_id`로 근거 검색·연결 |
+| 이양원 → RAG·검색 | `ConditionPayload`, 후보의 `evidence_by_field`·`evidence_document_ids` | `document_id`로 근거를 검색하고, 조건 관련 필드 근거와 청크 제품 태그가 모두 맞을 때만 후보·인용으로 연결 |
 | 이양원 → 챗봇·Streamlit | `RecommendationFormInput`, `RecommendationAgentResult`, `ChatResponse` | 위젯 라벨 변환과 화면용 최종 JSON 공유 |
 | 이양원 → PM·통합 | adapter 경로, config, manifest, Base–LoRA 평가표 | 채택 근거와 실패 사례 보고 |
 
