@@ -474,50 +474,57 @@ LLM 답변 평가의 실행·검수·채점은 [답변 품질 평가 가이드](
 
 sLLM Train·Dev·Holdout과 RAG Dev·Holdout의 목적을 구분하고, 학습 데이터 또는 의미가 같은 변형 질문이 최종 평가셋에 들어가지 않도록 누수를 검사합니다.
 
-## 권장 프로젝트 구조
+## 프로젝트 구조
 
 ```text
-app/
-└── streamlit_app.py
+streamlit_app/           # 화면 계층 (모델·검색 로직 없음)
+├── app.py               # 제품 추천·질의응답 탭
+├── runtime.py           # src/services/ 조립과 실행 준비 상태 확인
+├── streaming.py         # 검증 완료 답변의 스트리밍 표시
+└── styles.py
+
 src/
-├── contracts/        # sLLM·RAG·챗봇 공통 Pydantic 계약과 Schema 생성
-├── retrieval/        # 임베딩·Vector DB·Retriever
-├── condition_extraction/
-│   ├── baseline.py   # Base Few-shot 추출기
-│   └── lora.py       # LoRA adapter 추론
-├── recommendation/   # 최소 제품 후보 규칙
-├── generation/       # Prompt·Chain·LLM
-├── safety/           # 답변 보류·인젝션·비밀정보 방어
-├── evaluation/       # RAG·조건 추출 평가
-└── services/         # UI와 분리된 RAG 서비스 계층
-document_pipeline/    # 문서·데이터 담당 작업을 한곳에서 관리
-├── contracts/        # RAG 전달용 manifest 계약
-├── ingestion/        # 문서 로딩·정제·청킹 코드
-├── data/             # source registry와 로컬 원문·정제본
-└── docs/             # 라이선스 검토와 Document Card
+├── contracts/           # 공통 Pydantic 계약(ChatResponse 1.2.0)과 Schema 생성
+├── lang/                # 근거 기반 프롬프트(prompts.py)와 인용·안전 검증(safety.py)
+├── rag/                 # BM25 + E5/Chroma Dense + RRF Hybrid 검색, 색인
+├── rag_to_llm/          # 검색 근거를 답변 생성기로 넘기는 경계
+├── condition_extraction/# Base Few-shot(baseline.py)과 LoRA(lora.py) 조건 추출
+├── recommendation/      # 카탈로그 기반 제품 후보 규칙·점수화
+├── media/               # 인용 청크에 연결된 공식 이미지·영상 해석
+├── presentation/        # 사용자용 인용 라벨 표기
+├── evaluation/          # 조건 추출·답변 품질 평가
+├── services/            # UI와 분리된 QA·추천 서비스 계층과 CLI
+└── model_runtime.py     # CUDA/MPS/CPU 추론 백엔드 선택
+
+document_pipeline/       # 공식 문서 수집·정제·청킹
+├── contracts/           # manifest·media manifest 계약과 JSON Schema
+├── ingestion/           # 수집·파싱·청킹·manifest 생성 실행 코드
+└── data/                # source registry(추적) + 생성 원문·manifest(비추적)
+
 data/
-├── sample/           # 공개 가능한 샘플 문서와 manifest
-└── finetuning/
-    ├── train.jsonl
-    ├── dev.jsonl
-    └── holdout.jsonl
-assets/
-└── media/            # 공식 이미지, 출처·라이선스·checksum manifest
-training/
-├── train_qlora.py
-└── configs/
+├── products/catalog.json  # 팀이 검수한 제품 사실 데이터 (추적)
+├── presentation/          # 인용 라벨 사전
+├── corpora/               # legacy fixture의 corpus card
+├── finetuning/            # 학습 데이터 train/dev/holdout (비추적)
+└── indexed/               # Chroma 색인 (비추적)
+
 docs/
-├── document-card.md
-├── dataset-card.md
-├── model-card.md
-└── schemas/          # 조건·검색 결과·최종 응답 JSON Schema
+├── guides/              # 실행·학습·라이선스 가이드
+├── data-contracts/      # 카탈로그·corpus·파인튜닝 데이터 계약
+├── document-cards/      # corpus Document Card
+├── schemas/             # 조건·검색 결과·최종 응답 JSON Schema
+└── validation/          # 실행·검증 기록
+
+assets/media/            # 공식 이미지와 출처·라이선스·checksum manifest
+training/                # QLoRA 학습(train_qlora.py)·사전 검사·어댑터 백업
+eval/                    # 평가 질문셋
 tests/
-.streamlit/           # Streamlit 테마 설정
+
+.streamlit/config.toml   # Streamlit 테마
 .env.example
 requirements.txt              # 기본 (CPU, 모든 OS)
 requirements-gpu.txt          # + GPU 추론 (RunPod)
 requirements-training.txt     # + QLoRA 학습 (CUDA 12.8)
-README.md
 ```
 
 Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/를 통해 호출합니다. Base model 가중치는 Git에 올리지 않고 모델 ID와 revision을 기록하며, LoRA adapter는 저장소 크기 정책에 따라 Release 또는 모델 저장소 링크와 checksum으로 제공합니다.
