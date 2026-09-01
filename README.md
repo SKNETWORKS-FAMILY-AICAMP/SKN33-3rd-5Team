@@ -471,11 +471,30 @@ LLM 답변 평가의 실행·검수·채점은 [답변 품질 평가 가이드](
 
 파인튜닝 효과를 비교할 때 base model, prompt, JSON Schema, 생성 설정과 평가셋을 고정하고 **LoRA adapter 적용 여부만 변경**합니다. 한 실험에서는 한 가지 조건만 변경합니다.
 
-| 실험 | 모델 | Adapter | JSON 준수율 | Macro F1 | Exact Match | 추천 정확도 | 응답 시간 |
-|---|---|---|---:|---:|---:|---:|---:|
-| Baseline | Qwen3-4B-Instruct-2507 + Few-shot | 없음 |  |  |  |  |  |
-| QLoRA | Qwen3-4B-Instruct-2507 + 동일 prompt | 적용 |  |  |  |  |  |
-| Final | 채택한 조건 추출기 + RAG |  |  |  |  |  |  |
+아래는 고정 Holdout 20건에서 **adapter 적용 여부만 바꿔** 측정한 결과입니다.
+Base model, prompt, JSON Schema, 생성 설정, 평가셋은 모두 동일합니다.
+
+| 실험 | Adapter | JSON 준수율 | Macro F1 | Exact Match | 조건 추측률 | 추천 정확도 |
+|---|---|---:|---:|---:|---:|---:|
+| Baseline | 없음 | 100% | 78.79% | 10% (2/20) | 16.34% | 산출 불가 <sup>1</sup> |
+| QLoRA | 적용 | 100% | **90.61%** | **45% (9/20)** | **5.88%** | 산출 불가 <sup>1</sup> |
+
+형식 준수는 원래도 100%였고, **내용을 맞히는 능력과 안전성이 올랐습니다.**
+Exact Match는 4.5배가 됐고, 입력에 없는 조건을 지어내는 비율은 1/3 아래로 줄었습니다.
+다만 20건은 작은 표본이라 1건이 5%p입니다.
+
+<sup>1</sup> 평가 데이터 360건 모두 `expected_product_ids`가 비어 있어 산출할 수 없습니다.
+산출 코드는 [`src/evaluation/extractor_eval.py`](src/evaluation/extractor_eval.py)에 이미 있으므로,
+정답 제품 ID를 채우면 바로 측정됩니다. **조건 추출 F1을 제품 추천 정확도로 바꿔 부르지 않습니다.**
+
+조건 추출 단독 응답 시간은 아직 측정하지 않았습니다. 기록된 값은 검색·생성을 포함한
+서비스 전체 시간(QA 13.1~43.4초, 추천 21.9~36.9초, A40 기준 소수 표본)입니다.
+
+> [!NOTE]
+> 이후 Dev 40건 재평가에서는 Exact Match 57.5%, Macro F1 67.6%가 나왔습니다.
+> **위 Holdout 20건 수치와 직접 비교하지 않습니다** — 평가셋과 표본 크기가 다르고,
+> Dev의 Macro F1은 스키마 실패 1건을 각 필드 평균에 포함합니다.
+> 자세한 내용은 [A40 최종 검증 기록](docs/validation/2026-08-31-final-a40-defca71.md)을 참고하세요.
 
 sLLM Train·Dev·Holdout과 RAG Dev·Holdout의 목적을 구분하고, 학습 데이터 또는 의미가 같은 변형 질문이 최종 평가셋에 들어가지 않도록 누수를 검사합니다.
 
