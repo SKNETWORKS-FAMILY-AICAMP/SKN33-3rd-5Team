@@ -1,4 +1,4 @@
-"""CSS used by the PiCare Streamlit mock application."""
+"""CSS used by the PiCare Streamlit application."""
 
 APP_CSS = r"""
 <style>
@@ -34,7 +34,7 @@ html, body, [class*="css"] { font-family: 'Noto Sans KR', sans-serif; }
 .hero h1 { font-size: clamp(2rem, 4vw, 3.1rem); margin: 0; letter-spacing: -.045em; }
 .hero h1 em { color: var(--picare-red); font-style: normal; }
 .hero p { color: var(--picare-muted); font-size: 1.05rem; margin: .45rem 0 0; }
-.mock-ribbon { width: fit-content; margin: .2rem auto .8rem; color: #8b4b00; background: #fff7e6; border: 1px solid #ffd899; border-radius: 999px; padding: .28rem .7rem; font-size: .78rem; font-weight: 700; }
+.service-ribbon { width: fit-content; margin: .2rem auto .8rem; color: #8b4b00; background: #fff7e6; border: 1px solid #ffd899; border-radius: 999px; padding: .28rem .7rem; font-size: .78rem; font-weight: 700; }
 
 [data-testid="stForm"] { border: 1px solid var(--picare-line); border-radius: 14px; padding: 1.1rem 1.4rem 1.2rem; box-shadow: 0 3px 14px rgba(22, 31, 40, .035); }
 [data-testid="stForm"] [data-testid="stWidgetLabel"] p { font-weight: 700; color: var(--picare-ink); }

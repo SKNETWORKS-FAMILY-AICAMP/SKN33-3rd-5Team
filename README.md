@@ -503,7 +503,7 @@ Streamlit 화면에 RAG·sLLM 로직을 직접 작성하지 않고 src/services/
 ## 설치 및 실행
 
 > [!NOTE]
-> 현재 Streamlit 화면은 sLLM·RAG 연동 전 UI 검증을 위한 mock 버전입니다. 제품 추천, 조건 JSON, 한국어 QA 답변, 답변 보류, 공식 문서 출처 화면을 미리 확인할 수 있습니다.
+> Streamlit 화면은 `src/services/`의 실제 제품 추천·RAG QA 서비스를 호출합니다. 실행 환경에는 문서 manifest, 검색 인덱스, 모델 또는 원격 모델 설정이 필요하며, 준비되지 않으면 화면에 런타임 준비 상태가 표시됩니다.
 
 ### 현재 RAG QA 실행 기준
 
@@ -523,7 +523,7 @@ python3 -m src.services.rag_qa_cli
 python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 ```
 
-예정된 챗봇 실행 흐름은 다음과 같습니다.
+Streamlit 실행 흐름은 다음과 같습니다.
 
 ```bash
 git clone <PROJECT_REPOSITORY_URL>
@@ -531,10 +531,11 @@ cd <PROJECT_REPOSITORY>
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
+python -m src.services.rag_qa_cli --action index
 streamlit run streamlit_app/app.py
 ```
 
-브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. Streamlit 실행 파일, mock 응답, 화면 스타일은 `streamlit_app/` 디렉터리에서 함께 관리합니다. 실제 연동 시 UI 코드에 모델·검색 로직을 직접 추가하지 않고 `src/services/`의 공통 응답으로 mock 데이터를 교체합니다.
+브라우저에서 제품 추천과 질의응답 탭을 전환할 수 있습니다. `--action index`는 manifest의 검증된 문서로 로컬 Chroma 색인을 준비합니다. 문서나 색인 설정을 바꿔 기존 collection을 재생성해야 할 때만 `--reset`을 추가합니다. Streamlit 실행 파일과 화면 스타일은 `streamlit_app/` 디렉터리에서 관리하며, UI는 모델·검색 로직을 직접 구현하지 않고 `src/services/`의 공통 응답을 표시합니다.
 
 조건 추출기는 환경변수로 교체할 수 있게 구성합니다.
 
