@@ -12,7 +12,7 @@ prototype의 청킹·metadata·검색 흐름을 검증하기 위한 12개 청크
 
 ## 원본과 추적 정보
 
-- 공식 문서 Git checkout: `document/documentation-master`
+- 공식 문서 저장소: `raspberrypi/documentation` (전체 사본은 저장소에 두지 않는다)
 - checkout commit: `3e614e3`
 - 사용자 출처 URL: `https://www.raspberrypi.com/documentation/`
 - 수집일: 2026-08-28

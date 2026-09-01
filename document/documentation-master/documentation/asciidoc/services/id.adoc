@@ -1,3 +1,0 @@
-include::id/signing_up.adoc[]
-
-include::id/2fa.adoc[]

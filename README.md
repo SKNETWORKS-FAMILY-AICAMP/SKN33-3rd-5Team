@@ -137,6 +137,25 @@ flowchart LR
 
 실제 자동 수집 허용 여부는 [`document_pipeline/data/source_registry_v3.csv`](document_pipeline/data/source_registry_v3.csv), manifest 필드는 [`document_pipeline/contracts/manifest-contract.md`](document_pipeline/contracts/manifest-contract.md), 라이선스 판단 근거는 [`docs/guides/license-review.md`](docs/guides/license-review.md)를 기준으로 합니다.
 
+### 원문 확보 방식
+
+공식 문서 **전체 사본은 저장소에 두지 않습니다.** 파이프라인이 registry에 적힌 문서만
+고정 commit에서 내려받아 `document_pipeline/data/raw_v3/`에 생성하며, corpus와 인용 검증에
+쓰이는 원문은 이 폴더입니다.
+
+```bash
+# corpus에 쓰이는 18개 원문만 재생성 (약 270KB)
+python -m document_pipeline.ingestion.run_pipeline \
+  --commit 75331a79fbf32d2403b7547729ddccf553873b09
+```
+
+문서 전체를 오프라인으로 훑어봐야 할 때만 아래처럼 공식 저장소를 따로 받습니다.
+이 경로는 `.gitignore` 대상이라 저장소에 다시 포함되지 않습니다.
+
+```bash
+git clone --depth 1 https://github.com/raspberrypi/documentation.git document/
+```
+
 ### 핵심 온라인 문서
 
 | 영역 | 공식 문서 | 활용 목적 |
@@ -529,7 +548,9 @@ python3 -m src.services.rag_qa_cli --query "SSH를 활성화하려면?" --trace
 Streamlit 실행 흐름은 다음과 같습니다.
 
 ```bash
-git clone <PROJECT_REPOSITORY_URL>
+# --filter=blob:none: 커밋 이력은 그대로 받고 파일 내용만 필요할 때 받는다.
+# 과거 커밋에 남아 있는 공식 문서 전체 사본(약 137MB)을 내려받지 않는다.
+git clone --filter=blob:none <PROJECT_REPOSITORY_URL>
 cd <PROJECT_REPOSITORY>
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate

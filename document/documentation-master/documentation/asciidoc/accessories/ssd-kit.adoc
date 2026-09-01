@@ -1,1 +1,0 @@
-include::ssd-kit/about.adoc[]

@@ -1,1 +1,0 @@
-include::cm5-programming-jig/about.adoc[]
