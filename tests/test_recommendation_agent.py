@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 from unittest.mock import Mock
 from pathlib import Path
 
@@ -40,7 +40,10 @@ def evidence(document_id: str) -> dict[str, list[str]]:
         "cpu",
         "memory",
         "dimensions",
-        "recommendation_profile",
+        "performance_tier",
+        "beginner_friendly",
+        "recommended_use_cases",
+        "recommended_tasks",
     )
     return {field: [document_id] for field in fields} | {
         "required_accessories": [],
@@ -53,9 +56,15 @@ def catalog() -> ProductCatalog:
 
     return ProductCatalog.model_validate(
         {
-            "schema_version": "1.1.0",
+            "schema_version": "1.2.0",
             "catalog_version": "test-v1",
             "generated_at": datetime.fromisoformat("2026-08-27T12:00:00+09:00"),
+            "recommendation_policy": {
+                "policy_id": "test-relative-product-recommendation-v1",
+                "reviewed_at": date.fromisoformat("2026-08-27"),
+                "review_status": "approved",
+                "scope": "테스트 제품의 상대 추천 기준을 검수한 정책",
+            },
             "sources": [
                 {
                     "document_id": "doc-compact",
