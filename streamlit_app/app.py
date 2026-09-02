@@ -541,8 +541,7 @@ def render_qa_page() -> None:
                 st.markdown(
                     '<div class="qa-empty-icon">🍓</div>'
                     '<h1>무엇이 궁금하신가요?</h1>'
-                    '<p>사용법, 문제 해결, 공식 지원 절차를<br>'
-                    '검증된 문서 근거와 함께 알려드려요.</p>',
+                    '<p>사용법, 문제 해결, 공식 지원 절차를 검증된 문서 근거와 함께 알려드려요.</p>',
                     unsafe_allow_html=True,
                 )
 
